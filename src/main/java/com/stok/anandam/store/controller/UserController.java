@@ -1,0 +1,94 @@
+package com.stok.anandam.store.controller;
+
+import com.stok.anandam.store.annotation.LogActivity;
+import com.stok.anandam.store.dto.PagingResponse;
+import com.stok.anandam.store.dto.UserRequest;
+import com.stok.anandam.store.dto.UserResponse;
+import com.stok.anandam.store.dto.WebResponse;
+import com.stok.anandam.store.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/v1/users")
+public class UserController {
+
+        @Autowired
+        private UserService userService;
+
+        @GetMapping
+        public ResponseEntity<WebResponse<List<UserResponse>>> getAllUsers(
+                        @RequestParam(name = "page", defaultValue = "0") int page, // Default halaman 0 (pertama)
+                        @RequestParam(name = "size", defaultValue = "10") int size // Default ambil 10 data
+        ) {
+                Page<UserResponse> usersPage = userService.getAllUsers(page, size);
+
+                // Buat Metadata Paging
+                PagingResponse pagingResponse = PagingResponse.builder()
+                                .currentPage(page)
+                                .totalPage(usersPage.getTotalPages())
+                                .size(size)
+                                .totalItem(usersPage.getTotalElements())
+                                .build();
+
+                // Bungkus dalam WebResponse
+                WebResponse<List<UserResponse>> response = WebResponse.<List<UserResponse>>builder()
+                                .status(HttpStatus.OK.value())
+                                .message("Success fetch users data")
+                                .data(usersPage.getContent())
+                                .paging(pagingResponse)
+                                .build();
+
+                return ResponseEntity.ok(response);
+        }
+
+        @PostMapping
+        public ResponseEntity<WebResponse<UserResponse>> createUser(@Valid @RequestBody UserRequest request) {
+                UserResponse userResponse = userService.createUser(request);
+
+                WebResponse<UserResponse> response = WebResponse.<UserResponse>builder()
+                                .status(HttpStatus.CREATED.value())
+                                .message("User created successfully")
+                                .data(userResponse)
+                                .build();
+
+                return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        }
+
+        @PutMapping("/{id}")
+        @LogActivity("MENGUBAH DATA USER")
+        public ResponseEntity<WebResponse<UserResponse>> updateUser(
+                        @PathVariable Long id,
+                        @Valid @RequestBody UserRequest request) {
+                UserResponse updatedUser = userService.updateUser(id, request);
+
+                WebResponse<UserResponse> response = WebResponse.<UserResponse>builder()
+                                .status(HttpStatus.OK.value())
+                                .message("User updated successfully")
+                                .data(updatedUser)
+                                .build();
+
+                return ResponseEntity.ok(response);
+        }
+
+        @DeleteMapping("/{id}")
+        @LogActivity("MENGHAPUS USER")
+        public ResponseEntity<WebResponse<String>> deleteUser(@PathVariable Long id) {
+
+                userService.deleteUser(id);
+
+                WebResponse<String> response = WebResponse.<String>builder()
+                                .status(HttpStatus.OK.value())
+                                .message("User berhasil dihapus")
+                                .data(null)
+                                .build();
+
+                return ResponseEntity.ok(response);
+        }
+}
