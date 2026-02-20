@@ -1,6 +1,5 @@
 package com.stok.anandam.store.controller;
 
-import com.stok.anandam.store.annotation.LogActivity;
 import com.stok.anandam.store.core.postgres.model.Sales;
 import com.stok.anandam.store.dto.SalesSummaryResponse;
 import com.stok.anandam.store.dto.WebResponse;
@@ -18,7 +17,6 @@ public class SalesController {
 
     // GET /api/sales?startDate=...&empCode=...&search=...
     @GetMapping
-    @LogActivity("")
     public ResponseEntity<WebResponse<SalesSummaryResponse<Sales>>> getAllSales(
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "10") int size,
@@ -27,7 +25,7 @@ public class SalesController {
             // Filter Tambahan:
             @RequestParam(name = "startDate", required = false) String startDate,
             @RequestParam(name = "endDate", required = false) String endDate,
-            @RequestParam(name = "empCode", required = false) String empCode,
+            @RequestParam(name = "empCode", required = false) String empCode, // Filter Karyawan
             @RequestParam(name = "search", required = false) String search
     ) {
         

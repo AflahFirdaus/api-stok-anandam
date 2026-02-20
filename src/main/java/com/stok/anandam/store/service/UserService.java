@@ -1,6 +1,7 @@
 package com.stok.anandam.store.service;
 
 import com.stok.anandam.store.core.postgres.model.User;
+import com.stok.anandam.store.core.postgres.repository.RefreshTokenRepository;
 import com.stok.anandam.store.core.postgres.repository.UserRepository;
 import com.stok.anandam.store.dto.UserRequest;
 import com.stok.anandam.store.dto.UserResponse;
@@ -29,6 +30,9 @@ public class UserService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
+
     // UPDATE: Menggunakan Page<UserResponse> dan menerima parameter page & size
     public Page<UserResponse> getAllUsers(int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
@@ -49,7 +53,7 @@ public class UserService {
             throw new IllegalArgumentException("Password wajib diisi saat membuat user");
         }
         if (userRepository.findByUsername(request.getUsername()).isPresent()) {
-            throw new RuntimeException("Username sudah terpakai!");
+            throw new DataIntegrityViolationException("Username '" + request.getUsername() + "' sudah terpakai");
         }
         User user = new User();
         user.setNama(request.getNama());
@@ -82,6 +86,7 @@ public class UserService {
         return toUserResponse(user);
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public void deleteUser(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User dengan ID " + id + " tidak ditemukan"));
@@ -93,7 +98,30 @@ public class UserService {
             throw new DataIntegrityViolationException("Anda tidak dapat menghapus akun sendiri yang sedang aktif!");
         }
 
+        // Hapus refresh token yang terkait dengan user ini terlebih dahulu
+        // Ini penting karena ada foreign key constraint dari refresh_token ke user
+        refreshTokenRepository.findByUser(user).ifPresent(refreshToken -> {
+            refreshTokenRepository.delete(refreshToken);
+        });
+
+        // Baru setelah itu hapus user
         userRepository.delete(user);
+    }
+
+    /**
+     * Ambil data user yang sedang login (current authenticated user)
+     */
+    public UserResponse getCurrentUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getName() == null) {
+            throw new ResourceNotFoundException("User tidak ditemukan atau belum login");
+        }
+        
+        String username = auth.getName();
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User dengan username " + username + " tidak ditemukan"));
+        
+        return toUserResponse(user);
     }
 
     private UserResponse toUserResponse(User user) {

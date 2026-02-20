@@ -5,6 +5,7 @@ import com.stok.anandam.store.core.postgres.model.RefreshToken;
 import com.stok.anandam.store.dto.*;
 import com.stok.anandam.store.service.AuthService;
 import com.stok.anandam.store.service.RefreshTokenService;
+import com.stok.anandam.store.service.UserService;
 import com.stok.anandam.store.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -24,6 +25,9 @@ public class AuthController {
 
     @Autowired
     private JwtUtil jwtUtil;
+
+    @Autowired
+    private UserService userService;
 
     // 1. LOGIN (Dapat 2 Token)
     @PostMapping("/login")
@@ -74,6 +78,24 @@ public class AuthController {
                     return ResponseEntity.ok(WebResponse.<TokenResponse>builder()
                             .status(200).message("Token Refreshed").data(tokenResponse).build());
                 })
-                .orElseThrow(() -> new RuntimeException("Refresh token is not in database!"));
+                .orElseThrow(() -> new com.stok.anandam.store.exception.InvalidRefreshTokenException("Refresh token tidak ditemukan atau tidak valid"));
+    }
+
+    // 3. GET CURRENT USER (/me)
+    /**
+     * Ambil data user yang sedang login
+     * Endpoint ini memerlukan JWT token di header Authorization: Bearer <token>
+     */
+    @GetMapping("/me")
+    public ResponseEntity<WebResponse<UserResponse>> getCurrentUser() {
+        UserResponse userResponse = userService.getCurrentUser();
+
+        WebResponse<UserResponse> response = WebResponse.<UserResponse>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success fetch current user")
+                .data(userResponse)
+                .build();
+
+        return ResponseEntity.ok(response);
     }
 }

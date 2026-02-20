@@ -399,8 +399,6 @@ public class MigrationService {
                                  ELSE 0 END AS qty_movement
                         FROM dbtsalesdoc d JOIN dbtsalestrans t ON d.id = t.doc_id
                     ) trans
-                    GROUP BY war_id, ite_id
-                    HAVING SUM(qty_movement) > 0
                 ) stk
                 JOIN dbmitem i ON stk.ite_id = i.id
                 JOIN dbmwarehouse w ON stk.war_id = w.id

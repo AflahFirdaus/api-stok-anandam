@@ -36,21 +36,21 @@ public class MysqlConfig {
     }
 
     @Bean(name = "mysqlEntityManagerFactory")
-    public LocalContainerEntityManagerFactoryBean mysqlEntityManagerFactory(
+    public LocalContainerEntityManagerFactoryBean entityManagerFactory(
             EntityManagerFactoryBuilder builder,
             @Qualifier("mysqlDataSource") DataSource dataSource) {
         
         Map<String, Object> properties = new HashMap<>();
-        // WAJIB: Gunakan Dialect umum
         properties.put("hibernate.dialect", "org.hibernate.dialect.MySQLDialect");
-        // WAJIB: Matikan fitur update otomatis untuk DB MyBiz
-        properties.put("hibernate.hbm2ddl.auto", "none"); 
+        properties.put("hibernate.format_sql", "true");
+        properties.put("hibernate.hbm2ddl.auto", "none");
+        // Dialect tidak perlu diset manual (auto-detect), menghindari warning HHH90000025
 
         return builder
                 .dataSource(dataSource)
-                .packages("com.stok.anandam.store.core.mysql.model")
+                .packages("com.stok.anandam.store.core.mysql.model") // Pastikan path ini benar
                 .persistenceUnit("mysql")
-                .properties(properties)
+                .properties(properties) // <--- Masukkan properties ke sini
                 .build();
     }
 

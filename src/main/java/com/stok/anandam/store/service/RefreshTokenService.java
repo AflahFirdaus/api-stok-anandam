@@ -3,6 +3,7 @@ package com.stok.anandam.store.service;
 import com.stok.anandam.store.core.postgres.model.RefreshToken;
 import com.stok.anandam.store.core.postgres.repository.RefreshTokenRepository;
 import com.stok.anandam.store.core.postgres.repository.UserRepository;
+import com.stok.anandam.store.exception.InvalidRefreshTokenException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -49,7 +50,7 @@ public class RefreshTokenService {
     public RefreshToken verifyExpiration(RefreshToken token) {
         if (token.getExpiryDate().compareTo(Instant.now()) < 0) {
             refreshTokenRepository.delete(token);
-            throw new RuntimeException("Refresh token was expired. Please make a new signin request");
+            throw new InvalidRefreshTokenException("Refresh token sudah expired. Silakan login ulang");
         }
         return token;
     }
