@@ -45,17 +45,21 @@ public class DataCanvasingService {
         return dataCanvasingRepository.save(data);
     }
 
-    // === 2. GET ALL (Filter Date & Search) ===
-    public Page<DataCanvasing> getAll(int page, int size, String sortBy, String dir, 
-                                    String startDateStr, String endDateStr, String search) {
-        
-        // Parsing Tanggal
+    // === 2. GET ALL (Filter Date, Search, Canvasing, Tipe Kunjungan) ===
+    public Page<DataCanvasing> getAll(int page, int size, String sortBy, String dir,
+                                      String startDateStr, String endDateStr, String search,
+                                      Long canvasingId, String canvasVisit) {
         LocalDate start = (startDateStr != null && !startDateStr.isBlank()) ? LocalDate.parse(startDateStr) : LocalDate.of(2000, 1, 1);
         LocalDate end = (endDateStr != null && !endDateStr.isBlank()) ? LocalDate.parse(endDateStr) : LocalDate.now();
 
         Sort.Direction direction = dir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
 
-        return dataCanvasingRepository.findByFilters(start, end, search, pageable);
+        Page<DataCanvasing> result = dataCanvasingRepository.findByFilters(start, end, search, canvasingId, canvasVisit, pageable);
+        if (result.getTotalPages() > 0 && page >= result.getTotalPages()) {
+            pageable = PageRequest.of(0, size, Sort.by(direction, sortBy));
+            result = dataCanvasingRepository.findByFilters(start, end, search, canvasingId, canvasVisit, pageable);
+        }
+        return result;
     }
 }

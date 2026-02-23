@@ -23,6 +23,7 @@ public class MigrationController {
                         .status(503)
                         .message("Migrasi tidak aktif. Set app.mysql.enabled=true di application.properties lalu restart aplikasi.")
                         .data(null)
+                        .paging(null)
                         .build());
     }
 
@@ -34,6 +35,7 @@ public class MigrationController {
                 .status(200)
                 .message("Proses migrasi Purchase berjalan di background. Cek log server.")
                 .data("Processing...")
+                .paging(null)
                 .build());
     }
 
@@ -45,6 +47,7 @@ public class MigrationController {
                 .status(200)
                 .message("Migrasi Sales berjalan di background...")
                 .data("Processing...")
+                .paging(null)
                 .build());
     }
 
@@ -56,6 +59,7 @@ public class MigrationController {
                 .status(200)
                 .message("Migrasi Stok berjalan di background...")
                 .data("Processing...")
+                .paging(null)
                 .build());
     }
 
@@ -67,6 +71,7 @@ public class MigrationController {
                 .status(200)
                 .message("Migrasi Canvasing (dari CSV) berjalan di background...")
                 .data("Processing...")
+                .paging(null)
                 .build());
     }
 
@@ -79,7 +84,34 @@ public class MigrationController {
                 .status(200)
                 .message("Migrasi TKDN (dari CSV) berjalan di background...")
                 .data("Processing...")
+                .paging(null)
                 .build());
     }
+
+    @PostMapping("/sn")
+    public ResponseEntity<WebResponse<String>> startSnMigration() {
+        if (migrationService == null) return migrationDisabled();
+        migrationService.migrateSnData(); // Pastikan method ini sudah dibuat di MigrationService
+        return ResponseEntity.ok(WebResponse.<String>builder()
+                .status(200)
+                .message("Migrasi Serial Number berjalan di background...")
+                .data("Processing...")
+                .paging(null)
+                .build());
+    }
+
+    // @PostMapping("/all")
+    // public ResponseEntity<WebResponse<String>> migrateAll() {
+    //     if (migrationService == null) return migrationDisabled();
+        
+    //     // Menjalankan semua migrasi sekaligus di background
+    //     migrationService.migrateAll(); 
+        
+    //     return ResponseEntity.ok(WebResponse.<String>builder()
+    //             .status(200)
+    //             .message("Seluruh sinkronisasi data dari MyBiz sedang berjalan...")
+    //             .data("Total Processing...")
+    //             .build());
+    // }
 }
 // Re-trigger compilation

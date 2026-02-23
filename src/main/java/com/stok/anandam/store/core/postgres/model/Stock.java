@@ -45,4 +45,14 @@ public class Stock {
 
     @Column(name = "warehouse", length = 100)
     private String warehouse;
+
+    /** Dari sheet PRICELIST&MODAL (diisi setelah migrasi + sync dari Google Sheet). */
+    @Column(name = "spesifikasi", length = 2000)
+    private String spesifikasi;
+
+    @Column(name = "modal", precision = 19, scale = 2)
+    private BigDecimal modal;
+
+    @Column(name = "final_pricelist", precision = 19, scale = 2)
+    private BigDecimal finalPricelist;
 }

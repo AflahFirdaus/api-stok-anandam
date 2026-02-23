@@ -13,16 +13,18 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface DataCanvasingRepository extends JpaRepository<DataCanvasing, Long> {
-    // Bisa tambah method custom findByCanvasingId jika perlu filter per user
-    // Filter by Date Range & Search Nama Instansi (lewat relasi)
+    /** Filter: date range, search (nama instansi), canvasingId (toko), canvasVisit (Canvas/Visit). */
     @Query("SELECT d FROM DataCanvasing d WHERE " +
-           "(d.tanggal BETWEEN :startDate AND :endDate) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           " LOWER(d.canvasing.namaInstansi) LIKE LOWER(CONCAT('%', :search, '%')))")
+            "(d.tanggal BETWEEN :startDate AND :endDate) AND " +
+            "(:search IS NULL OR :search = '' OR LOWER(d.canvasing.namaInstansi) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
+            "(:canvasingId IS NULL OR d.canvasing.id = :canvasingId) AND " +
+            "(:canvasVisit IS NULL OR :canvasVisit = '' OR LOWER(TRIM(COALESCE(d.canvasVisit, ''))) = LOWER(TRIM(:canvasVisit)))")
     Page<DataCanvasing> findByFilters(
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,
             @Param("search") String search,
+            @Param("canvasingId") Long canvasingId,
+            @Param("canvasVisit") String canvasVisit,
             Pageable pageable
     );
 

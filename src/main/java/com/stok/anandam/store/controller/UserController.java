@@ -24,14 +24,15 @@ public class UserController {
 
         @GetMapping
         public ResponseEntity<WebResponse<List<UserResponse>>> getAllUsers(
-                        @RequestParam(name = "page", defaultValue = "0") int page, // Default halaman 0 (pertama)
-                        @RequestParam(name = "size", defaultValue = "10") int size // Default ambil 10 data
+                        @RequestParam(name = "page", defaultValue = "0") int page,
+                        @RequestParam(name = "size", defaultValue = "10") int size,
+                        @RequestParam(name = "search", required = false) String search,
+                        @RequestParam(name = "role", required = false) String role
         ) {
-                Page<UserResponse> usersPage = userService.getAllUsers(page, size);
+                Page<UserResponse> usersPage = userService.getAllUsers(page, size, search, role);
 
-                // Buat Metadata Paging
                 PagingResponse pagingResponse = PagingResponse.builder()
-                                .currentPage(page)
+                                .currentPage(usersPage.getNumber())
                                 .totalPage(usersPage.getTotalPages())
                                 .size(size)
                                 .totalItem(usersPage.getTotalElements())
@@ -56,6 +57,7 @@ public class UserController {
                                 .status(HttpStatus.CREATED.value())
                                 .message("User created successfully")
                                 .data(userResponse)
+                                .paging(null)
                                 .build();
 
                 return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -72,6 +74,7 @@ public class UserController {
                                 .status(HttpStatus.OK.value())
                                 .message("User updated successfully")
                                 .data(updatedUser)
+                                .paging(null)
                                 .build();
 
                 return ResponseEntity.ok(response);
@@ -87,6 +90,7 @@ public class UserController {
                                 .status(HttpStatus.OK.value())
                                 .message("User berhasil dihapus")
                                 .data(null)
+                                .paging(null)
                                 .build();
 
                 return ResponseEntity.ok(response);

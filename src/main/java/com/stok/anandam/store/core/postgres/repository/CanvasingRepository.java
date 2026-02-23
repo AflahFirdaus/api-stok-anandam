@@ -19,11 +19,13 @@ public interface CanvasingRepository extends JpaRepository<Canvasing, Long> {
     @Query(value = "TRUNCATE TABLE canvasing RESTART IDENTITY CASCADE", nativeQuery = true)
     void truncateTable();
 
-    // Cari berdasarkan Nama Instansi / Kabupaten / Kecamatan
+    /** Search + filter opsional: search (namaInstansi, kabupaten, kecamatan), kategori, provinsi. */
     @Query("SELECT c FROM Canvasing c WHERE " +
         "(:search IS NULL OR :search = '' OR " +
         " LOWER(c.namaInstansi) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-        " LOWER(c.kabupaten) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-        " LOWER(c.kecamatan) LIKE LOWER(CONCAT('%', :search, '%')))")
-    Page<Canvasing> search(@Param("search") String search, Pageable pageable);
+        " LOWER(COALESCE(c.kabupaten, '')) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+        " LOWER(COALESCE(c.kecamatan, '')) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
+        "(:kategori IS NULL OR :kategori = '' OR LOWER(COALESCE(c.kategori, '')) LIKE LOWER(CONCAT('%', :kategori, '%'))) AND " +
+        "(:provinsi IS NULL OR :provinsi = '' OR LOWER(COALESCE(c.provinsi, '')) LIKE LOWER(CONCAT('%', :provinsi, '%')))")
+    Page<Canvasing> search(@Param("search") String search, @Param("kategori") String kategori, @Param("provinsi") String provinsi, Pageable pageable);
 }

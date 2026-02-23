@@ -52,6 +52,7 @@ public class AuthController {
                 .status(HttpStatus.OK.value())
                 .message("Login Berhasil")
                 .data(tokenResponse)
+                .paging(null)
                 .build();
 
         return ResponseEntity.ok(response);
@@ -76,7 +77,7 @@ public class AuthController {
                             .build();
                             
                     return ResponseEntity.ok(WebResponse.<TokenResponse>builder()
-                            .status(200).message("Token Refreshed").data(tokenResponse).build());
+                            .status(200).message("Token Refreshed").data(tokenResponse).paging(null).build());
                 })
                 .orElseThrow(() -> new com.stok.anandam.store.exception.InvalidRefreshTokenException("Refresh token tidak ditemukan atau tidak valid"));
     }
@@ -94,6 +95,7 @@ public class AuthController {
                 .status(HttpStatus.OK.value())
                 .message("Success fetch current user")
                 .data(userResponse)
+                .paging(null)
                 .build();
 
         return ResponseEntity.ok(response);

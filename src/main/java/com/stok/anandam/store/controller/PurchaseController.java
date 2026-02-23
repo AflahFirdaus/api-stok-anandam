@@ -1,6 +1,7 @@
 package com.stok.anandam.store.controller;
 
 import com.stok.anandam.store.core.postgres.model.Purchase;
+import com.stok.anandam.store.dto.PagingResponse;
 import com.stok.anandam.store.dto.PurchaseSummaryResponse;
 import com.stok.anandam.store.dto.WebResponse;
 import com.stok.anandam.store.service.PurchaseService;
@@ -31,11 +32,23 @@ public class PurchaseController {
         PurchaseSummaryResponse<Purchase> data = purchaseService.getPurchases(
                 page, size, sortBy, dir, startDate, endDate, search
         );
+        if (data.getContent().isEmpty() && data.getTotalElements() > 0 && page > 0) {
+            data = purchaseService.getPurchases(0, size, sortBy, dir, startDate, endDate, search);
+            page = 0;
+        }
+
+        PagingResponse paging = PagingResponse.builder()
+                .currentPage(page)
+                .totalPage(data.getTotalPages())
+                .size(size)
+                .totalItem(data.getTotalElements())
+                .build();
 
         return ResponseEntity.ok(WebResponse.<PurchaseSummaryResponse<Purchase>>builder()
                 .status(200)
                 .message("Success fetch purchase data")
                 .data(data)
+                .paging(paging)
                 .build());
     }
 }

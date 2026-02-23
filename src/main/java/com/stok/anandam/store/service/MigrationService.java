@@ -41,6 +41,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import com.google.api.services.sheets.v4.model.ValueRange;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -171,6 +172,7 @@ public class MigrationService {
 
         } catch (Exception e) {
             log.error("CRITICAL ERROR during Purchase Data Migration: {}", e.getMessage(), e);
+            logConnectionCause(e);
             return CompletableFuture.completedFuture("ERROR: " + e.getMessage());
         }
     }
@@ -320,6 +322,7 @@ public class MigrationService {
 
         } catch (Exception e) {
             log.error("CRITICAL ERROR during Sales Data Migration: {}", e.getMessage(), e);
+            logConnectionCause(e);
             return CompletableFuture.completedFuture("ERROR: " + e.getMessage());
         }
     }
@@ -399,6 +402,7 @@ public class MigrationService {
                                  ELSE 0 END AS qty_movement
                         FROM dbtsalesdoc d JOIN dbtsalestrans t ON d.id = t.doc_id
                     ) trans
+                    GROUP BY war_id, ite_id
                 ) stk
                 JOIN dbmitem i ON stk.ite_id = i.id
                 JOIN dbmwarehouse w ON stk.war_id = w.id
@@ -482,14 +486,246 @@ public class MigrationService {
                 self.saveStockBatch(buffer);
             }
 
+            // Isi spesifikasi, modal, final pricelist dari sheet PRICELIST&MODAL (fill-down kosong)
+            String syncResult = self.syncStockPricelistFromSheet();
+            log.info("Sync Pricelist dari Sheet: {}", syncResult);
+
             long duration = System.currentTimeMillis() - startTime;
-            String result = "=== STOK SELESAI === Total: " + totalProcessed[0] + ". Waktu: " + (duration / 1000)
+            String result = "=== STOK SELESAI === Total: " + totalProcessed[0] + ". " + syncResult + " Waktu: " + (duration / 1000)
                     + " detik.";
             log.info("{}", result);
             return CompletableFuture.completedFuture(result);
         } catch (Exception e) {
             log.error("CRITICAL ERROR during Stock Data Migration: {}", e.getMessage(), e);
+            logConnectionCause(e);
             return CompletableFuture.completedFuture("ERROR: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Baca sheet PRICELIST&MODAL, isi kolom kosong dengan nilai dari baris atas (fill-down untuk spesifikasi & pricelist),
+     * lalu update stok by item name.
+     */
+    @Transactional
+    public String syncStockPricelistFromSheet() {
+        try {
+            InputStream in = MigrationService.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
+            if (in == null) return "ERROR: service_account.json tidak ditemukan";
+
+            GoogleCredentials credentials = GoogleCredentials.fromStream(in)
+                    .createScoped(Collections.singleton(SheetsScopes.SPREADSHEETS_READONLY));
+            Sheets service = new Sheets.Builder(
+                    GoogleNetHttpTransport.newTrustedTransport(),
+                    GsonFactory.getDefaultInstance(),
+                    new HttpCredentialsAdapter(credentials))
+                    .setApplicationName("Anandam Store")
+                    .build();
+
+            ValueRange response = service.spreadsheets().values().get(SPREADSHEET_ID, PRICELIST_RANGE).execute();
+            List<List<Object>> values = response.getValues();
+            if (values == null || values.size() < 2) return "Sheet kosong atau hanya header";
+
+            // Header bisa tidak berada di baris pertama. Cari dulu baris header.
+            int headerRowIndex = -1;
+            Map<String, Integer> headerMap = new HashMap<>();
+            for (int r = 0; r < values.size(); r++) {
+                List<Object> possibleHeader = values.get(r);
+                Map<String, Integer> probe = new HashMap<>();
+                for (int c = 0; c < possibleHeader.size(); c++) {
+                    probe.put(possibleHeader.get(c).toString().trim().toUpperCase(), c);
+                }
+                Integer probeItem = getHeaderIndexFirst(probe, "NAMA BARANG", "ITEM NAME", "NAMA", "ITEM");
+                Integer probeSpec = getHeaderIndexFirst(probe, "SPESIFIKASI", "SPESIFIKASI LENGKAP");
+                Integer probeModal = getHeaderIndexFirst(probe, "MODAL", "MODAL FINAL");
+                Integer probePrice = getHeaderIndexFirst(probe, "FINAL PRICELIST", "PRICELIST", "HARGA JUAL", "PRICE");
+                // Anggap valid jika minimal item + salah satu kolom harga/spec ada
+                if (probeItem != null && (probeSpec != null || probeModal != null || probePrice != null)) {
+                    headerRowIndex = r;
+                    headerMap = probe;
+                    break;
+                }
+            }
+
+            Integer idxItemName;
+            Integer idxItemCode = null;
+            Integer idxSpesifikasi;
+            Integer idxModal;
+            Integer idxPricelist;
+            if (headerRowIndex >= 0) {
+                log.info("PRICELIST&MODAL header row index {}: {}", headerRowIndex, headerMap.keySet());
+                idxItemName = getHeaderIndexFirst(headerMap, "NAMA BARANG", "ITEM NAME", "NAMA", "ITEM");
+                idxItemCode = getHeaderIndexFirst(headerMap, "ITEM CODE", "KODE ITEM", "CODE", "SKU");
+                idxSpesifikasi = getHeaderIndexFirst(headerMap, "SPESIFIKASI", "SPESIFIKASI LENGKAP");
+                idxModal = getHeaderIndexFirst(headerMap, "MODAL", "MODAL FINAL");
+                idxPricelist = getHeaderIndexFirst(headerMap, "FINAL PRICELIST", "PRICELIST", "HARGA JUAL", "PRICE");
+            } else {
+                // Fallback: tidak ada header -> pakai urutan yang Anda kasih:
+                // A: Spesifikasi | B: Item Name | C: Modal Final | D: Pricelist
+                log.info("PRICELIST&MODAL header tidak ditemukan, pakai fallback kolom A-D.");
+                idxSpesifikasi = 0;
+                idxItemName = 1;
+                idxItemCode = 1; // fallback: asumsikan item code sama dengan item name jika tidak ada kolom khusus
+                idxModal = 2;
+                idxPricelist = 3;
+            }
+
+            if (idxItemName == null) {
+                return "ERROR: Kolom nama item tidak ditemukan (header/fallback gagal).";
+            }
+
+            // Fill-down: nilai kosong diisi dari baris atas (HANYA spesifikasi & pricelist)
+            String lastSpesifikasi = null;
+            BigDecimal lastPricelist = null;
+            Map<String, Object[]> byItemName = new HashMap<>(); // normalized key -> [spesifikasi, modal, finalPricelist]
+            List<Object[]> orderedSheetRows = new ArrayList<>(); // urutan asli sheet -> [itemName, spesifikasi, modal, pricelist]
+
+            for (int i = 0; i < values.size(); i++) {
+                if (i == headerRowIndex) continue; // skip baris header (jika ada)
+                List<Object> row = values.get(i);
+                String itemName = getValByIndex(row, idxItemName);
+                String itemCode = getValByIndex(row, idxItemCode);
+                String fallbackNameColA = (headerRowIndex < 0) ? getValByIndex(row, 0) : null;
+                String spesifikasiRaw = getValByIndex(row, idxSpesifikasi);
+                String modalStr = getValByIndex(row, idxModal);
+                String pricelistStr = getValByIndex(row, idxPricelist);
+
+                // Fill-down: kosong pakai nilai baris atas (spesifikasi & pricelist)
+                if (spesifikasiRaw != null && !spesifikasiRaw.isBlank()) lastSpesifikasi = spesifikasiRaw;
+                String spesifikasi = (spesifikasiRaw != null && !spesifikasiRaw.isBlank()) ? spesifikasiRaw : lastSpesifikasi;
+
+                // Modal TIDAK fill-down: jika kosong tetap null
+                BigDecimal modal = (modalStr != null && !modalStr.isBlank()) ? cleanBigDecimal(modalStr) : null;
+
+                if (pricelistStr != null && !pricelistStr.isBlank()) lastPricelist = cleanBigDecimal(pricelistStr);
+                BigDecimal pricelist = (pricelistStr != null && !pricelistStr.isBlank()) ? cleanBigDecimal(pricelistStr) : lastPricelist;
+
+                Object[] payload = new Object[]{ spesifikasi, modal, pricelist };
+                if (itemName != null && !itemName.isBlank()) {
+                    byItemName.put(normalizeItemName(itemName), payload);
+                }
+                if (itemCode != null && !itemCode.isBlank()) {
+                    byItemName.put(normalizeItemName(itemCode), payload);
+                }
+                // Fallback penting untuk format tanpa header: kolom A kadang berisi nama item versi panjang
+                if (fallbackNameColA != null && !fallbackNameColA.isBlank()) {
+                    byItemName.put(normalizeItemName(fallbackNameColA), payload);
+                }
+
+                // Simpan urutan baris sheet untuk fallback by-order
+                if (itemName != null && !itemName.isBlank()) {
+                    orderedSheetRows.add(new Object[] { itemName, spesifikasi, modal, pricelist });
+                }
+            }
+
+            List<Stock> allStocks = stockRepository.findAll();
+            String normKey = null;
+            int updated = 0;
+            int fuzzyMatched = 0;
+            for (Stock s : allStocks) {
+                if (s.getItemName() == null && s.getItemCode() == null) continue;
+
+                // 1) Exact by item_name
+                normKey = normalizeItemName(s.getItemName());
+                Object[] row = byItemName.get(normKey);
+
+                // 2) Exact by item_code
+                if (row == null && s.getItemCode() != null) {
+                    row = byItemName.get(normalizeItemName(s.getItemCode()));
+                }
+
+                // 3) Fuzzy by item_name (contains dua arah + compact compare)
+                if (row == null && s.getItemName() != null) {
+                    String stockNorm = normalizeItemName(s.getItemName());
+                    String stockCompact = normalizeCompact(stockNorm);
+                    for (Map.Entry<String, Object[]> e : byItemName.entrySet()) {
+                        String sheetNorm = e.getKey();
+                        String sheetCompact = normalizeCompact(sheetNorm);
+                        if (stockNorm.contains(sheetNorm) || sheetNorm.contains(stockNorm)
+                                || stockCompact.contains(sheetCompact) || sheetCompact.contains(stockCompact)) {
+                            row = e.getValue();
+                            fuzzyMatched++;
+                            break;
+                        }
+                    }
+                }
+
+                if (row == null) continue;
+                s.setSpesifikasi((String) row[0]);
+                s.setModal(row[1] != null ? (BigDecimal) row[1] : null);
+                s.setFinalPricelist(row[2] != null ? (BigDecimal) row[2] : null);
+                updated++;
+            }
+
+            // Fallback: jika tidak ada yang match by-name, pakai urutan baris (sheet -> stok).
+            if (updated == 0 && !allStocks.isEmpty() && !orderedSheetRows.isEmpty()) {
+                List<Stock> orderedStocks = new ArrayList<>(allStocks);
+                orderedStocks.sort(Comparator.comparing(Stock::getId, Comparator.nullsLast(Long::compareTo)));
+
+                int limit = Math.min(orderedStocks.size(), orderedSheetRows.size());
+                for (int i = 0; i < limit; i++) {
+                    Stock s = orderedStocks.get(i);
+                    Object[] sheet = orderedSheetRows.get(i);
+                    // Sesuai permintaan: sesuaikan item_name berdasarkan urutan data sheet.
+                    s.setItemName((String) sheet[0]);
+                    s.setSpesifikasi((String) sheet[1]);
+                    s.setModal(sheet[2] != null ? (BigDecimal) sheet[2] : null);
+                    s.setFinalPricelist(sheet[3] != null ? (BigDecimal) sheet[3] : null);
+                    updated++;
+                }
+                log.info("Fallback by-order aktif: {} stok diisi berdasarkan urutan baris sheet.", limit);
+            }
+
+            stockRepository.saveAll(allStocks);
+            log.info("Pricelist mapping keys total: {}", byItemName.size());
+            log.info("Pricelist fuzzy matched count: {}", fuzzyMatched);
+            return "Pricelist sync: " + updated + " stok di-update dari sheet.";
+        } catch (Exception e) {
+            log.error("Error sync pricelist from sheet: {}", e.getMessage(), e);
+            return "ERROR sync: " + e.getMessage();
+        }
+    }
+
+    private static String normalizeItemName(String name) {
+        if (name == null) return "";
+        return name
+                .toUpperCase()
+                .replace("™", "")
+                .replace("®", "")
+                .replaceAll("[^A-Z0-9 ]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    private static String normalizeCompact(String value) {
+        if (value == null) return "";
+        return value.replaceAll("[^A-Z0-9]", "");
+    }
+
+    private static Integer getHeaderIndexFirst(Map<String, Integer> headerMap, String... names) {
+        for (String n : names) {
+            if (headerMap.containsKey(n)) return headerMap.get(n);
+        }
+        return null;
+    }
+
+    private static String getValByIndex(List<Object> row, Integer index) {
+        if (index == null) return null;
+        if (index >= row.size()) return null;
+        Object v = row.get(index);
+        return (v == null) ? null : v.toString().trim();
+    }
+
+    private BigDecimal cleanBigDecimal(String val) {
+        if (val == null || val.isBlank()) return null;
+        String s = val.replace("\u00A0", "").replace(" ", "").replace("Rp", "");
+        if (s.contains(".") && !s.contains(",")) s = s.replace(".", "");
+        else if (s.contains(".") && s.contains(",")) s = s.split(",")[0].replace(".", "");
+        s = s.replaceAll("[^0-9.-]", "");
+        if (s.isEmpty()) return null;
+        try {
+            return new BigDecimal(s);
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -527,6 +763,79 @@ public class MigrationService {
             }
         });
         stockList.clear();
+    }
+
+    @Async
+    public CompletableFuture<String> migrateSnData() {
+        log.info("=== START MIGRASI SERIAL NUMBER ===");
+        try {
+            // 1. Bersihkan tabel tujuan di Postgres (Pastikan kamu sudah buat repository-nya)
+            pgJdbcTemplate.execute("TRUNCATE TABLE item_serial_numbers RESTART IDENTITY");
+
+            // 2. Query Gabungan (Masuk & Keluar) dari Legacy MySQL
+            String sqlSource = """
+                SELECT p.doc_date AS tanggal, p.doc_no AS doc_id, p.par_name AS user_name, m.name AS item_name, sn.sn, 'MASUK' as type
+                FROM dbtitemsn sn
+                LEFT JOIN dbmitem m ON sn.ite_id = m.id
+                LEFT JOIN dbtpurchasedoc p ON sn.doc_id = p.id AND sn.doc_type = p.doc_type
+                WHERE sn.doc_type IN (42,43,44) AND sn.sn IS NOT NULL AND TRIM(sn.sn) <> ''
+                UNION ALL
+                SELECT s.doc_date AS tanggal, s.doc_no AS doc_id, s.par_name AS user_name, m.name AS item_name, sn.sn, 'KELUAR' as type
+                FROM dbtitemsn sn
+                LEFT JOIN dbmitem m ON sn.ite_id = m.id
+                LEFT JOIN dbtsalesdoc s ON sn.doc_id = s.id AND sn.doc_type = s.doc_type
+                WHERE sn.doc_type IN (32,33) AND sn.sn IS NOT NULL AND TRIM(sn.sn) <> ''
+            """;
+
+            final List<Object[]> buffer = new ArrayList<>();
+            legacyJdbcTemplate.query(sqlSource, rs -> {
+                Object[] row = new Object[] {
+                    rs.getDate("tanggal"),
+                    rs.getString("doc_id"),
+                    rs.getString("user_name"),
+                    rs.getString("item_name"),
+                    rs.getString("sn"),
+                    rs.getString("type")
+                };
+                buffer.add(row);
+                if (buffer.size() >= BATCH_SIZE) {
+                    saveSnBatch(new ArrayList<>(buffer));
+                    buffer.clear();
+                }
+            });
+            
+            if (!buffer.isEmpty()) saveSnBatch(buffer);
+
+            return CompletableFuture.completedFuture("Migrasi SN Selesai.");
+        } catch (Exception e) {
+            log.error("Error SN Migration: {}", e.getMessage());
+            logConnectionCause(e);
+            return CompletableFuture.completedFuture("Error: " + e.getMessage());
+        }
+    }
+
+    /** Log penyebab koneksi JDBC (root cause) agar mudah debug MySQL/Postgres. */
+    private void logConnectionCause(Throwable e) {
+        Throwable cause = e;
+        int depth = 0;
+        while (cause != null && depth < 10) {
+            log.error("Caused by [{}]: {} - {}", depth, cause.getClass().getSimpleName(), cause.getMessage());
+            if (cause instanceof java.sql.SQLException) {
+                java.sql.SQLException sqlEx = (java.sql.SQLException) cause;
+                if (sqlEx.getSQLState() != null) log.error("  SQLState: {}", sqlEx.getSQLState());
+                if (sqlEx.getErrorCode() != 0) log.error("  ErrorCode: {}", sqlEx.getErrorCode());
+            }
+            cause = cause.getCause();
+            depth++;
+        }
+    }
+
+    private void saveSnBatch(List<Object[]> data) {
+        String sqlInsert = "INSERT INTO item_serial_numbers (tanggal, doc_id, user_name, item_name, sn, type) VALUES (?, ?, ?, ?, ?, ?)";
+        pgJdbcTemplate.batchUpdate(sqlInsert, data, new int[] { 
+            java.sql.Types.DATE, java.sql.Types.VARCHAR, java.sql.Types.VARCHAR, 
+            java.sql.Types.VARCHAR, java.sql.Types.VARCHAR, java.sql.Types.VARCHAR 
+        });
     }
 
     @Autowired
@@ -652,6 +961,7 @@ public class MigrationService {
     // KONFIGURASI GOOGLE SHEET
     private static final String SPREADSHEET_ID = "173w5Y8hynv8lOphrsjtCx0tc8CJIQThuLrMIttwtw30";
     private static final String RANGE = "TKDN!A1:Z"; // Ambil dari A1 biar Header kebawa
+    private static final String PRICELIST_RANGE = "PRICELIST&MODAL!A1:Z";
     private static final String CREDENTIALS_FILE_PATH = "/service_account.json";
 
     @Async

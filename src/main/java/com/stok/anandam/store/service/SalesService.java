@@ -51,4 +51,8 @@ public class SalesService {
                 .totalElements(pageResult.getTotalElements())
                 .build();
     }
+
+    public java.util.List<String> getEmployeeCodes() {
+        return salesRepository.findDistinctEmpCodeOrderByEmpCode();
+    }
 }

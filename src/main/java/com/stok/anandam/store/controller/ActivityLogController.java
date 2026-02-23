@@ -15,11 +15,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/activity-logs")
 public class ActivityLogController {
+
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("id", "timestamp", "username", "action", "details", "ipAddress");
 
     @Autowired
     private ActivityLogRepository activityLogRepository;
@@ -34,8 +37,9 @@ public class ActivityLogController {
             @RequestParam(name = "username", required = false) String username,
             @RequestParam(name = "action", required = false) String action
     ) {
+        String safeSortBy = ALLOWED_SORT_FIELDS.contains(sortBy) ? sortBy : "timestamp";
         Sort.Direction sortDirection = direction.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, safeSortBy));
 
         Page<ActivityLog> logsPage;
 
@@ -53,6 +57,20 @@ public class ActivityLogController {
         } else {
             // Tidak ada filter, ambil semua
             logsPage = activityLogRepository.findAll(pageable);
+        }
+
+        if (logsPage.getTotalPages() > 0 && page >= logsPage.getTotalPages()) {
+            pageable = PageRequest.of(0, size, Sort.by(sortDirection, safeSortBy));
+            if (username != null && !username.isBlank() && action != null && !action.isBlank()) {
+                logsPage = activityLogRepository.findByUsernameContainingIgnoreCaseAndActionContainingIgnoreCase(username, action, pageable);
+            } else if (username != null && !username.isBlank()) {
+                logsPage = activityLogRepository.findByUsernameContainingIgnoreCase(username, pageable);
+            } else if (action != null && !action.isBlank()) {
+                logsPage = activityLogRepository.findByActionContainingIgnoreCase(action, pageable);
+            } else {
+                logsPage = activityLogRepository.findAll(pageable);
+            }
+            page = 0;
         }
 
         // Convert ke DTO
@@ -92,6 +110,7 @@ public class ActivityLogController {
                 .status(HttpStatus.OK.value())
                 .message("Success fetch activity log")
                 .data(toResponse(log))
+                .paging(null)
                 .build();
 
         return ResponseEntity.ok(response);

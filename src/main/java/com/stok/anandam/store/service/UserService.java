@@ -1,5 +1,6 @@
 package com.stok.anandam.store.service;
 
+import com.stok.anandam.store.core.postgres.model.Role;
 import com.stok.anandam.store.core.postgres.model.User;
 import com.stok.anandam.store.core.postgres.repository.RefreshTokenRepository;
 import com.stok.anandam.store.core.postgres.repository.UserRepository;
@@ -33,19 +34,24 @@ public class UserService {
     @Autowired
     private RefreshTokenRepository refreshTokenRepository;
 
-    // UPDATE: Menggunakan Page<UserResponse> dan menerima parameter page & size
-    public Page<UserResponse> getAllUsers(int page, int size) {
+    /** List user dengan filter opsional: search (nama/username), role. Jika halaman melebihi total, kembalikan halaman 0. */
+    public Page<UserResponse> getAllUsers(int page, int size, String search, String roleStr) {
         Pageable pageable = PageRequest.of(page, size);
-        
-        Page<User> usersPage = userRepository.findAll(pageable);
-        
-        // Konversi Page<User> ke List<UserResponse>
+        Role role = null;
+        if (roleStr != null && !roleStr.isBlank()) {
+            try {
+                role = Role.valueOf(roleStr.toUpperCase().trim());
+            } catch (IllegalArgumentException ignored) { }
+        }
+        Page<User> usersPage = userRepository.findByFilters(search, role, pageable);
+        if (usersPage.getTotalPages() > 0 && page >= usersPage.getTotalPages()) {
+            pageable = PageRequest.of(0, size);
+            usersPage = userRepository.findByFilters(search, role, pageable);
+        }
         List<UserResponse> userResponses = usersPage.getContent().stream()
                 .map(this::toUserResponse)
                 .collect(Collectors.toList());
-
-        // Bungkus kembali menjadi Page
-        return new PageImpl<>(userResponses, pageable, usersPage.getTotalElements());
+        return new PageImpl<>(userResponses, usersPage.getPageable(), usersPage.getTotalElements());
     }
 
     public UserResponse createUser(UserRequest request) {

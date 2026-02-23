@@ -9,16 +9,19 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/**") // Izinkan semua endpoint
+        registry.addMapping("/**")
                 .allowedOrigins(
-                        "http://localhost:3000", // React/Next.js default
-                        "http://localhost:4200", // Angular default
-                        "http://localhost:5173", // Vite/Vue default
-                        "*" // ATAU pakai bintang (*) untuk development (Hati-hati saat production!)
+                        "http://localhost:3000",
+                        "http://localhost:4200",
+                        "http://localhost:5173",
+                        "http://127.0.0.1:3000",
+                        "http://127.0.0.1:4200",
+                        "http://127.0.0.1:5173"
                 )
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS") // Method yang diizinkan
-                .allowedHeaders("*") // Header apa saja (termasuk Authorization)
-                .allowCredentials(false) // Set true jika pakai Cookies (Jika pakai '*', ini harus false)
-                .maxAge(3600); // Cache setting CORS selama 1 jam
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+                .allowedHeaders("*")
+                .exposedHeaders("Authorization")
+                .allowCredentials(true)
+                .maxAge(3600);
     }
 }

@@ -54,5 +54,8 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
     );
 
     @Query("SELECT COALESCE(SUM(s.grandTotal), 0) FROM Sales s WHERE s.docDate = :today")
-            BigDecimal sumTotalByDate(@Param("today") LocalDate today);
+    BigDecimal sumTotalByDate(@Param("today") LocalDate today);
+
+    @Query("SELECT DISTINCT s.empCode FROM Sales s WHERE s.empCode IS NOT NULL AND TRIM(s.empCode) <> '' ORDER BY s.empCode")
+    java.util.List<String> findDistinctEmpCodeOrderByEmpCode();
 }

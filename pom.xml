@@ -111,10 +111,18 @@
 			<artifactId>postgresql</artifactId>
 			<scope>runtime</scope>
 		</dependency>
+		<!-- MySQL: legacy 5.1 dulu di classpath agar com.mysql.jdbc.Driver dipakai (hindari CLIENT_PLUGIN_AUTH) -->
+		<dependency>
+			<groupId>mysql</groupId>
+			<artifactId>mysql-connector-java</artifactId>
+			<version>5.1.49</version>
+			<scope>runtime</scope>
+		</dependency>
+		<!-- MySQL 8.x: pakai jika driver-class-name=com.mysql.cj.jdbc.Driver di application.properties -->
 		<dependency>
 			<groupId>com.mysql</groupId>
 			<artifactId>mysql-connector-j</artifactId>
-			<version>8.0.33</version>
+			<version>8.4.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.projectlombok</groupId>

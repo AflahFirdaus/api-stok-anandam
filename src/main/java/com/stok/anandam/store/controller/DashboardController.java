@@ -24,6 +24,7 @@ public class DashboardController {
                 .status(200)
                 .message("Success Fetch Dashboard Summary")
                 .data(data)
+                .paging(null)
                 .build());
     }
 }
