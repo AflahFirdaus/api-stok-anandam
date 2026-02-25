@@ -28,7 +28,7 @@ public class Tkdn {
 
     private String dealer;
     private String principal;
-    private LocalDate tayang;
+    private Integer tayang;
 
     @Column(name = "sertifikat_tkd", length = 100)
     private String sertifikatTkd;

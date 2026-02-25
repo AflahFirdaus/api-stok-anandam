@@ -9,11 +9,16 @@ import java.time.LocalDate;
 @Service
 public class DashboardService {
 
-    @Autowired private SalesRepository salesRepo;
-    @Autowired private PurchaseRepository purchaseRepo;
-    @Autowired private StockRepository stockRepo;
-    @Autowired private DataCanvasingRepository canvasRepo;
-    @Autowired private TkdnRepository tkdnRepo;
+    @Autowired
+    private SalesRepository salesRepo;
+    @Autowired
+    private PurchaseRepository purchaseRepo;
+    @Autowired
+    private StockRepository stockRepo;
+    @Autowired
+    private DataCanvasingRepository canvasRepo;
+    @Autowired
+    private TkdnRepository tkdnRepo;
 
     public DashboardResponse getDashboardData() {
         LocalDate today = LocalDate.now();
@@ -24,7 +29,7 @@ public class DashboardService {
                 .totalPurchasesToday(purchaseRepo.sumTotalByDate(today))
                 .totalVisitsToday(canvasRepo.countByTanggal(today))
                 .totalLowStockItems(stockRepo.countByFinalStokLessThan(lowStockThreshold)) // <--- Pakai Stok
-                .lowStockPreview(stockRepo.findTop5ByFinalStokLessThanOrderByFinalStokAsc(lowStockThreshold)) // <--- Pakai Stok
+                .lowStockPreview(stockRepo.findTop5ByLowStock(lowStockThreshold)) // <--- Pakai Stok
                 .totalTkdnItems(tkdnRepo.count()) // Total item di katalog TKDN
                 .build();
     }

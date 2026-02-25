@@ -22,12 +22,13 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/v1/activity-logs")
 public class ActivityLogController {
 
-    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("id", "timestamp", "username", "action", "details", "ipAddress");
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("id", "timestamp", "username", "action", "details",
+            "ipAddress");
 
     @Autowired
     private ActivityLogRepository activityLogRepository;
 
-    //  GET /api/v1/activity-logs
+    // GET /api/v1/activity-logs
     @GetMapping
     public ResponseEntity<WebResponse<List<ActivityLogResponse>>> getAllActivityLogs(
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -35,8 +36,7 @@ public class ActivityLogController {
             @RequestParam(name = "sortBy", defaultValue = "timestamp") String sortBy,
             @RequestParam(name = "direction", defaultValue = "desc") String direction,
             @RequestParam(name = "username", required = false) String username,
-            @RequestParam(name = "action", required = false) String action
-    ) {
+            @RequestParam(name = "action", required = false) String action) {
         String safeSortBy = ALLOWED_SORT_FIELDS.contains(sortBy) ? sortBy : "timestamp";
         Sort.Direction sortDirection = direction.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, safeSortBy));
@@ -62,7 +62,8 @@ public class ActivityLogController {
         if (logsPage.getTotalPages() > 0 && page >= logsPage.getTotalPages()) {
             pageable = PageRequest.of(0, size, Sort.by(sortDirection, safeSortBy));
             if (username != null && !username.isBlank() && action != null && !action.isBlank()) {
-                logsPage = activityLogRepository.findByUsernameContainingIgnoreCaseAndActionContainingIgnoreCase(username, action, pageable);
+                logsPage = activityLogRepository
+                        .findByUsernameContainingIgnoreCaseAndActionContainingIgnoreCase(username, action, pageable);
             } else if (username != null && !username.isBlank()) {
                 logsPage = activityLogRepository.findByUsernameContainingIgnoreCase(username, pageable);
             } else if (action != null && !action.isBlank()) {
@@ -101,7 +102,7 @@ public class ActivityLogController {
      * Detail activity log berdasarkan ID
      */
     @GetMapping("/{id}")
-    public ResponseEntity<WebResponse<ActivityLogResponse>> getActivityLogById(@PathVariable Long id) {
+    public ResponseEntity<WebResponse<ActivityLogResponse>> getActivityLogById(@PathVariable(name = "id") Long id) {
         ActivityLog log = activityLogRepository.findById(id)
                 .orElseThrow(() -> new com.stok.anandam.store.exception.ResourceNotFoundException(
                         "Activity log dengan ID " + id + " tidak ditemukan"));

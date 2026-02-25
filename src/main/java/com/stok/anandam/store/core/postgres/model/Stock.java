@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Data
 @AllArgsConstructor
@@ -27,7 +28,8 @@ public class Stock {
     @Column(name = "item_name", length = 100)
     private String itemName;
 
-    // Tambahan kolom baru (walau di query lama tidak ada, kita siapkan null dulu atau diisi logic lain)
+    // Tambahan kolom baru (walau di query lama tidak ada, kita siapkan null dulu
+    // atau diisi logic lain)
     @Column(name = "kategori_nama", length = 50)
     private String kategoriNama;
 
@@ -46,7 +48,9 @@ public class Stock {
     @Column(name = "warehouse", length = 100)
     private String warehouse;
 
-    /** Dari sheet PRICELIST&MODAL (diisi setelah migrasi + sync dari Google Sheet). */
+    /**
+     * Dari sheet PRICELIST&MODAL (diisi setelah migrasi + sync dari Google Sheet).
+     */
     @Column(name = "spesifikasi", length = 2000)
     private String spesifikasi;
 
@@ -55,4 +59,7 @@ public class Stock {
 
     @Column(name = "final_pricelist", precision = 19, scale = 2)
     private BigDecimal finalPricelist;
+
+    @Transient
+    private LocalDate lastSalesDate;
 }

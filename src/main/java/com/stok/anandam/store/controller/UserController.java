@@ -27,8 +27,7 @@ public class UserController {
                         @RequestParam(name = "page", defaultValue = "0") int page,
                         @RequestParam(name = "size", defaultValue = "10") int size,
                         @RequestParam(name = "search", required = false) String search,
-                        @RequestParam(name = "role", required = false) String role
-        ) {
+                        @RequestParam(name = "role", required = false) String role) {
                 Page<UserResponse> usersPage = userService.getAllUsers(page, size, search, role);
 
                 PagingResponse pagingResponse = PagingResponse.builder()
@@ -66,7 +65,7 @@ public class UserController {
         @PutMapping("/{id}")
         @LogActivity("MENGUBAH DATA USER")
         public ResponseEntity<WebResponse<UserResponse>> updateUser(
-                        @PathVariable Long id,
+                        @PathVariable(name = "id") Long id,
                         @Valid @RequestBody UserRequest request) {
                 UserResponse updatedUser = userService.updateUser(id, request);
 
@@ -82,7 +81,7 @@ public class UserController {
 
         @DeleteMapping("/{id}")
         @LogActivity("MENGHAPUS USER")
-        public ResponseEntity<WebResponse<String>> deleteUser(@PathVariable Long id) {
+        public ResponseEntity<WebResponse<String>> deleteUser(@PathVariable(name = "id") Long id) {
 
                 userService.deleteUser(id);
 

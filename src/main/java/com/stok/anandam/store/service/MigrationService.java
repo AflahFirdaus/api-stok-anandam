@@ -846,10 +846,6 @@ public class MigrationService {
         long startTime = System.currentTimeMillis();
         log.info("=== START MIGRASI CANVASING (OPTIMIZED) ===");
 
-        // 1. Truncate (Bersihkan tabel)
-        log.info("Membersihkan tabel Canvasing...");
-        canvasingRepository.truncateTable();
-
         final List<Canvasing> buffer = new ArrayList<>();
         final int[] totalProcessed = { 0 };
 
@@ -1034,7 +1030,7 @@ public class MigrationService {
                     t.setPrincipal(getVal(row, headerMap, "PRINCIPAL"));
                 }
 
-                t.setTayang(parseDate(getVal(row, headerMap, "TAYANG")));
+                t.setTayang(cleanNumber(getVal(row, headerMap, "TAYANG")));
                 t.setSertifikatTkd(getVal(row, headerMap, "SERTIFIKAT TKDN"));
                 t.setPresentase(cleanPercentage(getVal(row, headerMap, "PERSENTASE")));
 
@@ -1114,9 +1110,9 @@ public class MigrationService {
                 ps.setString(4, t.getPrincipal());
 
                 if (t.getTayang() != null)
-                    ps.setDate(5, java.sql.Date.valueOf(t.getTayang()));
+                    ps.setInt(5, t.getTayang());
                 else
-                    ps.setNull(5, java.sql.Types.DATE);
+                    ps.setNull(5, java.sql.Types.INTEGER);
 
                 ps.setString(6, t.getSertifikatTkd());
                 ps.setBigDecimal(7, t.getPresentase());
