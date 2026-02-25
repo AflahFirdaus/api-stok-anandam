@@ -7,7 +7,6 @@ import com.stok.anandam.store.dto.StockSummaryByCategoryResponse;
 import com.stok.anandam.store.dto.StockSummaryRowResponse;
 import com.stok.anandam.store.dto.StockGroupedResponse;
 import com.stok.anandam.store.dto.WebResponse;
-import com.stok.anandam.store.exception.ResourceNotFoundException;
 import com.stok.anandam.store.service.StockService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -24,9 +23,6 @@ public class StockController {
         private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
                         "itemName", "itemCode", "kategoriNama", "kategoriItemcode", "finalStok", "grandTotal",
                         "warehouse", "id");
-
-        @Autowired
-        private StockRepository stockRepository;
 
         @Autowired
         private StockService stockService;
