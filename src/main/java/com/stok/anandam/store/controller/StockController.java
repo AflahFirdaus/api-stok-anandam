@@ -1,7 +1,6 @@
 package com.stok.anandam.store.controller;
 
 import com.stok.anandam.store.core.postgres.model.Stock;
-import com.stok.anandam.store.core.postgres.repository.StockRepository;
 import com.stok.anandam.store.dto.PagingResponse;
 import com.stok.anandam.store.dto.StockSummaryByCategoryResponse;
 import com.stok.anandam.store.dto.StockSummaryRowResponse;

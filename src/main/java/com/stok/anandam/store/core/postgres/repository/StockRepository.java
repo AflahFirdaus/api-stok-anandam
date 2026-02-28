@@ -59,6 +59,32 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
         Page<String> findDistinctItemCodes(@Param("search") String search, @Param("kategori") String kategori,
                         Pageable pageable);
 
+        /** Fetch unique item codes with joined sorting. */
+        @Query("SELECT s.itemCode FROM Stock s LEFT JOIN Pricelist p ON s.normalizedItemName = p.itemName WHERE " +
+                        "(:search IS NULL OR :search = '' OR LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.itemCode) LIKE LOWER(CONCAT('%', :search, '%'))) AND "
+                        +
+                        "(:kategori IS NULL OR :kategori = '' OR LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) = LOWER(TRIM(:kategori)) OR LOWER(s.kategoriItemcode) LIKE LOWER(CONCAT('%', :kategori, '%'))) AND "
+                        +
+                        "s.finalStok >= 1 " +
+                        "GROUP BY s.itemCode, s.itemName, p.modal, p.finalPricelist, p.spesifikasi " +
+                        "ORDER BY " +
+                        "CASE WHEN :direction = 'asc' AND :sortBy = 'p.modal' THEN p.modal END ASC, " +
+                        "CASE WHEN :direction = 'asc' AND :sortBy = 'p.finalPricelist' THEN p.finalPricelist END ASC, "
+                        +
+                        "CASE WHEN :direction = 'asc' AND :sortBy = 'p.spesifikasi' THEN p.spesifikasi END ASC, " +
+                        "CASE WHEN :direction = 'asc' AND :sortBy = 'SUM(s.finalStok)' THEN SUM(s.finalStok) END ASC, "
+                        +
+                        "CASE WHEN :direction = 'desc' AND :sortBy = 'p.modal' THEN p.modal END DESC, " +
+                        "CASE WHEN :direction = 'desc' AND :sortBy = 'p.finalPricelist' THEN p.finalPricelist END DESC, "
+                        +
+                        "CASE WHEN :direction = 'desc' AND :sortBy = 'p.spesifikasi' THEN p.spesifikasi END DESC, " +
+                        "CASE WHEN :direction = 'desc' AND :sortBy = 'SUM(s.finalStok)' THEN SUM(s.finalStok) END DESC")
+        Page<String> findDistinctItemCodesSortedByPricelist(@Param("search") String search,
+                        @Param("kategori") String kategori,
+                        @Param("sortBy") String sortBy,
+                        @Param("direction") String direction,
+                        Pageable pageable);
+
         /**
          * Fetch all stock records for a list of item codes, respecting finalStok >= 1.
          */
@@ -74,13 +100,13 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
          * Agregasi: group by kategori_itemcode, sum(grand_total). Urut nilai terbesar
          * dulu.
          */
-        @Query("SELECT s.kategoriItemcode, COALESCE(SUM(s.grandTotal), 0) FROM Stock s WHERE s.kategoriItemcode IS NOT NULL AND TRIM(s.kategoriItemcode) <> '' AND s.finalStok >= 1 GROUP BY s.kategoriItemcode ORDER BY COALESCE(SUM(s.grandTotal), 0) DESC")
+        @Query("SELECT COALESCE(NULLIF(TRIM(s.kategoriItemcode), ''), 'LAIN-LAIN'), COALESCE(SUM(s.grandTotal), 0) FROM Stock s WHERE s.finalStok >= 1 GROUP BY COALESCE(NULLIF(TRIM(s.kategoriItemcode), ''), 'LAIN-LAIN') ORDER BY COALESCE(SUM(s.grandTotal), 0) DESC")
         List<Object[]> sumGrandTotalByKategoriItemcode();
 
         /**
          * Agregasi: group by kategori_nama, sum(grand_total). Urut nilai terbesar dulu.
          */
-        @Query("SELECT s.kategoriNama, COALESCE(SUM(s.grandTotal), 0) FROM Stock s WHERE s.kategoriNama IS NOT NULL AND TRIM(s.kategoriNama) <> '' AND s.finalStok >= 1 GROUP BY s.kategoriNama ORDER BY COALESCE(SUM(s.grandTotal), 0) DESC")
+        @Query("SELECT COALESCE(NULLIF(TRIM(s.kategoriNama), ''), 'LAIN-LAIN'), COALESCE(SUM(s.grandTotal), 0) FROM Stock s WHERE s.finalStok >= 1 GROUP BY COALESCE(NULLIF(TRIM(s.kategoriNama), ''), 'LAIN-LAIN') ORDER BY COALESCE(SUM(s.grandTotal), 0) DESC")
         List<Object[]> sumGrandTotalByKategoriNama();
 
         /**

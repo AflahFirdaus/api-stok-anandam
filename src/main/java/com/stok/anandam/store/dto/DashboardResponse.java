@@ -15,4 +15,6 @@ public class DashboardResponse {
     private long totalLowStockItems; // <--- Pastikan pakai 'long'
     private List<Stock> lowStockPreview;
     private long totalTkdnItems;
+    private BigDecimal totalHpp;
+    private List<EmployeeSalesResponse> employeeSalesToday;
 }

@@ -17,10 +17,10 @@ import java.util.function.Function;
 @Component
 public class JwtUtil {
 
-    @Value("${jwt.secret}")
+    @Value("${jwt.secret:default_fallback_secret_key_must_be_long_enough_32_chars}")
     private String secret;
 
-    @Value("${jwt.expiration}")
+    @Value("${jwt.expiration:3600000}")
     private long expiration;
 
     private Key getSignInKey() {

@@ -49,4 +49,7 @@ public class Sales {
 
     @Column(name = "emp_code", length = 50)
     private String empCode;
+
+    @Column(name = "emp_name")
+    private String empName;
 }

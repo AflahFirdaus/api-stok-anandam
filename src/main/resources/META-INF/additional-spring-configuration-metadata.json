@@ -63,5 +63,40 @@
     "name": "migration.legacy-schema",
     "type": "java.lang.String",
     "description": "Nama schema/database MySQL sumber data migrasi (legacy)."
+  },
+  {
+    "name": "spring.datasource.mysql.maximum-pool-size",
+    "type": "java.lang.String",
+    "description": "A description for 'spring.datasource.mysql.maximum-pool-size'"
+  },
+  {
+    "name": "spring.datasource.mysql.minimum-idle",
+    "type": "java.lang.String",
+    "description": "A description for 'spring.datasource.mysql.minimum-idle'"
+  },
+  {
+    "name": "spring.datasource.mysql.idle-timeout",
+    "type": "java.lang.String",
+    "description": "A description for 'spring.datasource.mysql.idle-timeout'"
+  },
+  {
+    "name": "spring.datasource.mysql.connection-timeout",
+    "type": "java.lang.String",
+    "description": "A description for 'spring.datasource.mysql.connection-timeout'"
+  },
+  {
+    "name": "spring.datasource.mysql.max-lifetime",
+    "type": "java.lang.String",
+    "description": "A description for 'spring.datasource.mysql.max-lifetime'"
+  },
+  {
+    "name": "spring.datasource.mysql.leak-detection-threshold",
+    "type": "java.lang.String",
+    "description": "A description for 'spring.datasource.mysql.leak-detection-threshold'"
+  },
+  {
+    "name": "spring.cloud.gcp.credentials.location",
+    "type": "java.lang.String",
+    "description": "A description for 'spring.cloud.gcp.credentials.location'"
   }
 ]}

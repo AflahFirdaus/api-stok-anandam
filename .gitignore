@@ -32,6 +32,25 @@ build/
 ### VS Code ###
 .vscode/
 
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.restore
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Log files
+*.log
+logs/
+
+# Rahasia (Sudah benar)
+src/main/resources/service_account.json
+
 ### Application Properties ###
 src/main/resources/application-prod.properties
 src/main/resources/application-dev.properties

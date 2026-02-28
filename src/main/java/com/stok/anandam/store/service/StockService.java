@@ -1,8 +1,7 @@
 package com.stok.anandam.store.service;
 
-import com.stok.anandam.store.core.postgres.model.Stock;
-import com.stok.anandam.store.core.postgres.repository.StockRepository;
-import com.stok.anandam.store.core.postgres.repository.SalesRepository;
+import com.stok.anandam.store.core.postgres.model.*;
+import com.stok.anandam.store.core.postgres.repository.*;
 import com.stok.anandam.store.dto.StockSummaryByCategoryResponse;
 import com.stok.anandam.store.dto.StockSummaryRowResponse;
 import com.stok.anandam.store.dto.StockGroupedResponse;
@@ -30,14 +29,42 @@ public class StockService {
         @Autowired
         private SalesRepository salesRepository;
 
+        @Autowired
+        private PricelistRepository pricelistRepository;
+
         public Page<StockGroupedResponse> getGroupedStocks(int page, int size, String sortBy, String direction,
                         String search, String kategori) {
                 Sort.Direction sortDirection = direction.equalsIgnoreCase("desc") ? Sort.Direction.DESC
                                 : Sort.Direction.ASC;
-                String actualSortBy = "itemCode".equals(sortBy) || "itemName".equals(sortBy) ? sortBy : "itemCode";
-                Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, actualSortBy));
+                String actualSortBy = sortBy;
+                // Map frontend sort names to backend field names if they differ
+                if ("modalFinal".equals(sortBy))
+                        actualSortBy = "p.modal";
+                else if ("finalPricelist".equals(sortBy))
+                        actualSortBy = "p.finalPricelist";
+                else if ("spesifikasi".equals(sortBy))
+                        actualSortBy = "p.spesifikasi";
+                else if ("itemCode".equals(sortBy))
+                        actualSortBy = "s.itemCode";
+                else if ("itemName".equals(sortBy))
+                        actualSortBy = "s.itemName";
+                else if ("finalStok".equals(sortBy))
+                        actualSortBy = "SUM(s.finalStok)";
+                else
+                        actualSortBy = "s.itemName";
 
-                Page<String> itemCodePage = stockRepository.findDistinctItemCodes(search, kategori, pageable);
+                Pageable pageable = PageRequest.of(page, size); // Manual sorting in query if complex
+
+                Page<String> itemCodePage;
+                if (actualSortBy.startsWith("p.") || actualSortBy.startsWith("SUM")) {
+                        // Need special query for joined/agg sorting
+                        itemCodePage = stockRepository.findDistinctItemCodesSortedByPricelist(
+                                        search, kategori, actualSortBy, direction, pageable);
+                } else {
+                        itemCodePage = stockRepository.findDistinctItemCodes(search, kategori,
+                                        PageRequest.of(page, size,
+                                                        Sort.by(sortDirection, actualSortBy.replace("s.", ""))));
+                }
                 List<String> itemCodes = itemCodePage.getContent();
 
                 if (itemCodes.isEmpty()) {
@@ -60,6 +87,15 @@ public class StockService {
                 Map<String, List<Stock>> groupedByCode = allStocks.stream()
                                 .collect(Collectors.groupingBy(Stock::getItemCode));
 
+                // Fetch pricelist data for all items in one go (or by name list)
+                List<String> uniqueItemNames = allStocks.stream().map(Stock::getItemName).distinct()
+                                .collect(Collectors.toList());
+                Map<String, com.stok.anandam.store.core.postgres.model.Pricelist> pricelistMap = new HashMap<>();
+                uniqueItemNames.forEach(name -> {
+                        String normalized = com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(name);
+                        pricelistRepository.findByItemName(normalized).ifPresent(p -> pricelistMap.put(name, p));
+                });
+
                 List<StockGroupedResponse> groupedResponses = itemCodes.stream().map(code -> {
                         List<Stock> stocks = groupedByCode.get(code);
                         Stock first = stocks.get(0);
@@ -77,6 +113,9 @@ public class StockService {
                                         .filter(Objects::nonNull)
                                         .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+                        com.stok.anandam.store.core.postgres.model.Pricelist priceInfo = pricelistMap
+                                        .get(first.getItemName());
+
                         return StockGroupedResponse.builder()
                                         .id(first.getId())
                                         .itemCode(first.getItemCode())
@@ -86,9 +125,9 @@ public class StockService {
                                         .totalStok(totalStok)
                                         .hargaHpp(first.getHargaHpp())
                                         .grandTotal(grandTotal)
-                                        .spesifikasi(first.getSpesifikasi())
-                                        .modal(first.getModal())
-                                        .finalPricelist(first.getFinalPricelist())
+                                        .spesifikasi(priceInfo != null ? priceInfo.getSpesifikasi() : null)
+                                        .modal(priceInfo != null ? priceInfo.getModal() : null)
+                                        .finalPricelist(priceInfo != null ? priceInfo.getFinalPricelist() : null)
                                         .lastSalesDate(lastSalesDates.get(first.getItemName()))
                                         .warehouses(warehouses)
                                         .build();
@@ -241,6 +280,16 @@ public class StockService {
 
                 LocalDate lastSalesDate = salesRepository.findLatestDocDateByItemName(stock.getItemName());
                 stock.setLastSalesDate(lastSalesDate);
+
+                // Fetch from pricelist using normalized name
+                String normalizedName = com.stok.anandam.store.util.NormalizationUtil
+                                .normalizeItemName(stock.getItemName());
+                pricelistRepository.findByItemName(normalizedName).ifPresent(p -> {
+                        stock.setSpesifikasi(p.getSpesifikasi());
+                        stock.setModal(p.getModal());
+                        stock.setFinalPricelist(p.getFinalPricelist());
+                });
+
                 return stock;
         }
 

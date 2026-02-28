@@ -117,6 +117,21 @@ public class ActivityLogController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/last-sync")
+    public ResponseEntity<WebResponse<ActivityLogResponse>> getLastSync() {
+        java.util.Optional<ActivityLog> lastLog = activityLogRepository
+                .findFirstByActionStartingWithOrderByTimestampDesc("MELAKUKAN MIGRASI");
+
+        WebResponse<ActivityLogResponse> response = WebResponse.<ActivityLogResponse>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success fetch last sync log")
+                .data(lastLog.map(this::toResponse).orElse(null))
+                .paging(null)
+                .build();
+
+        return ResponseEntity.ok(response);
+    }
+
     private ActivityLogResponse toResponse(ActivityLog log) {
         return ActivityLogResponse.builder()
                 .id(log.getId())

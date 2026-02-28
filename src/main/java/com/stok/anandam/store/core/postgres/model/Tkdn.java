@@ -7,7 +7,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 
 @Data
 @AllArgsConstructor
@@ -26,8 +25,8 @@ public class Tkdn {
 
     private Integer modal;
 
-    private String dealer;
-    private String principal;
+    private Integer dealer;
+    private Integer principal;
     private Integer tayang;
 
     @Column(name = "sertifikat_tkd", length = 100)
@@ -45,7 +44,7 @@ public class Tkdn {
     private String spesifikasi;
 
     @Column(name = "distri")
-    private String distri;
+    private Integer distri;
 
     @Column(name = "processor", length = 255)
     private String processor;

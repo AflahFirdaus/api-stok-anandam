@@ -25,8 +25,11 @@ public class Stock {
     @Column(name = "item_code", length = 100)
     private String itemCode;
 
-    @Column(name = "item_name", length = 100)
+    @Column(name = "item_name", length = 500)
     private String itemName;
+
+    @Column(name = "normalized_item_name", length = 500)
+    private String normalizedItemName;
 
     // Tambahan kolom baru (walau di query lama tidak ada, kita siapkan null dulu
     // atau diisi logic lain)
@@ -48,18 +51,16 @@ public class Stock {
     @Column(name = "warehouse", length = 100)
     private String warehouse;
 
-    /**
-     * Dari sheet PRICELIST&MODAL (diisi setelah migrasi + sync dari Google Sheet).
-     */
-    @Column(name = "spesifikasi", length = 2000)
-    private String spesifikasi;
-
-    @Column(name = "modal", precision = 19, scale = 2)
-    private BigDecimal modal;
-
-    @Column(name = "final_pricelist", precision = 19, scale = 2)
-    private BigDecimal finalPricelist;
-
     @Transient
     private LocalDate lastSalesDate;
+
+    // These fields are populated via lookup to Pricelist table
+    @Transient
+    private String spesifikasi;
+
+    @Transient
+    private java.math.BigDecimal modal;
+
+    @Transient
+    private java.math.BigDecimal finalPricelist;
 }

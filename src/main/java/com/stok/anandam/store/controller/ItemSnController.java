@@ -1,5 +1,6 @@
 package com.stok.anandam.store.controller;
 
+import com.stok.anandam.store.dto.PagingResponse;
 import com.stok.anandam.store.dto.ItemSerialNumberResponse;
 import com.stok.anandam.store.dto.WebResponse;
 import com.stok.anandam.store.service.ItemSnService;
@@ -39,11 +40,19 @@ public class ItemSnController {
                 List<ItemSerialNumberResponse> data = itemSnService.getSnData(
                                 "MASUK", search, docId, user, itemName, sn, startDate, endDate, sortBy, direction, size,
                                 page * size);
+                long totalItem = itemSnService.countSnData(
+                                "MASUK", search, docId, user, itemName, sn, startDate, endDate);
+
                 return ResponseEntity.ok(WebResponse.<List<ItemSerialNumberResponse>>builder()
                                 .status(200)
                                 .message("Success Fetch SN Masuk")
                                 .data(data)
-                                .paging(null)
+                                .paging(PagingResponse.builder()
+                                                .currentPage(page)
+                                                .totalPage((int) Math.ceil((double) totalItem / size))
+                                                .size(size)
+                                                .totalItem(totalItem)
+                                                .build())
                                 .build());
         }
 
@@ -70,11 +79,19 @@ public class ItemSnController {
                 List<ItemSerialNumberResponse> data = itemSnService.getSnData(
                                 "KELUAR", search, docId, user, itemName, sn, startDate, endDate, sortBy, direction,
                                 size, page * size);
+                long totalItem = itemSnService.countSnData(
+                                "KELUAR", search, docId, user, itemName, sn, startDate, endDate);
+
                 return ResponseEntity.ok(WebResponse.<List<ItemSerialNumberResponse>>builder()
                                 .status(200)
                                 .message("Success Fetch SN Keluar")
                                 .data(data)
-                                .paging(null)
+                                .paging(PagingResponse.builder()
+                                                .currentPage(page)
+                                                .totalPage((int) Math.ceil((double) totalItem / size))
+                                                .size(size)
+                                                .totalItem(totalItem)
+                                                .build())
                                 .build());
         }
 }

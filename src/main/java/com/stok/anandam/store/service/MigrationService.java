@@ -1,20 +1,15 @@
 package com.stok.anandam.store.service;
 
-import com.stok.anandam.store.core.postgres.model.Sales;
-import com.stok.anandam.store.core.postgres.model.Stock;
-import com.stok.anandam.store.core.postgres.model.Tkdn;
-import com.stok.anandam.store.core.postgres.model.Purchase;
-import com.stok.anandam.store.core.postgres.repository.PurchaseRepository;
-import com.stok.anandam.store.core.postgres.repository.SalesRepository;
-import com.stok.anandam.store.core.postgres.repository.StockRepository;
-import com.stok.anandam.store.core.postgres.repository.TkdnRepository;
-
+import com.stok.anandam.store.core.postgres.model.*;
+import com.stok.anandam.store.core.postgres.repository.*;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
@@ -26,30 +21,18 @@ import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.sheets.v4.Sheets;
 import com.google.api.services.sheets.v4.SheetsScopes;
+import com.google.api.services.sheets.v4.model.ValueRange;
 import com.google.auth.http.HttpCredentialsAdapter;
 import com.google.auth.oauth2.GoogleCredentials;
-import com.stok.anandam.store.core.postgres.model.Canvasing;
-import com.stok.anandam.store.core.postgres.repository.CanvasingRepository;
-import org.springframework.core.io.ClassPathResource;
+
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import com.google.api.services.sheets.v4.model.ValueRange;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @Service
 @ConditionalOnProperty(name = "app.mysql.enabled", havingValue = "true")
@@ -234,7 +217,8 @@ public class MigrationService {
                             ELSE t.qty_def
                         END * t.price
                     ) AS grand_total,
-                    e.code AS emp_code
+                    e.code AS emp_code,
+                    e.name AS emp_name
                 FROM dbtsalesdoc d
                 LEFT JOIN dbtsalestrans t ON d.id = t.doc_id
                 LEFT JOIN dbmemployee e ON d.emp_id = e.id
@@ -293,6 +277,7 @@ public class MigrationService {
                         s.setGrandTotal(rs.getBigDecimal("grand_total"));
 
                         s.setEmpCode(rs.getString("emp_code"));
+                        s.setEmpName(rs.getString("emp_name"));
 
                         buffer.add(s);
 
@@ -330,8 +315,8 @@ public class MigrationService {
     @Transactional
     public void saveSalesBatch(List<Sales> salesList) {
         String sql = """
-                    INSERT INTO sales (id, doc_date, doc_no, code, par_name, item_name, qty, price, grand_total, emp_code)
-                    VALUES (nextval('sales_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO sales (id, doc_date, doc_no, code, par_name, item_name, qty, price, grand_total, emp_code, emp_name)
+                    VALUES (nextval('sales_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
 
         pgJdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
@@ -347,6 +332,7 @@ public class MigrationService {
                 ps.setBigDecimal(7, s.getPrice());
                 ps.setBigDecimal(8, s.getGrandTotal());
                 ps.setString(9, s.getEmpCode());
+                ps.setString(10, s.getEmpName());
             }
 
             @Override
@@ -360,7 +346,63 @@ public class MigrationService {
     @Autowired
     private StockRepository stockRepository;
 
-    // SQL Stok: pakai schema default dari connection string
+    @Autowired
+    private SyncSettingsRepository syncSettingsRepository;
+
+    @Autowired
+    private PricelistRepository pricelistRepository;
+
+    // Google Sheets Config
+    private static final String CREDENTIALS_FILE_PATH = "/service_account.json";
+    private static final String STOCK_SPREADSHEET_ID = "173w5Y8hynv8lOphrsjtCx0tc8CJIQThuLrMIttwtw30";
+    private static final String STOCK_PRICELIST_RANGE = "'PRICELIST&MODAL'!A:Z";
+
+    private static final String TKDN_SPREADSHEET_ID = "173w5Y8hynv8lOphrsjtCx0tc8CJIQThuLrMIttwtw30";
+    private static final String TKDN_RANGE = "TKDN!A1:Z";
+
+    @Async
+    public void checkAndTriggerMigration() {
+        log.info("Checking for database changes in dbslog...");
+        try {
+            // dbslog lebih realtime — setiap aksi sistem langsung dicatat di sini.
+            String sql = "SELECT MAX(id) FROM dbslog";
+            Long currentMaxId = legacyJdbcTemplate.queryForObject(sql, Long.class);
+
+            if (currentMaxId == null || currentMaxId == 0)
+                return;
+
+            Optional<SyncSettings> opt = syncSettingsRepository.findBySyncKey("last_max_id");
+            Long lastMaxId = opt.map(s -> {
+                try {
+                    return Long.parseLong(s.getSyncValue());
+                } catch (NumberFormatException e) {
+                    return 0L;
+                }
+            }).orElse(0L);
+
+            if (currentMaxId > lastMaxId) {
+                log.info("Changes detected in dbtjurnal (current: {}, last: {}). Triggering migration...", currentMaxId,
+                        lastMaxId);
+
+                migrateStockData().get();
+                migrateSalesData().get();
+                migratePurchaseData().get();
+                migrateSnData().get();
+
+                SyncSettings settings = opt
+                        .orElse(SyncSettings.builder().syncKey("last_max_id").syncValue("0").build());
+                settings.setSyncValue(String.valueOf(currentMaxId));
+                syncSettingsRepository.save(settings);
+
+                log.info("Auto-sync migration completed. last_max_id updated to {}", currentMaxId);
+            } else {
+                log.info("No changes in dbtjurnal (max_id: {}).", currentMaxId);
+            }
+        } catch (Exception e) {
+            log.error("Error trigger check: {}", e.getMessage());
+        }
+    }
+
     private static final String SQL_STOCK = """
                 SELECT
                     i.code AS item_code,
@@ -442,6 +484,7 @@ public class MigrationService {
 
                         s.setItemCode(code);
                         s.setItemName(name);
+                        s.setNormalizedItemName(com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(name));
 
                         // === LOGIC UPDATE KATEGORI ===
 
@@ -486,12 +529,9 @@ public class MigrationService {
                 self.saveStockBatch(buffer);
             }
 
-            // Isi spesifikasi, modal, final pricelist dari sheet PRICELIST&MODAL (fill-down kosong)
-            String syncResult = self.syncStockPricelistFromSheet();
-            log.info("Sync Pricelist dari Sheet: {}", syncResult);
-
             long duration = System.currentTimeMillis() - startTime;
-            String result = "=== STOK SELESAI === Total: " + totalProcessed[0] + ". " + syncResult + " Waktu: " + (duration / 1000)
+            String result = "=== STOK SELESAI === Total: " + totalProcessed[0] + ". Waktu: "
+                    + (duration / 1000)
                     + " detik.";
             log.info("{}", result);
             return CompletableFuture.completedFuture(result);
@@ -503,14 +543,17 @@ public class MigrationService {
     }
 
     /**
-     * Baca sheet PRICELIST&MODAL, isi kolom kosong dengan nilai dari baris atas (fill-down untuk spesifikasi & pricelist),
+     * Baca sheet PRICELIST&MODAL, isi kolom kosong dengan nilai dari baris atas
+     * (fill-down untuk spesifikasi & pricelist),
      * lalu update stok by item name.
      */
+    @Async
     @Transactional
-    public String syncStockPricelistFromSheet() {
+    public CompletableFuture<String> syncStockPricelistFromSheet() {
         try {
             InputStream in = MigrationService.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
-            if (in == null) return "ERROR: service_account.json tidak ditemukan";
+            if (in == null)
+                return CompletableFuture.completedFuture("ERROR: service_account.json tidak ditemukan");
 
             GoogleCredentials credentials = GoogleCredentials.fromStream(in)
                     .createScoped(Collections.singleton(SheetsScopes.SPREADSHEETS_READONLY));
@@ -521,9 +564,11 @@ public class MigrationService {
                     .setApplicationName("Anandam Store")
                     .build();
 
-            ValueRange response = service.spreadsheets().values().get(SPREADSHEET_ID, PRICELIST_RANGE).execute();
+            ValueRange response = service.spreadsheets().values().get(STOCK_SPREADSHEET_ID, STOCK_PRICELIST_RANGE)
+                    .execute();
             List<List<Object>> values = response.getValues();
-            if (values == null || values.size() < 2) return "Sheet kosong atau hanya header";
+            if (values == null || values.size() < 2)
+                return CompletableFuture.completedFuture("Sheet kosong atau hanya header");
 
             // Header bisa tidak berada di baris pertama. Cari dulu baris header.
             int headerRowIndex = -1;
@@ -564,23 +609,28 @@ public class MigrationService {
                 log.info("PRICELIST&MODAL header tidak ditemukan, pakai fallback kolom A-D.");
                 idxSpesifikasi = 0;
                 idxItemName = 1;
-                idxItemCode = 1; // fallback: asumsikan item code sama dengan item name jika tidak ada kolom khusus
+                idxItemCode = 1; // fallback: asumsikan item code sama dengan item name jika tidak ada kolom
+                                 // khusus
                 idxModal = 2;
                 idxPricelist = 3;
             }
 
             if (idxItemName == null) {
-                return "ERROR: Kolom nama item tidak ditemukan (header/fallback gagal).";
+                return CompletableFuture
+                        .completedFuture("ERROR: Kolom nama item tidak ditemukan (header/fallback gagal).");
             }
 
             // Fill-down: nilai kosong diisi dari baris atas (HANYA spesifikasi & pricelist)
             String lastSpesifikasi = null;
             BigDecimal lastPricelist = null;
-            Map<String, Object[]> byItemName = new HashMap<>(); // normalized key -> [spesifikasi, modal, finalPricelist]
-            List<Object[]> orderedSheetRows = new ArrayList<>(); // urutan asli sheet -> [itemName, spesifikasi, modal, pricelist]
+            Map<String, Object[]> byItemName = new HashMap<>(); // normalized key -> [spesifikasi, modal,
+                                                                // finalPricelist]
+            List<Object[]> orderedSheetRows = new ArrayList<>(); // urutan asli sheet -> [itemName, spesifikasi, modal,
+                                                                 // pricelist]
 
             for (int i = 0; i < values.size(); i++) {
-                if (i == headerRowIndex) continue; // skip baris header (jika ada)
+                if (i == headerRowIndex)
+                    continue; // skip baris header (jika ada)
                 List<Object> row = values.get(i);
                 String itemName = getValByIndex(row, idxItemName);
                 String itemCode = getValByIndex(row, idxItemCode);
@@ -590,25 +640,31 @@ public class MigrationService {
                 String pricelistStr = getValByIndex(row, idxPricelist);
 
                 // Fill-down: kosong pakai nilai baris atas (spesifikasi & pricelist)
-                if (spesifikasiRaw != null && !spesifikasiRaw.isBlank()) lastSpesifikasi = spesifikasiRaw;
-                String spesifikasi = (spesifikasiRaw != null && !spesifikasiRaw.isBlank()) ? spesifikasiRaw : lastSpesifikasi;
+                if (spesifikasiRaw != null && !spesifikasiRaw.isBlank())
+                    lastSpesifikasi = spesifikasiRaw;
+                String spesifikasi = (spesifikasiRaw != null && !spesifikasiRaw.isBlank()) ? spesifikasiRaw
+                        : lastSpesifikasi;
 
                 // Modal TIDAK fill-down: jika kosong tetap null
                 BigDecimal modal = (modalStr != null && !modalStr.isBlank()) ? cleanBigDecimal(modalStr) : null;
 
-                if (pricelistStr != null && !pricelistStr.isBlank()) lastPricelist = cleanBigDecimal(pricelistStr);
-                BigDecimal pricelist = (pricelistStr != null && !pricelistStr.isBlank()) ? cleanBigDecimal(pricelistStr) : lastPricelist;
+                if (pricelistStr != null && !pricelistStr.isBlank())
+                    lastPricelist = cleanBigDecimal(pricelistStr);
+                BigDecimal pricelist = (pricelistStr != null && !pricelistStr.isBlank()) ? cleanBigDecimal(pricelistStr)
+                        : lastPricelist;
 
-                Object[] payload = new Object[]{ spesifikasi, modal, pricelist };
+                Object[] payload = new Object[] { spesifikasi, modal, pricelist };
                 if (itemName != null && !itemName.isBlank()) {
-                    byItemName.put(normalizeItemName(itemName), payload);
+                    byItemName.put(com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(itemName), payload);
                 }
                 if (itemCode != null && !itemCode.isBlank()) {
-                    byItemName.put(normalizeItemName(itemCode), payload);
+                    byItemName.put(com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(itemCode), payload);
                 }
-                // Fallback penting untuk format tanpa header: kolom A kadang berisi nama item versi panjang
+                // Fallback penting untuk format tanpa header: kolom A kadang berisi nama item
+                // versi panjang
                 if (fallbackNameColA != null && !fallbackNameColA.isBlank()) {
-                    byItemName.put(normalizeItemName(fallbackNameColA), payload);
+                    byItemName.put(com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(fallbackNameColA),
+                            payload);
                 }
 
                 // Simpan urutan baris sheet untuk fallback by-order
@@ -617,111 +673,62 @@ public class MigrationService {
                 }
             }
 
-            List<Stock> allStocks = stockRepository.findAll();
-            String normKey = null;
+            List<Pricelist> pricelistUpdates = new ArrayList<>();
             int updated = 0;
-            int fuzzyMatched = 0;
-            for (Stock s : allStocks) {
-                if (s.getItemName() == null && s.getItemCode() == null) continue;
+            for (Map.Entry<String, Object[]> entry : byItemName.entrySet()) {
+                String itemName = entry.getKey();
+                Object[] payload = entry.getValue();
 
-                // 1) Exact by item_name
-                normKey = normalizeItemName(s.getItemName());
-                Object[] row = byItemName.get(normKey);
+                Pricelist p = pricelistRepository.findByItemName(itemName)
+                        .orElse(Pricelist.builder().itemName(itemName).build());
 
-                // 2) Exact by item_code
-                if (row == null && s.getItemCode() != null) {
-                    row = byItemName.get(normalizeItemName(s.getItemCode()));
-                }
+                p.setSpesifikasi((String) payload[0]);
+                p.setModal((BigDecimal) payload[1]);
+                p.setFinalPricelist((BigDecimal) payload[2]);
 
-                // 3) Fuzzy by item_name (contains dua arah + compact compare)
-                if (row == null && s.getItemName() != null) {
-                    String stockNorm = normalizeItemName(s.getItemName());
-                    String stockCompact = normalizeCompact(stockNorm);
-                    for (Map.Entry<String, Object[]> e : byItemName.entrySet()) {
-                        String sheetNorm = e.getKey();
-                        String sheetCompact = normalizeCompact(sheetNorm);
-                        if (stockNorm.contains(sheetNorm) || sheetNorm.contains(stockNorm)
-                                || stockCompact.contains(sheetCompact) || sheetCompact.contains(stockCompact)) {
-                            row = e.getValue();
-                            fuzzyMatched++;
-                            break;
-                        }
-                    }
-                }
-
-                if (row == null) continue;
-                s.setSpesifikasi((String) row[0]);
-                s.setModal(row[1] != null ? (BigDecimal) row[1] : null);
-                s.setFinalPricelist(row[2] != null ? (BigDecimal) row[2] : null);
+                pricelistUpdates.add(p);
                 updated++;
             }
 
-            // Fallback: jika tidak ada yang match by-name, pakai urutan baris (sheet -> stok).
-            if (updated == 0 && !allStocks.isEmpty() && !orderedSheetRows.isEmpty()) {
-                List<Stock> orderedStocks = new ArrayList<>(allStocks);
-                orderedStocks.sort(Comparator.comparing(Stock::getId, Comparator.nullsLast(Long::compareTo)));
-
-                int limit = Math.min(orderedStocks.size(), orderedSheetRows.size());
-                for (int i = 0; i < limit; i++) {
-                    Stock s = orderedStocks.get(i);
-                    Object[] sheet = orderedSheetRows.get(i);
-                    // Sesuai permintaan: sesuaikan item_name berdasarkan urutan data sheet.
-                    s.setItemName((String) sheet[0]);
-                    s.setSpesifikasi((String) sheet[1]);
-                    s.setModal(sheet[2] != null ? (BigDecimal) sheet[2] : null);
-                    s.setFinalPricelist(sheet[3] != null ? (BigDecimal) sheet[3] : null);
-                    updated++;
-                }
-                log.info("Fallback by-order aktif: {} stok diisi berdasarkan urutan baris sheet.", limit);
-            }
-
-            stockRepository.saveAll(allStocks);
+            pricelistRepository.saveAll(pricelistUpdates);
             log.info("Pricelist mapping keys total: {}", byItemName.size());
-            log.info("Pricelist fuzzy matched count: {}", fuzzyMatched);
-            return "Pricelist sync: " + updated + " stok di-update dari sheet.";
+            return CompletableFuture.completedFuture("Pricelist sync: " + updated + " item di-update dari sheet.");
         } catch (Exception e) {
             log.error("Error sync pricelist from sheet: {}", e.getMessage(), e);
-            return "ERROR sync: " + e.getMessage();
+            return CompletableFuture.completedFuture("ERROR sync: " + e.getMessage());
         }
     }
 
-    private static String normalizeItemName(String name) {
-        if (name == null) return "";
-        return name
-                .toUpperCase()
-                .replace("™", "")
-                .replace("®", "")
-                .replaceAll("[^A-Z0-9 ]", " ")
-                .replaceAll("\\s+", " ")
-                .trim();
-    }
-
-    private static String normalizeCompact(String value) {
-        if (value == null) return "";
-        return value.replaceAll("[^A-Z0-9]", "");
-    }
+    // Normalization methods moved to NormalizationUtil
 
     private static Integer getHeaderIndexFirst(Map<String, Integer> headerMap, String... names) {
         for (String n : names) {
-            if (headerMap.containsKey(n)) return headerMap.get(n);
+            if (headerMap.containsKey(n))
+                return headerMap.get(n);
         }
         return null;
     }
 
     private static String getValByIndex(List<Object> row, Integer index) {
-        if (index == null) return null;
-        if (index >= row.size()) return null;
+        if (index == null)
+            return null;
+        if (index >= row.size())
+            return null;
         Object v = row.get(index);
         return (v == null) ? null : v.toString().trim();
     }
 
     private BigDecimal cleanBigDecimal(String val) {
-        if (val == null || val.isBlank()) return null;
+        if (val == null || val.isBlank())
+            return null;
         String s = val.replace("\u00A0", "").replace(" ", "").replace("Rp", "");
-        if (s.contains(".") && !s.contains(",")) s = s.replace(".", "");
-        else if (s.contains(".") && s.contains(",")) s = s.split(",")[0].replace(".", "");
+        if (s.contains(".") && !s.contains(","))
+            s = s.replace(".", "");
+        else if (s.contains(".") && s.contains(","))
+            s = s.split(",")[0].replace(".", "");
         s = s.replaceAll("[^0-9.-]", "");
-        if (s.isEmpty()) return null;
+        if (s.isEmpty())
+            return null;
         try {
             return new BigDecimal(s);
         } catch (Exception e) {
@@ -732,9 +739,11 @@ public class MigrationService {
     @Transactional
     public void saveStockBatch(List<Stock> stockList) {
         String sql = """
-                    INSERT INTO stok (id, item_code, item_name, kategori_nama, kategori_itemcode, final_stok, harga_hpp, grand_total, warehouse)
-                    VALUES (nextval('stok_seq'), ?, ?, ?, ?, ?, ?, ?, ?)
-                """;
+                INSERT INTO
+
+                stok (id, item_code, item_name, kategori_nama, kategori_itemcode, final_stok, harga_hpp, grand_total, warehouse)
+                                VALUES (nextval('stok_seq'), ?, ?, ?, ?, ?, ?, ?, ?)
+                            """;
 
         pgJdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
             @Override
@@ -769,33 +778,34 @@ public class MigrationService {
     public CompletableFuture<String> migrateSnData() {
         log.info("=== START MIGRASI SERIAL NUMBER ===");
         try {
-            // 1. Bersihkan tabel tujuan di Postgres (Pastikan kamu sudah buat repository-nya)
+            // 1. Bersihkan tabel tujuan di Postgres (Pastikan kamu sudah buat
+            // repository-nya)
             pgJdbcTemplate.execute("TRUNCATE TABLE item_serial_numbers RESTART IDENTITY");
 
             // 2. Query Gabungan (Masuk & Keluar) dari Legacy MySQL
             String sqlSource = """
-                SELECT p.doc_date AS tanggal, p.doc_no AS doc_id, p.par_name AS user_name, m.name AS item_name, sn.sn, 'MASUK' as type
-                FROM dbtitemsn sn
-                LEFT JOIN dbmitem m ON sn.ite_id = m.id
-                LEFT JOIN dbtpurchasedoc p ON sn.doc_id = p.id AND sn.doc_type = p.doc_type
-                WHERE sn.doc_type IN (42,43,44) AND sn.sn IS NOT NULL AND TRIM(sn.sn) <> ''
-                UNION ALL
-                SELECT s.doc_date AS tanggal, s.doc_no AS doc_id, s.par_name AS user_name, m.name AS item_name, sn.sn, 'KELUAR' as type
-                FROM dbtitemsn sn
-                LEFT JOIN dbmitem m ON sn.ite_id = m.id
-                LEFT JOIN dbtsalesdoc s ON sn.doc_id = s.id AND sn.doc_type = s.doc_type
-                WHERE sn.doc_type IN (32,33) AND sn.sn IS NOT NULL AND TRIM(sn.sn) <> ''
-            """;
+                        SELECT p.doc_date AS tanggal, p.doc_no AS doc_id, p.par_name AS user_name, m.name AS item_name, sn.sn, 'MASUK' as type
+                        FROM dbtitemsn sn
+                        LEFT JOIN dbmitem m ON sn.ite_id = m.id
+                        LEFT JOIN dbtpurchasedoc p ON sn.doc_id = p.id AND sn.doc_type = p.doc_type
+                        WHERE sn.doc_type IN (42,43,44) AND sn.sn IS NOT NULL AND TRIM(sn.sn) <> ''
+                        UNION ALL
+                        SELECT s.doc_date AS tanggal, s.doc_no AS doc_id, s.par_name AS user_name, m.name AS item_name, sn.sn, 'KELUAR' as type
+                        FROM dbtitemsn sn
+                        LEFT JOIN dbmitem m ON sn.ite_id = m.id
+                        LEFT JOIN dbtsalesdoc s ON sn.doc_id = s.id AND sn.doc_type = s.doc_type
+                        WHERE sn.doc_type IN (32,33) AND sn.sn IS NOT NULL AND TRIM(sn.sn) <> ''
+                    """;
 
             final List<Object[]> buffer = new ArrayList<>();
             legacyJdbcTemplate.query(sqlSource, rs -> {
                 Object[] row = new Object[] {
-                    rs.getDate("tanggal"),
-                    rs.getString("doc_id"),
-                    rs.getString("user_name"),
-                    rs.getString("item_name"),
-                    rs.getString("sn"),
-                    rs.getString("type")
+                        rs.getTimestamp("tanggal"),
+                        rs.getString("doc_id"),
+                        rs.getString("user_name"),
+                        rs.getString("item_name"),
+                        rs.getString("sn"),
+                        rs.getString("type")
                 };
                 buffer.add(row);
                 if (buffer.size() >= BATCH_SIZE) {
@@ -803,8 +813,9 @@ public class MigrationService {
                     buffer.clear();
                 }
             });
-            
-            if (!buffer.isEmpty()) saveSnBatch(buffer);
+
+            if (!buffer.isEmpty())
+                saveSnBatch(buffer);
 
             return CompletableFuture.completedFuture("Migrasi SN Selesai.");
         } catch (Exception e) {
@@ -822,8 +833,10 @@ public class MigrationService {
             log.error("Caused by [{}]: {} - {}", depth, cause.getClass().getSimpleName(), cause.getMessage());
             if (cause instanceof java.sql.SQLException) {
                 java.sql.SQLException sqlEx = (java.sql.SQLException) cause;
-                if (sqlEx.getSQLState() != null) log.error("  SQLState: {}", sqlEx.getSQLState());
-                if (sqlEx.getErrorCode() != 0) log.error("  ErrorCode: {}", sqlEx.getErrorCode());
+                if (sqlEx.getSQLState() != null)
+                    log.error("  SQLState: {}", sqlEx.getSQLState());
+                if (sqlEx.getErrorCode() != 0)
+                    log.error("  ErrorCode: {}", sqlEx.getErrorCode());
             }
             cause = cause.getCause();
             depth++;
@@ -832,9 +845,9 @@ public class MigrationService {
 
     private void saveSnBatch(List<Object[]> data) {
         String sqlInsert = "INSERT INTO item_serial_numbers (tanggal, doc_id, user_name, item_name, sn, type) VALUES (?, ?, ?, ?, ?, ?)";
-        pgJdbcTemplate.batchUpdate(sqlInsert, data, new int[] { 
-            java.sql.Types.DATE, java.sql.Types.VARCHAR, java.sql.Types.VARCHAR, 
-            java.sql.Types.VARCHAR, java.sql.Types.VARCHAR, java.sql.Types.VARCHAR 
+        pgJdbcTemplate.batchUpdate(sqlInsert, data, new int[] {
+                java.sql.Types.TIMESTAMP, java.sql.Types.VARCHAR, java.sql.Types.VARCHAR,
+                java.sql.Types.VARCHAR, java.sql.Types.VARCHAR, java.sql.Types.VARCHAR
         });
     }
 
@@ -845,6 +858,10 @@ public class MigrationService {
     public CompletableFuture<String> migrateCanvasingData() {
         long startTime = System.currentTimeMillis();
         log.info("=== START MIGRASI CANVASING (OPTIMIZED) ===");
+
+        // Clear existing data before migration to prevent duplication
+        log.info("Cleaning up canvasing table...");
+        canvasingRepository.truncateTable();
 
         final List<Canvasing> buffer = new ArrayList<>();
         final int[] totalProcessed = { 0 };
@@ -954,12 +971,6 @@ public class MigrationService {
     @Autowired
     private TkdnRepository tkdnRepository;
 
-    // KONFIGURASI GOOGLE SHEET
-    private static final String SPREADSHEET_ID = "173w5Y8hynv8lOphrsjtCx0tc8CJIQThuLrMIttwtw30";
-    private static final String RANGE = "TKDN!A1:Z"; // Ambil dari A1 biar Header kebawa
-    private static final String PRICELIST_RANGE = "PRICELIST&MODAL!A1:Z";
-    private static final String CREDENTIALS_FILE_PATH = "/service_account.json";
-
     @Async
     public CompletableFuture<String> migrateTkdnData() {
         long startTime = System.currentTimeMillis();
@@ -984,7 +995,7 @@ public class MigrationService {
 
             // 2. Ambil Data
             ValueRange response = service.spreadsheets().values()
-                    .get(SPREADSHEET_ID, RANGE)
+                    .get(TKDN_SPREADSHEET_ID, TKDN_RANGE)
                     .execute();
 
             List<List<Object>> values = response.getValues();
@@ -1021,13 +1032,14 @@ public class MigrationService {
                 // Ambil data berdasarkan NAMA KOLOM (Sesuai Python script kamu)
                 t.setKategori(getVal(row, headerMap, "KATEGORI"));
                 t.setModal(cleanNumber(getVal(row, headerMap, "MODAL")));
-                t.setDealer(getVal(row, headerMap, "DEALER")); // Di DB Varchar
-                t.setPrincipal(getVal(row, headerMap, "PRINCIPLE")); // Perhatikan ejaan di sheet mungkin "PRINCIPLE"
-                                                                     // atau "PRINCIPAL"
+                t.setDealer(cleanNumber(getVal(row, headerMap, "DEALER"))); // Di DB Varchar
+                t.setPrincipal(cleanNumber(getVal(row, headerMap, "PRINCIPLE"))); // Perhatikan ejaan di sheet mungkin
+                                                                                  // "PRINCIPLE"
+                // atau "PRINCIPAL"
 
                 // Cek typo kolom di sheet, kadang PRINCIPLE kadang PRINCIPAL
                 if (t.getPrincipal() == null) {
-                    t.setPrincipal(getVal(row, headerMap, "PRINCIPAL"));
+                    t.setPrincipal(cleanNumber(getVal(row, headerMap, "PRINCIPAL")));
                 }
 
                 t.setTayang(cleanNumber(getVal(row, headerMap, "TAYANG")));
@@ -1037,7 +1049,7 @@ public class MigrationService {
                 t.setNoMerek(getVal(row, headerMap, "NO MEREK"));
                 t.setNama(getVal(row, headerMap, "NAMA LENGKAP")); // Sesuai python: NAMA LENGKAP
                 t.setSpesifikasi(getVal(row, headerMap, "SPESIFIKASI LENGKAP"));
-                t.setDistri(getVal(row, headerMap, "DISTRI"));
+                t.setDistri(cleanNumber(getVal(row, headerMap, "DISTRI")));
 
                 t.setProcessor(getVal(row, headerMap, "PROCESSOR"));
                 t.setRam(getVal(row, headerMap, "RAM"));
@@ -1106,8 +1118,15 @@ public class MigrationService {
                 else
                     ps.setNull(2, java.sql.Types.INTEGER);
 
-                ps.setString(3, t.getDealer());
-                ps.setString(4, t.getPrincipal());
+                if (t.getDealer() != null)
+                    ps.setInt(3, t.getDealer());
+                else
+                    ps.setNull(3, java.sql.Types.INTEGER);
+
+                if (t.getPrincipal() != null)
+                    ps.setInt(4, t.getPrincipal());
+                else
+                    ps.setNull(4, java.sql.Types.INTEGER);
 
                 if (t.getTayang() != null)
                     ps.setInt(5, t.getTayang());
@@ -1119,7 +1138,10 @@ public class MigrationService {
                 ps.setString(8, t.getNoMerek());
                 ps.setString(9, t.getNama());
                 ps.setString(10, t.getSpesifikasi());
-                ps.setString(11, t.getDistri());
+                if (t.getDistri() != null)
+                    ps.setInt(11, t.getDistri());
+                else
+                    ps.setNull(11, java.sql.Types.INTEGER);
                 ps.setString(12, t.getProcessor());
                 ps.setString(13, t.getRam());
                 ps.setString(14, t.getSsd());
@@ -1169,20 +1191,6 @@ public class MigrationService {
             return new BigDecimal(s);
         } catch (Exception e) {
             return BigDecimal.ZERO;
-        }
-    }
-
-    private LocalDate parseDate(String val) {
-        if (val == null || val.isEmpty())
-            return null;
-        try {
-            return LocalDate.parse(val, DateTimeFormatter.ofPattern("d/M/yyyy"));
-        } catch (Exception e) {
-            try {
-                return LocalDate.parse(val, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-            } catch (Exception ex) {
-                return null;
-            }
         }
     }
 }

@@ -21,15 +21,18 @@ public class MigrationController {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(WebResponse.<String>builder()
                         .status(503)
-                        .message("Migrasi tidak aktif. Set app.mysql.enabled=true di application.properties lalu restart aplikasi.")
+                        .message(
+                                "Migrasi tidak aktif. Set app.mysql.enabled=true di application.properties lalu restart aplikasi.")
                         .data(null)
                         .paging(null)
                         .build());
     }
 
     @PostMapping("/purchase")
+    @LogActivity("MELAKUKAN MIGRASI DATA PURCHASE")
     public ResponseEntity<WebResponse<String>> startPurchaseMigration() {
-        if (migrationService == null) return migrationDisabled();
+        if (migrationService == null)
+            return migrationDisabled();
         migrationService.migratePurchaseData();
         return ResponseEntity.ok(WebResponse.<String>builder()
                 .status(200)
@@ -40,8 +43,10 @@ public class MigrationController {
     }
 
     @PostMapping("/sales")
+    @LogActivity("MELAKUKAN MIGRASI DATA SALES")
     public ResponseEntity<WebResponse<String>> startSalesMigration() {
-        if (migrationService == null) return migrationDisabled();
+        if (migrationService == null)
+            return migrationDisabled();
         migrationService.migrateSalesData();
         return ResponseEntity.ok(WebResponse.<String>builder()
                 .status(200)
@@ -52,8 +57,10 @@ public class MigrationController {
     }
 
     @PostMapping("/stock")
+    @LogActivity("MELAKUKAN MIGRASI DATA STOK")
     public ResponseEntity<WebResponse<String>> startStockMigration() {
-        if (migrationService == null) return migrationDisabled();
+        if (migrationService == null)
+            return migrationDisabled();
         migrationService.migrateStockData();
         return ResponseEntity.ok(WebResponse.<String>builder()
                 .status(200)
@@ -64,8 +71,10 @@ public class MigrationController {
     }
 
     @PostMapping("/canvasing")
+    @LogActivity("MELAKUKAN MIGRASI DATA CANVASSING")
     public ResponseEntity<WebResponse<String>> startCanvasingMigration() {
-        if (migrationService == null) return migrationDisabled();
+        if (migrationService == null)
+            return migrationDisabled();
         migrationService.migrateCanvasingData();
         return ResponseEntity.ok(WebResponse.<String>builder()
                 .status(200)
@@ -78,7 +87,8 @@ public class MigrationController {
     @PostMapping("/tkdn")
     @LogActivity("MELAKUKAN MIGRASI DATA TKDN")
     public ResponseEntity<WebResponse<String>> startTkdnMigration() {
-        if (migrationService == null) return migrationDisabled();
+        if (migrationService == null)
+            return migrationDisabled();
         migrationService.migrateTkdnData();
         return ResponseEntity.ok(WebResponse.<String>builder()
                 .status(200)
@@ -89,8 +99,10 @@ public class MigrationController {
     }
 
     @PostMapping("/sn")
+    @LogActivity("MELAKUKAN MIGRASI DATA SERIAL NUMBER")
     public ResponseEntity<WebResponse<String>> startSnMigration() {
-        if (migrationService == null) return migrationDisabled();
+        if (migrationService == null)
+            return migrationDisabled();
         migrationService.migrateSnData(); // Pastikan method ini sudah dibuat di MigrationService
         return ResponseEntity.ok(WebResponse.<String>builder()
                 .status(200)
@@ -100,18 +112,32 @@ public class MigrationController {
                 .build());
     }
 
+    @PostMapping("/pricelist")
+    @LogActivity("MELAKUKAN MIGRASI DATA PRICELIST DARI SPREADSHEET")
+    public ResponseEntity<WebResponse<String>> startPricelistMigration() {
+        if (migrationService == null)
+            return migrationDisabled();
+        migrationService.syncStockPricelistFromSheet();
+        return ResponseEntity.ok(WebResponse.<String>builder()
+                .status(200)
+                .message("Sinkronisasi Pricelist dari Spreadsheet sedang berjalan di background...")
+                .data("Processing...")
+                .paging(null)
+                .build());
+    }
+
     // @PostMapping("/all")
     // public ResponseEntity<WebResponse<String>> migrateAll() {
-    //     if (migrationService == null) return migrationDisabled();
-        
-    //     // Menjalankan semua migrasi sekaligus di background
-    //     migrationService.migrateAll(); 
-        
-    //     return ResponseEntity.ok(WebResponse.<String>builder()
-    //             .status(200)
-    //             .message("Seluruh sinkronisasi data dari MyBiz sedang berjalan...")
-    //             .data("Total Processing...")
-    //             .build());
+    // if (migrationService == null) return migrationDisabled();
+
+    // // Menjalankan semua migrasi sekaligus di background
+    // migrationService.migrateAll();
+
+    // return ResponseEntity.ok(WebResponse.<String>builder()
+    // .status(200)
+    // .message("Seluruh sinkronisasi data dari MyBiz sedang berjalan...")
+    // .data("Total Processing...")
+    // .build());
     // }
 }
 // Re-trigger compilation
