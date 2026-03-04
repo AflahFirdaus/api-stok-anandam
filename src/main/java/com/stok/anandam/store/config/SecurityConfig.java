@@ -19,7 +19,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final UserDetailsService userDetailsService;
-    
+
     // 2. Tambahkan deklarasi variabel ini
     private final JwtFilter jwtFilter;
 
@@ -34,14 +34,15 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // Spring Security 7: constructor wajib UserDetailsService, setUserDetailsService() tidak ada
+    // Spring Security 7: constructor wajib UserDetailsService,
+    // setUserDetailsService() tidak ada
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(userDetailsService);
         authProvider.setPasswordEncoder(passwordEncoder());
         return authProvider;
     }
-    
+
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
         return authConfig.getAuthenticationManager();
@@ -51,50 +52,75 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain actuatorSecurityFilterChain(HttpSecurity http) throws Exception {
         http
-            .securityMatcher("/actuator/**")
-            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
-            .csrf(csrf -> csrf.disable());
+                .securityMatcher("/actuator/**")
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .csrf(csrf -> csrf.disable());
         return http.build();
     }
 
-    /** API (termasuk /api/v1/* dan /api/sn): JWT. Swagger & auth login/refresh tanpa auth. */
+    /**
+     * API (termasuk /api/v1/* dan /api/sn): JWT. Swagger & auth login/refresh tanpa
+     * auth.
+     */
     @Bean
     public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
         http
-            .securityMatcher("/api/**", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**")
-            .csrf(csrf -> csrf.disable())
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
-                .requestMatchers("/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
-                .requestMatchers("/api/v1/users/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
-                .requestMatchers("/api/**").authenticated()
-            )
-            .authenticationProvider(authenticationProvider())
-            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
-            .formLogin(login -> login.disable())
-            .httpBasic(basic -> basic.disable());
+                .securityMatcher("/api/**", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**")
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
+
+                        // RBAC: Role-based access control
+                        .requestMatchers("/api/v1/users/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/migration/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/tkdn/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/canvasing/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/data-canvasing/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/activity-logs/last-sync")
+                        .hasAnyRole("ADMIN", "SUPERVISOR", "MARKETING")
+                        .requestMatchers("/api/v1/activity-logs/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/old-data/**").hasRole("ADMIN")
+                        .requestMatchers("/api/sn/**").hasRole("ADMIN")
+
+                        .requestMatchers("/api/v1/sales/export").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/purchases/export").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/sales/**").hasAnyRole("ADMIN", "SUPERVISOR")
+                        .requestMatchers("/api/v1/purchase/**", "/api/v1/purchases/**")
+                        .hasAnyRole("ADMIN", "SUPERVISOR")
+
+                        .requestMatchers("/api/v1/dashboard/**").hasAnyRole("ADMIN", "SUPERVISOR", "MARKETING")
+                        .requestMatchers("/api/v1/stock/**", "/api/v1/stocks/**")
+                        .hasAnyRole("ADMIN", "SUPERVISOR", "MARKETING")
+
+                        .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
+                        .requestMatchers("/api/**").authenticated())
+                .authenticationProvider(authenticationProvider())
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .formLogin(login -> login.disable())
+                .httpBasic(basic -> basic.disable());
         return http.build();
     }
 
-    /** Browser (/, /dashboard, dll): form login + JWT (supaya Postman bisa GET /dashboard pakai Bearer token). */
+    /**
+     * Browser (/, /dashboard, dll): form login + JWT (supaya Postman bisa GET
+     * /dashboard pakai Bearer token).
+     */
     @Bean
     public SecurityFilterChain webSecurityFilterChain(HttpSecurity http) throws Exception {
         http
-            .securityMatcher("/", "/check-db", "/login", "/logout", "/dashboard", "/login.html")
-            .csrf(csrf -> csrf.disable())
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/", "/check-db", "/login", "/logout", "/login.html").permitAll()
-                .anyRequest().authenticated()
-            )
-            .authenticationProvider(authenticationProvider())
-            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
-            .formLogin(login -> login
-                    .permitAll()
-                    .defaultSuccessUrl("/dashboard", true)
-            )
-            .logout(logout -> logout.permitAll())
-            .httpBasic(basic -> basic.disable());
+                .securityMatcher("/", "/check-db", "/login", "/logout", "/dashboard", "/login.html")
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/", "/check-db", "/login", "/logout", "/login.html").permitAll()
+                        .anyRequest().authenticated())
+                .authenticationProvider(authenticationProvider())
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .formLogin(login -> login
+                        .permitAll()
+                        .defaultSuccessUrl("/dashboard", true))
+                .logout(logout -> logout.permitAll())
+                .httpBasic(basic -> basic.disable());
         return http.build();
     }
 }

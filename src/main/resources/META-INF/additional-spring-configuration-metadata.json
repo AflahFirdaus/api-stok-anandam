@@ -98,5 +98,15 @@
     "name": "spring.cloud.gcp.credentials.location",
     "type": "java.lang.String",
     "description": "A description for 'spring.cloud.gcp.credentials.location'"
+  },
+  {
+    "name": "spring.datasource.pg.max-lifetime",
+    "type": "java.lang.String",
+    "description": "A description for 'spring.datasource.pg.max-lifetime'"
+  },
+  {
+    "name": "spring.datasource.pg.maximum-pool-size",
+    "type": "java.lang.String",
+    "description": "A description for 'spring.datasource.pg.maximum-pool-size'"
   }
 ]}

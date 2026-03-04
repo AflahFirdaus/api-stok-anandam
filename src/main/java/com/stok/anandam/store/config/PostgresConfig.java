@@ -3,7 +3,6 @@ package com.stok.anandam.store.config; // Sesuaikan package
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 
-import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.boot.jpa.EntityManagerFactoryBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,16 +36,24 @@ public class PostgresConfig {
     @Value("${spring.datasource.pg.driver-class-name}")
     private String driverClassName;
 
+    @Value("${spring.datasource.pg.maximum-pool-size:10}")
+    private int maximumPoolSize;
+
+    @Value("${spring.datasource.pg.max-lifetime:1800000}")
+    private long maxLifetime;
+
     @Primary
     @Bean(name = "pgDataSource")
     public DataSource dataSource() {
-        return DataSourceBuilder.create()
-                .type(com.zaxxer.hikari.HikariDataSource.class)
-                .url(url)
-                .username(username)
-                .password(password)
-                .driverClassName(driverClassName)
-                .build();
+        com.zaxxer.hikari.HikariDataSource ds = new com.zaxxer.hikari.HikariDataSource();
+        ds.setJdbcUrl(url);
+        ds.setUsername(username);
+        ds.setPassword(password);
+        ds.setDriverClassName(driverClassName);
+        ds.setMaximumPoolSize(maximumPoolSize);
+        ds.setMaxLifetime(maxLifetime);
+        ds.setPoolName("HikariPool-Postgres");
+        return ds;
     }
 
     @Primary

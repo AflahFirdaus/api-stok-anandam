@@ -405,56 +405,106 @@ public class MigrationService {
 
     private static final String SQL_STOCK = """
                 SELECT
-                    i.code AS item_code,
-                    i.name AS item_name,
-                    SUBSTRING_INDEX(i.code, ' ', 1) AS kategori_itemcode,
-                    SUBSTRING_INDEX(i.name, ' ', 1) AS kategori_nama,
-                    stk.final_stock,
+                    s.item_code,
+                    s.item_name,
+                    /* Field dari SQL lama tetap dipertahankan */
+                    SUBSTRING_INDEX(s.item_code, ' ', 1) AS kategori_itemcode,
+                    SUBSTRING_INDEX(s.item_name, ' ', 1) AS kategori_nama,
+                    s.final_stock,
                     COALESCE(h.price_avg, 0) AS harga_hpp,
-                    (stk.final_stock * COALESCE(h.price_avg, 0)) AS grand_total,
-                    w.name AS warehouse_name
+                    (s.final_stock * COALESCE(h.price_avg, 0)) AS grand_total,
+                    s.warehouse_name
                 FROM (
                     SELECT
-                        war_id,
-                        ite_id,
-                        SUM(qty_movement) AS final_stock
+                        combined.item_code,
+                        combined.item_name,
+                        SUM(combined.qty_movement) AS final_stock,
+                        w.name AS warehouse_name
                     FROM (
-                        /* PURCHASE */
-                        SELECT d.war_id, t.ite_id,
-                            CASE WHEN d.doc_no LIKE 'BL%%' THEN t.qty_def
-                                 WHEN d.doc_no LIKE 'RB%%' THEN -t.qty_def
-                                 ELSE 0 END AS qty_movement
-                        FROM dbtpurchasedoc d JOIN dbtpurchasetrans t ON d.id = t.doc_id
+                        -- PURCHASE
+                        SELECT
+                            d.war_id,
+                            /* Logika penentuan item_code & name mengikuti SQL baru agar lebih aman (COALESCE) */
+                            COALESCE(m.code, NULLIF(TRIM(t.ite_code),''), TRIM(t.ite_name)) AS item_code,
+                            COALESCE(m.name, TRIM(t.ite_name)) AS item_name,
+                            CASE UPPER(LEFT(TRIM(d.doc_no),2))
+                                WHEN 'BL' THEN COALESCE(t.qty_def,0)
+                                WHEN 'RB' THEN -COALESCE(t.qty_def,0)
+                                WHEN 'KM' THEN COALESCE(t.qty_def,0)
+                                WHEN 'KK' THEN -COALESCE(t.qty_def,0)
+                                ELSE 0
+                            END AS qty_movement
+                        FROM anandamid26.dbtpurchasedoc d
+                        LEFT JOIN anandamid26.dbtpurchasetrans t ON d.id = t.doc_id
+                        LEFT JOIN anandamid26.dbmitem m ON t.ite_id = m.id
 
                         UNION ALL
 
-                        /* TRANSFER */
-                        SELECT d.war_id, t.ite_id,
-                            CASE WHEN d.doc_no LIKE 'II%%' THEN t.qty_def
-                                 WHEN d.doc_no LIKE 'IO%%' THEN -t.qty_def
-                                 ELSE 0 END AS qty_movement
-                        FROM dbtitemtransferdoc d JOIN dbtitemtransfertrans t ON d.id = t.doc_id
+                        -- TRANSFER
+                        SELECT
+                            d.war_id,
+                            COALESCE(m.code, NULLIF(TRIM(t.ite_code),''), TRIM(t.ite_name)) AS item_code,
+                            COALESCE(m.name, TRIM(t.ite_name)) AS item_name,
+                            CASE UPPER(LEFT(TRIM(d.doc_no),2))
+                                WHEN 'II' THEN COALESCE(t.qty_def,0)
+                                WHEN 'IO' THEN -COALESCE(t.qty_def,0)
+                                WHEN 'KM' THEN COALESCE(t.qty_def,0)
+                                WHEN 'KK' THEN -COALESCE(t.qty_def,0)
+                                ELSE 0
+                            END AS qty_movement
+                        FROM anandamid26.dbtitemtransferdoc d
+                        LEFT JOIN anandamid26.dbtitemtransfertrans t ON d.id = t.doc_id
+                        LEFT JOIN anandamid26.dbmitem m ON t.ite_id = m.id
 
                         UNION ALL
 
-                        /* SALES */
-                        SELECT d.war_id, t.ite_id,
-                            CASE WHEN d.doc_no LIKE 'JL%%' THEN -t.qty_def
-                                 WHEN d.doc_no LIKE 'RJ%%' THEN t.qty_def
-                                 ELSE 0 END AS qty_movement
-                        FROM dbtsalesdoc d JOIN dbtsalestrans t ON d.id = t.doc_id
-                    ) trans
-                    GROUP BY war_id, ite_id
-                ) stk
-                JOIN dbmitem i ON stk.ite_id = i.id
-                JOIN dbmwarehouse w ON stk.war_id = w.id
+                        -- SALES
+                        SELECT
+                            d.war_id,
+                            COALESCE(m.code, NULLIF(TRIM(t.ite_code),''), TRIM(t.ite_name)) AS item_code,
+                            COALESCE(m.name, TRIM(t.ite_name)) AS item_name,
+                            CASE UPPER(LEFT(TRIM(d.doc_no),2))
+                                WHEN 'JL' THEN -COALESCE(t.qty_def,0)
+                                WHEN 'RJ' THEN COALESCE(t.qty_def,0)
+                                WHEN 'KM' THEN COALESCE(t.qty_def,0)
+                                WHEN 'KK' THEN -COALESCE(t.qty_def,0)
+                                ELSE 0
+                            END AS qty_movement
+                        FROM anandamid26.dbtsalesdoc d
+                        LEFT JOIN anandamid26.dbtsalestrans t ON d.id = t.doc_id
+                        LEFT JOIN anandamid26.dbmitem m ON t.ite_id = m.id
+                    ) AS combined
+                    LEFT JOIN anandamid26.dbmwarehouse w ON combined.war_id = w.id
+                    WHERE w.name IS NOT NULL
+                    AND TRIM(w.name) <> ''
+                    GROUP BY
+                        w.id,
+                        w.name,
+                        combined.item_code,
+                        combined.item_name
+                    /* Menampilkan stok > 0 sesuai kriteria migrasi pada umumnya */
+                    HAVING SUM(combined.qty_movement) > 0
+                ) AS s
+
                 LEFT JOIN (
-                    SELECT s1.ite_id, s1.price_avg
-                    FROM dbtstockavg s1
-                    JOIN (SELECT ite_id, MAX(id) as max_id FROM dbtstockavg GROUP BY ite_id) s2
-                    ON s1.ite_id = s2.ite_id AND s1.id = s2.max_id
-                ) h ON stk.ite_id = h.ite_id
-                ORDER BY i.name
+                    SELECT
+                        i.code AS item_code,
+                        sa.price_avg
+                    FROM anandamid26.dbtstockavg sa
+                    JOIN anandamid26.dbmitem i ON sa.ite_id = i.id
+                    JOIN (
+                        SELECT
+                            ite_id,
+                            MAX(id) AS max_id
+                        FROM anandamid26.dbtstockavg
+                        GROUP BY ite_id
+                    ) last_sa
+                        ON sa.ite_id = last_sa.ite_id
+                        AND sa.id = last_sa.max_id
+                ) AS h
+                    ON s.item_code = h.item_code
+
+                ORDER BY s.item_name;
             """;
 
     private String getSqlStock() {

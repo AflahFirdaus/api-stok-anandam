@@ -33,7 +33,8 @@ public class RefreshTokenService {
     public RefreshToken createRefreshToken(String username) {
         var user = userRepository.findByUsername(username).orElseThrow();
 
-        // Satu user hanya boleh satu baris refresh_token (unique user_id). Hapus dulu yang lama.
+        // Satu user hanya boleh satu baris refresh_token (unique user_id). Hapus dulu
+        // yang lama.
         refreshTokenRepository.findByUser(user).ifPresent(rt -> {
             refreshTokenRepository.delete(rt);
             refreshTokenRepository.flush(); // Paksa DELETE ke DB sebelum INSERT, supaya tidak duplicate key
@@ -53,6 +54,13 @@ public class RefreshTokenService {
             throw new InvalidRefreshTokenException("Refresh token sudah expired. Silakan login ulang");
         }
         return token;
+    }
+
+    @Transactional
+    public void deleteByUsername(String username) {
+        userRepository.findByUsername(username).ifPresent(user -> {
+            refreshTokenRepository.deleteByUser(user);
+        });
     }
 
     @Transactional

@@ -9,7 +9,8 @@ import java.util.List;
 @Builder
 public class SalesSummaryResponse<T> {
     private BigDecimal totalGrandSum; // Total Omset Penjualan
-    private List<T> content;          // List Data Penjualan
+    private BigDecimal totalQty; // Total Quantity Item
+    private List<T> content; // List Data Penjualan
     private int totalPages;
     private long totalElements;
 }

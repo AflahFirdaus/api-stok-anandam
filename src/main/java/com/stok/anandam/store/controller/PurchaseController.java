@@ -4,6 +4,7 @@ import com.stok.anandam.store.core.postgres.model.Purchase;
 import com.stok.anandam.store.dto.PagingResponse;
 import com.stok.anandam.store.dto.PurchaseSummaryResponse;
 import com.stok.anandam.store.dto.WebResponse;
+import com.stok.anandam.store.service.ExcelExportService;
 import com.stok.anandam.store.service.PurchaseService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -13,42 +14,62 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/purchases")
 public class PurchaseController {
 
-    @Autowired
-    private PurchaseService purchaseService;
+        @Autowired
+        private PurchaseService purchaseService;
 
-    // GET /api/purchases?startDate=2023-01-01&endDate=2023-01-31&search=Budi
-    @GetMapping
-    public ResponseEntity<WebResponse<PurchaseSummaryResponse<Purchase>>> getPurchases(
+        // GET /api/purchases?startDate=2023-01-01&endDate=2023-01-31&search=Budi
+        @GetMapping
+        public ResponseEntity<WebResponse<PurchaseSummaryResponse<Purchase>>> getPurchases(
 
-            @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "10") int size,
-            @RequestParam(name = "sortBy", defaultValue = "docDate") String sortBy,
-            @RequestParam(name = "dir", defaultValue = "desc") String dir,
-            @RequestParam(name = "startDate", required = false) String startDate,
-            @RequestParam(name = "endDate", required = false) String endDate,
-            @RequestParam(name = "search", required = false) String search
-    ) {
-        
-        PurchaseSummaryResponse<Purchase> data = purchaseService.getPurchases(
-                page, size, sortBy, dir, startDate, endDate, search
-        );
-        if (data.getContent().isEmpty() && data.getTotalElements() > 0 && page > 0) {
-            data = purchaseService.getPurchases(0, size, sortBy, dir, startDate, endDate, search);
-            page = 0;
+                        @RequestParam(name = "page", defaultValue = "0") int page,
+                        @RequestParam(name = "size", defaultValue = "10") int size,
+                        @RequestParam(name = "sortBy", defaultValue = "docDate") String sortBy,
+                        @RequestParam(name = "dir", defaultValue = "desc") String dir,
+                        @RequestParam(name = "startDate", required = false) String startDate,
+                        @RequestParam(name = "endDate", required = false) String endDate,
+                        @RequestParam(name = "search", required = false) String search) {
+
+                PurchaseSummaryResponse<Purchase> data = purchaseService.getPurchases(
+                                page, size, sortBy, dir, startDate, endDate, search);
+                if (data.getContent().isEmpty() && data.getTotalElements() > 0 && page > 0) {
+                        data = purchaseService.getPurchases(0, size, sortBy, dir, startDate, endDate, search);
+                        page = 0;
+                }
+
+                PagingResponse paging = PagingResponse.builder()
+                                .currentPage(page)
+                                .totalPage(data.getTotalPages())
+                                .size(size)
+                                .totalItem(data.getTotalElements())
+                                .build();
+
+                return ResponseEntity.ok(WebResponse.<PurchaseSummaryResponse<Purchase>>builder()
+                                .status(200)
+                                .message("Success fetch purchase data")
+                                .data(data)
+                                .paging(paging)
+                                .build());
         }
 
-        PagingResponse paging = PagingResponse.builder()
-                .currentPage(page)
-                .totalPage(data.getTotalPages())
-                .size(size)
-                .totalItem(data.getTotalElements())
-                .build();
+        @Autowired
+        private ExcelExportService excelExportService;
 
-        return ResponseEntity.ok(WebResponse.<PurchaseSummaryResponse<Purchase>>builder()
-                .status(200)
-                .message("Success fetch purchase data")
-                .data(data)
-                .paging(paging)
-                .build());
-    }
+        // GET /api/v1/purchases/export?startDate=...&endDate=...&search=...
+        @GetMapping("/export")
+        public ResponseEntity<org.springframework.core.io.Resource> exportToExcel(
+                        @RequestParam(name = "startDate", required = false) String startDate,
+                        @RequestParam(name = "endDate", required = false) String endDate,
+                        @RequestParam(name = "search", required = false) String search) throws java.io.IOException {
+
+                java.util.List<Purchase> data = purchaseService.getAllPurchasesForExport(startDate, endDate, search);
+                byte[] bytes = excelExportService.exportPurchaseToExcel(data);
+
+                String filename = "purchases_" + java.time.LocalDate.now() + ".xlsx";
+                return ResponseEntity.ok()
+                                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                                                "attachment; filename=" + filename)
+                                .contentType(org.springframework.http.MediaType.parseMediaType(
+                                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                                .body(new org.springframework.core.io.ByteArrayResource(bytes));
+        }
 }

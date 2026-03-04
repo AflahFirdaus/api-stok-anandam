@@ -26,7 +26,6 @@ public class AuthService {
                 )
             );
             
-            // Simpan sesi user yang berhasil login
             SecurityContextHolder.getContext().setAuthentication(authentication);
             
         } catch (Exception e) {
