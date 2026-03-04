@@ -14,19 +14,18 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+import jakarta.servlet.http.HttpServletResponse;
+
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
     private final UserDetailsService userDetailsService;
-
-    // 2. Tambahkan deklarasi variabel ini
     private final JwtFilter jwtFilter;
 
-    // 3. Update Constructor untuk menerima JwtFilter
     public SecurityConfig(UserDetailsService userDetailsService, JwtFilter jwtFilter) {
         this.userDetailsService = userDetailsService;
-        this.jwtFilter = jwtFilter; // Masukkan ke variabel class
+        this.jwtFilter = jwtFilter;
     }
 
     @Bean
@@ -34,8 +33,6 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // Spring Security 7: constructor wajib UserDetailsService,
-    // setUserDetailsService() tidak ada
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(userDetailsService);
@@ -48,7 +45,7 @@ public class SecurityConfig {
         return authConfig.getAuthenticationManager();
     }
 
-    /** Actuator: health & info untuk load balancer / monitoring (tanpa auth). */
+    /** Actuator: health & info (Tanpa Auth) */
     @Bean
     public SecurityFilterChain actuatorSecurityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -58,54 +55,58 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /**
-     * API (termasuk /api/v1/* dan /api/sn): JWT. Swagger & auth login/refresh tanpa
-     * auth.
-     */
+    /** API (JWT Based) dengan penanganan 401 & 403 yang benar */
     @Bean
     public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
         http
                 .securityMatcher("/api/**", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**")
                 .csrf(csrf -> csrf.disable())
+                
+                // --- PENANGANAN ERROR AUTH/AUTHZ ---
+                .exceptionHandling(exception -> exception
+                    // Jika token salah/expired/tidak ada (401)
+                    .authenticationEntryPoint((request, response, authException) -> {
+                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                        response.setContentType("application/json");
+                        response.getWriter().write("{\"code\": \"TOKEN_EXPIRED\", \"message\": \"Sesi habis atau token tidak valid\"}");
+                    })
+                    // Jika token benar tapi role tidak cukup (403)
+                    .accessDeniedHandler((request, response, accessDeniedException) -> {
+                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                        response.setContentType("application/json");
+                        response.getWriter().write("{\"code\": \"ACCESS_DENIED\", \"message\": \"Anda tidak memiliki izin akses fitur ini\"}");
+                    })
+                )
+
                 .authorizeHttpRequests(auth -> auth
+                        // Public Endpoints
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
 
-                        // RBAC: Role-based access control
-                        .requestMatchers("/api/v1/users/**").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/migration/**").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/tkdn/**").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/canvasing/**").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/data-canvasing/**").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/activity-logs/last-sync")
-                        .hasAnyRole("ADMIN", "SUPERVISOR", "MARKETING")
-                        .requestMatchers("/api/v1/activity-logs/**").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/old-data/**").hasRole("ADMIN")
-                        .requestMatchers("/api/sn/**").hasRole("ADMIN")
+                        // RBAC: ADMIN ONLY
+                        .requestMatchers("/api/v1/users/**", "/api/v1/migration/**", "/api/v1/activity-logs/**", 
+                                        "/api/v1/old-data/**", "/api/v1/sales/export", "/api/v1/purchases/export").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/sales/**", "/api/v1/purchase/**", "/api/v1/purchases/**").hasRole("ADMIN")
 
-                        .requestMatchers("/api/v1/sales/export").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/purchases/export").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/sales/**").hasAnyRole("ADMIN", "SUPERVISOR")
-                        .requestMatchers("/api/v1/purchase/**", "/api/v1/purchases/**")
-                        .hasAnyRole("ADMIN", "SUPERVISOR")
+                        // RBAC: ADMIN, SPV_MARKETING, MARKETING
+                        .requestMatchers("/api/v1/tkdn/**", "/api/v1/canvasing/**", "/api/v1/stock/**", 
+                                        "/api/v1/stocks/**", "/api/v1/dashboard/**").hasAnyRole("ADMIN", "SPV_MARKETING", "MARKETING")
 
-                        .requestMatchers("/api/v1/dashboard/**").hasAnyRole("ADMIN", "SUPERVISOR", "MARKETING")
-                        .requestMatchers("/api/v1/stock/**", "/api/v1/stocks/**")
-                        .hasAnyRole("ADMIN", "SUPERVISOR", "MARKETING")
+                        // RBAC: ADMIN, SPV_MARKETING ONLY
+                        .requestMatchers("/api/v1/data-canvasing/**", "/api/sn/**").hasAnyRole("ADMIN", "SPV_MARKETING")
 
                         .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
-                        .requestMatchers("/api/**").authenticated())
+                        .anyRequest().authenticated()
+                )
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .formLogin(login -> login.disable())
                 .httpBasic(basic -> basic.disable());
+
         return http.build();
     }
 
-    /**
-     * Browser (/, /dashboard, dll): form login + JWT (supaya Postman bisa GET
-     * /dashboard pakai Bearer token).
-     */
+    /** Web Dashboard (Session/Form Based) */
     @Bean
     public SecurityFilterChain webSecurityFilterChain(HttpSecurity http) throws Exception {
         http

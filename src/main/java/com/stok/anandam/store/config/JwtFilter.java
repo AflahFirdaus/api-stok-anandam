@@ -2,6 +2,7 @@ package com.stok.anandam.store.config;
 
 import com.stok.anandam.store.service.CustomUserDetailsService;
 import com.stok.anandam.store.util.JwtUtil;
+import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -33,13 +34,11 @@ public class JwtFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
-        return path != null && (
-            path.startsWith("/api/v1/auth/login") ||
-            path.startsWith("/api/v1/auth/refresh") ||
-            path.startsWith("/swagger-ui") ||
-            path.startsWith("/v3/api-docs") ||
-            path.startsWith("/actuator/")
-        );
+        return path != null && (path.startsWith("/api/v1/auth/login") ||
+                path.startsWith("/api/v1/auth/refresh") ||
+                path.startsWith("/swagger-ui") ||
+                path.startsWith("/v3/api-docs") ||
+                path.startsWith("/actuator/"));
     }
 
     @Override
@@ -56,6 +55,14 @@ public class JwtFilter extends OncePerRequestFilter {
             jwt = authHeader.substring(7); // Potong kata "Bearer "
             try {
                 username = jwtUtil.extractUsername(jwt); // Ambil username dari token
+            } catch (ExpiredJwtException e) {
+                // Token expired → kembalikan 401 agar Flutter bisa trigger refresh/logout
+                log.debug("JWT expired: {}", e.getMessage());
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
+                response.getWriter().write(
+                        "{\"status\":401,\"error\":\"Unauthorized\",\"message\":\"Token expired\"}");
+                return; // Hentikan filter chain, jangan lanjut ke controller
             } catch (Exception e) {
                 log.debug("JWT parse error: {}", e.getMessage());
             }
@@ -64,19 +71,19 @@ public class JwtFilter extends OncePerRequestFilter {
         // 2. Validasi Token & Set Authentication
         // Jika username ketemu DAN belum ada yang login di context saat ini
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            
+
             // Ambil data user dari database
             UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
 
             // Cek apakah token valid (signature benar & belum expired)
             if (jwtUtil.validateToken(jwt, userDetails)) {
-                
+
                 // Buat objek Authentication
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         userDetails, null, userDetails.getAuthorities());
-                
+
                 authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                
+
                 // Masukkan user ke context Spring Security (User dianggap LOGIN)
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }
