@@ -94,4 +94,19 @@ public class UserController {
 
                 return ResponseEntity.ok(response);
         }
+
+        @PatchMapping("/{id}/toggle-status")
+        @LogActivity("MENGUBAH STATUS AKTIF USER")
+        public ResponseEntity<WebResponse<UserResponse>> toggleUserStatus(@PathVariable(name = "id") Long id) {
+                UserResponse userResponse = userService.toggleUserStatus(id);
+
+                WebResponse<UserResponse> response = WebResponse.<UserResponse>builder()
+                                .status(HttpStatus.OK.value())
+                                .message("User status toggled successfully")
+                                .data(userResponse)
+                                .paging(null)
+                                .build();
+
+                return ResponseEntity.ok(response);
+        }
 }

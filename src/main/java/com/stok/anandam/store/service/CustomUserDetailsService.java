@@ -25,13 +25,17 @@ public class CustomUserDetailsService implements UserDetailsService {
 
         // 2. Terjemahkan Role (Enum) ke Authority Spring Security
         // Format standar Spring Security untuk role adalah "ROLE_NAMA"
-        String roleName = "ROLE_" + user.getRole().name(); 
+        String roleName = "ROLE_" + user.getRole().name();
         SimpleGrantedAuthority authority = new SimpleGrantedAuthority(roleName);
 
         // 3. Kembalikan object User milik Spring Security (bukan User entity kita)
         return new org.springframework.security.core.userdetails.User(
                 user.getUsername(),
                 user.getPassword(),
+                Boolean.TRUE.equals(user.getActive()), // enabled
+                true, // accountNonExpired
+                true, // credentialsNonExpired
+                true, // accountNonLocked
                 Collections.singletonList(authority) // Masukkan role ke dalam list
         );
     }

@@ -4,6 +4,7 @@ import com.stok.anandam.store.dto.LoginUserRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -20,16 +21,20 @@ public class AuthService {
     public void authenticate(LoginUserRequest request) {
         try {
             Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                    request.getUsername(),
-                    request.getPassword()
-                )
-            );
-            
+                    new UsernamePasswordAuthenticationToken(
+                            request.getUsername(),
+                            request.getPassword()));
+
             SecurityContextHolder.getContext().setAuthentication(authentication);
-            
+
+        } catch (DisabledException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Akun Anda telah dinonaktifkan. Silakan hubungi admin.");
         } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Username atau Password Salah");
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Username atau Password Salah");
         }
     }
 }

@@ -24,4 +24,7 @@ public class User {
     @Enumerated(EnumType.STRING) // Agar tersimpan sebagai tulisan "ADMIN", bukan angka 0
     @Column(nullable = false)
     private Role role;
+
+    @Column(columnDefinition = "boolean default true")
+    private Boolean active = true;
 }

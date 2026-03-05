@@ -9,5 +9,6 @@ public class UserResponse {
     private String nama;
     private String username;
     private Role role;
+    private boolean active;
 
 }

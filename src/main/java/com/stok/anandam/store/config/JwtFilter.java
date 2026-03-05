@@ -75,6 +75,16 @@ public class JwtFilter extends OncePerRequestFilter {
             // Ambil data user dari database
             UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
 
+            // Cek apakah user aktif/enabled
+            if (!userDetails.isEnabled()) {
+                log.debug("User is disabled: {}", username);
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
+                response.getWriter().write(
+                        "{\"status\":401,\"error\":\"Unauthorized\",\"message\":\"Akun Anda telah dinonaktifkan. Silakan hubungi admin.\"}");
+                return;
+            }
+
             // Cek apakah token valid (signature benar & belum expired)
             if (jwtUtil.validateToken(jwt, userDetails)) {
 

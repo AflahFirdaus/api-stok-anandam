@@ -34,14 +34,18 @@ public class UserService {
     @Autowired
     private RefreshTokenRepository refreshTokenRepository;
 
-    /** List user dengan filter opsional: search (nama/username), role. Jika halaman melebihi total, kembalikan halaman 0. */
+    /**
+     * List user dengan filter opsional: search (nama/username), role. Jika halaman
+     * melebihi total, kembalikan halaman 0.
+     */
     public Page<UserResponse> getAllUsers(int page, int size, String search, String roleStr) {
         Pageable pageable = PageRequest.of(page, size);
         Role role = null;
         if (roleStr != null && !roleStr.isBlank()) {
             try {
                 role = Role.valueOf(roleStr.toUpperCase().trim());
-            } catch (IllegalArgumentException ignored) { }
+            } catch (IllegalArgumentException ignored) {
+            }
         }
         Page<User> usersPage = userRepository.findByFilters(search, role, pageable);
         if (usersPage.getTotalPages() > 0 && page >= usersPage.getTotalPages()) {
@@ -76,7 +80,8 @@ public class UserService {
 
         if (!user.getUsername().equals(request.getUsername())) {
             if (userRepository.existsByUsername(request.getUsername())) {
-                throw new DataIntegrityViolationException("Username '" + request.getUsername() + "' sudah digunakan user lain");
+                throw new DataIntegrityViolationException(
+                        "Username '" + request.getUsername() + "' sudah digunakan user lain");
             }
         }
 
@@ -87,7 +92,7 @@ public class UserService {
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
             user.setPassword(passwordEncoder.encode(request.getPassword()));
         }
-        
+
         userRepository.save(user);
         return toUserResponse(user);
     }
@@ -122,11 +127,28 @@ public class UserService {
         if (auth == null || auth.getName() == null) {
             throw new ResourceNotFoundException("User tidak ditemukan atau belum login");
         }
-        
+
         String username = auth.getName();
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User dengan username " + username + " tidak ditemukan"));
-        
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("User dengan username " + username + " tidak ditemukan"));
+
+        return toUserResponse(user);
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public UserResponse toggleUserStatus(Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User dengan ID " + id + " tidak ditemukan"));
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (user.getUsername().equals(auth.getName())) {
+            throw new DataIntegrityViolationException(
+                    "Anda tidak dapat menonaktifkan akun sendiri yang sedang digunakan!");
+        }
+
+        user.setActive(!Boolean.TRUE.equals(user.getActive()));
+        userRepository.save(user);
         return toUserResponse(user);
     }
 
@@ -136,6 +158,7 @@ public class UserService {
         response.setNama(user.getNama());
         response.setUsername(user.getUsername());
         response.setRole(user.getRole());
+        response.setActive(Boolean.TRUE.equals(user.getActive()));
         return response;
     }
 }
