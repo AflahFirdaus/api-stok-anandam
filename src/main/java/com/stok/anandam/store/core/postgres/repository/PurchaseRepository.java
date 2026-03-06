@@ -4,6 +4,7 @@ import com.stok.anandam.store.core.postgres.model.Purchase;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -62,4 +63,10 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
 
         @Query("SELECT COALESCE(SUM(p.grandTotal), 0) FROM Purchase p WHERE p.docDate = :today")
         BigDecimal sumTotalByDate(@Param("today") LocalDate today);
+
+        @Query("SELECT p.itemName, p.docDate, p.parName FROM Purchase p WHERE p.itemName IN :itemNames AND p.docDate = (SELECT MAX(p2.docDate) FROM Purchase p2 WHERE p2.itemName = p.itemName)")
+        List<Object[]> findLatestPurchaseDetailsByItemNames(@Param("itemNames") List<String> itemNames);
+
+        @Query(value = "SELECT * FROM purchases WHERE item_name = :itemName ORDER BY doc_date DESC LIMIT 1", nativeQuery = true)
+        java.util.Optional<Purchase> findLatestPurchaseByItemName(@Param("itemName") String itemName);
 }

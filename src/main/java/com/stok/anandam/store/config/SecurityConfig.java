@@ -103,12 +103,12 @@ public class SecurityConfig {
                                                 // RBAC: ADMIN, SPV_MARKETING, MARKETING
                                                 .requestMatchers("/api/v1/tkdn/**", "/api/v1/canvasing/**",
                                                                 "/api/v1/stock/**",
-                                                                "/api/v1/stocks/**", "/api/v1/dashboard/**",
+                                                                "/api/v1/stocks/**",
                                                                 "/api/v1/migration/**")
                                                 .hasAnyRole("ADMIN", "SPV_MARKETING", "MARKETING")
 
                                                 // RBAC: ADMIN, SPV_MARKETING ONLY
-                                                .requestMatchers("/api/v1/data-canvasing/**", "/api/sn/**")
+                                                .requestMatchers("/api/v1/data-canvasing/**", "/api/sn/**","/api/v1/dashboard/**")
                                                 .hasAnyRole("ADMIN", "SPV_MARKETING")
 
                                                 .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()

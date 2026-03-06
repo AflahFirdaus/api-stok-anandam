@@ -32,6 +32,9 @@ public class StockService {
         @Autowired
         private PricelistRepository pricelistRepository;
 
+        @Autowired
+        private PurchaseRepository purchaseRepository;
+
         public Page<StockGroupedResponse> getGroupedStocks(int page, int size, String sortBy, String direction,
                         String search, String kategori) {
                 Sort.Direction sortDirection = direction.equalsIgnoreCase("desc") ? Sort.Direction.DESC
@@ -84,6 +87,22 @@ public class StockService {
                         }
                 }
 
+                // Fetch Last Purchase Details (Date and Partner Name)
+                Map<String, LocalDate> lastPurchaseDates = new HashMap<>();
+                Map<String, String> lastPurchasePartners = new HashMap<>();
+                if (!itemNames.isEmpty()) {
+                        List<Object[]> results = purchaseRepository.findLatestPurchaseDetailsByItemNames(itemNames);
+                        for (Object[] res : results) {
+                                String name = (String) res[0];
+                                LocalDate date = (LocalDate) res[1];
+                                String partner = (String) res[2];
+
+                                // In case of duplicate latest dates, the last one in results wins
+                                lastPurchaseDates.put(name, date);
+                                lastPurchasePartners.put(name, partner);
+                        }
+                }
+
                 Map<String, List<Stock>> groupedByCode = allStocks.stream()
                                 .collect(Collectors.groupingBy(Stock::getItemCode));
 
@@ -129,6 +148,8 @@ public class StockService {
                                         .modal(priceInfo != null ? priceInfo.getModal() : null)
                                         .finalPricelist(priceInfo != null ? priceInfo.getFinalPricelist() : null)
                                         .lastSalesDate(lastSalesDates.get(first.getItemName()))
+                                        .lastPurchaseDate(lastPurchaseDates.get(first.getItemName()))
+                                        .parName(lastPurchasePartners.get(first.getItemName()))
                                         .warehouses(warehouses)
                                         .build();
                 }).collect(Collectors.toList());
@@ -280,6 +301,11 @@ public class StockService {
 
                 LocalDate lastSalesDate = salesRepository.findLatestDocDateByItemName(stock.getItemName());
                 stock.setLastSalesDate(lastSalesDate);
+
+                purchaseRepository.findLatestPurchaseByItemName(stock.getItemName()).ifPresent(p -> {
+                        stock.setLastPurchaseDate(p.getDocDate());
+                        stock.setParName(p.getParName());
+                });
 
                 // Fetch from pricelist using normalized name
                 String normalizedName = com.stok.anandam.store.util.NormalizationUtil

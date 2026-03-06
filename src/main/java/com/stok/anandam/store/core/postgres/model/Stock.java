@@ -63,4 +63,10 @@ public class Stock {
 
     @Transient
     private java.math.BigDecimal finalPricelist;
+
+    @Transient
+    private LocalDate lastPurchaseDate;
+
+    @Transient
+    private String parName;
 }
