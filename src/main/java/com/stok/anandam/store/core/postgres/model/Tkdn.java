@@ -44,7 +44,7 @@ public class Tkdn {
     private String spesifikasi;
 
     @Column(name = "distri")
-    private Integer distri;
+    private String distri;
 
     @Column(name = "processor", length = 255)
     private String processor;

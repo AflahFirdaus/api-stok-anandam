@@ -358,7 +358,7 @@ public class MigrationService {
     private static final String STOCK_PRICELIST_RANGE = "'PRICELIST&MODAL'!A:Z";
 
     private static final String TKDN_SPREADSHEET_ID = "173w5Y8hynv8lOphrsjtCx0tc8CJIQThuLrMIttwtw30";
-    private static final String TKDN_RANGE = "TKDN!A1:Z";
+    private static final String TKDN_RANGE = "TKDN!A1:AE";
 
     @Async
     public void checkAndTriggerMigration() {
@@ -1099,7 +1099,7 @@ public class MigrationService {
                 t.setNoMerek(getVal(row, headerMap, "NO MEREK"));
                 t.setNama(getVal(row, headerMap, "NAMA LENGKAP")); // Sesuai python: NAMA LENGKAP
                 t.setSpesifikasi(getVal(row, headerMap, "SPESIFIKASI LENGKAP"));
-                t.setDistri(cleanNumber(getVal(row, headerMap, "DISTRI")));
+                t.setDistri(getVal(row, headerMap, "DISTRI"));
 
                 t.setProcessor(getVal(row, headerMap, "PROCESSOR"));
                 t.setRam(getVal(row, headerMap, "RAM"));
@@ -1188,10 +1188,7 @@ public class MigrationService {
                 ps.setString(8, t.getNoMerek());
                 ps.setString(9, t.getNama());
                 ps.setString(10, t.getSpesifikasi());
-                if (t.getDistri() != null)
-                    ps.setInt(11, t.getDistri());
-                else
-                    ps.setNull(11, java.sql.Types.INTEGER);
+                ps.setString(11, t.getDistri());
                 ps.setString(12, t.getProcessor());
                 ps.setString(13, t.getRam());
                 ps.setString(14, t.getSsd());
