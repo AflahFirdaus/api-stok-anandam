@@ -77,13 +77,21 @@ public class StockService {
                 List<Stock> allStocks = stockRepository.findByItemCodeInAndFinalStokGreaterThanEqual(itemCodes, 1);
 
                 // Fetch Last Sales Dates for these items
-                List<String> itemNames = allStocks.stream().map(Stock::getItemName).distinct()
+                List<String> itemNames = allStocks.stream()
+                                .map(Stock::getItemName)
+                                .filter(Objects::nonNull)
+                                .map(String::trim)
+                                .distinct()
                                 .collect(Collectors.toList());
+
                 Map<String, LocalDate> lastSalesDates = new HashMap<>();
                 if (!itemNames.isEmpty()) {
                         List<Object[]> results = salesRepository.findLatestDocDatesByItemNames(itemNames);
                         for (Object[] res : results) {
-                                lastSalesDates.put((String) res[0], (LocalDate) res[1]);
+                                String name = (String) res[0];
+                                if (name != null) {
+                                        lastSalesDates.put(name.trim(), (LocalDate) res[1]);
+                                }
                         }
                 }
 
@@ -97,20 +105,20 @@ public class StockService {
                                 LocalDate date = (LocalDate) res[1];
                                 String partner = (String) res[2];
 
-                                // In case of duplicate latest dates, the last one in results wins
-                                lastPurchaseDates.put(name, date);
-                                lastPurchasePartners.put(name, partner);
+                                if (name != null) {
+                                        String trimmedName = name.trim();
+                                        lastPurchaseDates.put(trimmedName, date);
+                                        lastPurchasePartners.put(trimmedName, partner);
+                                }
                         }
                 }
 
                 Map<String, List<Stock>> groupedByCode = allStocks.stream()
                                 .collect(Collectors.groupingBy(Stock::getItemCode));
 
-                // Fetch pricelist data for all items in one go (or by name list)
-                List<String> uniqueItemNames = allStocks.stream().map(Stock::getItemName).distinct()
-                                .collect(Collectors.toList());
+                // Fetch pricelist data for all items in one go
                 Map<String, com.stok.anandam.store.core.postgres.model.Pricelist> pricelistMap = new HashMap<>();
-                uniqueItemNames.forEach(name -> {
+                itemNames.forEach(name -> {
                         String normalized = com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(name);
                         pricelistRepository.findByItemName(normalized).ifPresent(p -> pricelistMap.put(name, p));
                 });
@@ -118,12 +126,13 @@ public class StockService {
                 List<StockGroupedResponse> groupedResponses = itemCodes.stream().map(code -> {
                         List<Stock> stocks = groupedByCode.get(code);
                         Stock first = stocks.get(0);
+                        String trimmedName = first.getItemName() != null ? first.getItemName().trim() : "";
 
                         List<WarehouseStockDTO> warehouses = stocks.stream()
                                         .map(s -> WarehouseStockDTO.builder()
-                                                        .warehouse(s.getWarehouse())
-                                                        .stok(s.getFinalStok())
-                                                        .build())
+                                                         .warehouse(s.getWarehouse())
+                                                         .stok(s.getFinalStok())
+                                                         .build())
                                         .collect(Collectors.toList());
 
                         int totalStok = stocks.stream().mapToInt(Stock::getFinalStok).sum();
@@ -133,7 +142,7 @@ public class StockService {
                                         .reduce(BigDecimal.ZERO, BigDecimal::add);
 
                         com.stok.anandam.store.core.postgres.model.Pricelist priceInfo = pricelistMap
-                                        .get(first.getItemName());
+                                        .get(trimmedName);
 
                         return StockGroupedResponse.builder()
                                         .id(first.getId())
@@ -147,9 +156,9 @@ public class StockService {
                                         .spesifikasi(priceInfo != null ? priceInfo.getSpesifikasi() : null)
                                         .modal(priceInfo != null ? priceInfo.getModal() : null)
                                         .finalPricelist(priceInfo != null ? priceInfo.getFinalPricelist() : null)
-                                        .lastSalesDate(lastSalesDates.get(first.getItemName()))
-                                        .lastPurchaseDate(lastPurchaseDates.get(first.getItemName()))
-                                        .parName(lastPurchasePartners.get(first.getItemName()))
+                                        .lastSalesDate(lastSalesDates.get(trimmedName))
+                                        .lastPurchaseDate(lastPurchaseDates.get(trimmedName))
+                                        .parName(lastPurchasePartners.get(trimmedName))
                                         .warehouses(warehouses)
                                         .build();
                 }).collect(Collectors.toList());
