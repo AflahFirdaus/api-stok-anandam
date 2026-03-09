@@ -70,7 +70,17 @@ public class StockController {
          * Ringkasan stok per kategori: NAMA, STOK (total grand_total), PRESENTASE (%).
          * Baris terakhir = TOTAL (100%).
          */
-
+        @GetMapping("/summary-by-category")
+        public ResponseEntity<WebResponse<List<StockSummaryByCategoryResponse>>> getSummaryByCategory(
+                        @RequestParam(name = "groupBy", defaultValue = "kategori_itemcode") String groupBy) {
+                List<StockSummaryByCategoryResponse> data = stockService.getSummaryByCategory(groupBy);
+                return ResponseEntity.ok(WebResponse.<List<StockSummaryByCategoryResponse>>builder()
+                                .status(200)
+                                .message("Success fetch stock summary by category")
+                                .data(data)
+                                .paging(null)
+                                .build());
+        }
 
         /**
          * Ringkasan stok dua level: parent (stok = jumlah children) + children. Contoh:
