@@ -364,7 +364,6 @@ public class MigrationService {
     public void checkAndTriggerMigration() {
         log.info("Checking for database changes in dbslog...");
         try {
-            // dbslog lebih realtime — setiap aksi sistem langsung dicatat di sini.
             String sql = "SELECT MAX(id) FROM dbslog";
             Long currentMaxId = legacyJdbcTemplate.queryForObject(sql, Long.class);
 
