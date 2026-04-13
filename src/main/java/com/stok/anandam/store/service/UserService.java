@@ -4,6 +4,7 @@ import com.stok.anandam.store.core.postgres.model.Role;
 import com.stok.anandam.store.core.postgres.model.User;
 import com.stok.anandam.store.core.postgres.repository.RefreshTokenRepository;
 import com.stok.anandam.store.core.postgres.repository.UserRepository;
+import com.stok.anandam.store.dto.ChangePasswordRequest;
 import com.stok.anandam.store.dto.UserRequest;
 import com.stok.anandam.store.dto.UserResponse;
 import com.stok.anandam.store.exception.ResourceNotFoundException;
@@ -137,6 +138,21 @@ public class UserService {
     }
 
     @org.springframework.transaction.annotation.Transactional
+    public void changePassword(ChangePasswordRequest request) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User tidak ditemukan"));
+
+        if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
+            throw new IllegalArgumentException("Password lama salah");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+    }
+
+    @org.springframework.transaction.annotation.Transactional
     public UserResponse toggleUserStatus(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User dengan ID " + id + " tidak ditemukan"));
@@ -152,13 +168,33 @@ public class UserService {
         return toUserResponse(user);
     }
 
+    @org.springframework.transaction.annotation.Transactional
+    public UserResponse clearUserSessions(Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User dengan ID " + id + " tidak ditemukan"));
+
+        // 1. Reset device count and online status
+        user.setDeviceCount(0);
+        user.setIsOnline(false);
+        userRepository.save(user);
+
+        // 2. Delete all refresh tokens for this user
+        refreshTokenRepository.deleteByUser(user);
+
+        return toUserResponse(user);
+    }
+
     private UserResponse toUserResponse(User user) {
         UserResponse response = new UserResponse();
         response.setId(user.getId());
         response.setNama(user.getNama());
         response.setUsername(user.getUsername());
+        response.setEmployeeCode(user.getEmployeeCode());
         response.setRole(user.getRole());
+        response.setAuthorities(java.util.Collections.singletonList("ROLE_" + user.getRole().name()));
         response.setActive(Boolean.TRUE.equals(user.getActive()));
+        response.setIsOnline(user.getIsOnline());
+        response.setDeviceCount(user.getDeviceCount());
         return response;
     }
 }

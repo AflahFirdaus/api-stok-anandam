@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 @AllArgsConstructor
@@ -52,4 +53,7 @@ public class Purchase {
 
     @Column(name = "grand_total")
     private BigDecimal grandTotal;
+
+    @Column(name = "last_synced")
+    private LocalDateTime lastSynced;
 }

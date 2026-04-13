@@ -113,11 +113,25 @@ public class AuthController {
                 Authentication auth = SecurityContextHolder.getContext().getAuthentication();
                 if (auth != null && auth.isAuthenticated() && !auth.getName().equals("anonymousUser")) {
                         refreshTokenService.deleteByUsername(auth.getName());
+                        authService.logout();
                 }
 
                 return ResponseEntity.ok(WebResponse.<String>builder()
                                 .status(200)
                                 .message("Logout Berhasil")
+                                .data("OK")
+                                .paging(null)
+                                .build());
+        }
+
+        @PostMapping("/change-password")
+        @LogActivity("USER GANTI PASSWORD SENDIRI")
+        public ResponseEntity<WebResponse<String>> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+                userService.changePassword(request);
+
+                return ResponseEntity.ok(WebResponse.<String>builder()
+                                .status(HttpStatus.OK.value())
+                                .message("Password Berhasil Diubah")
                                 .data("OK")
                                 .paging(null)
                                 .build());

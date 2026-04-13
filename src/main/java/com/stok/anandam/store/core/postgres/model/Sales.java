@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 @AllArgsConstructor
@@ -52,4 +53,7 @@ public class Sales {
 
     @Column(name = "emp_name")
     private String empName;
+
+    @Column(name = "last_synced")
+    private LocalDateTime lastSynced;
 }

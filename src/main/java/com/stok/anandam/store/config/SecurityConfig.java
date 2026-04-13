@@ -1,10 +1,11 @@
-package com.stok.anandam.store.config;
+        package com.stok.anandam.store.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -13,8 +14,12 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -60,18 +65,17 @@ public class SecurityConfig {
         public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
                 http
                                 .securityMatcher("/api/**", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**")
+                                .cors(Customizer.withDefaults())
                                 .csrf(csrf -> csrf.disable())
 
                                 // --- PENANGANAN ERROR AUTH/AUTHZ ---
                                 .exceptionHandling(exception -> exception
-                                                // Jika token salah/expired/tidak ada (401)
                                                 .authenticationEntryPoint((request, response, authException) -> {
                                                         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                                                         response.setContentType("application/json");
                                                         response.getWriter().write(
                                                                         "{\"code\": \"TOKEN_EXPIRED\", \"message\": \"Sesi habis atau token tidak valid\"}");
                                                 })
-                                                // Jika token benar tapi role tidak cukup (403)
                                                 .accessDeniedHandler((request, response, accessDeniedException) -> {
                                                         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                                                         response.setContentType("application/json");
@@ -80,39 +84,43 @@ public class SecurityConfig {
                                                 }))
 
                                 .authorizeHttpRequests(auth -> auth
-                                                // Public Endpoints
-                                                .requestMatchers("/swagger-ui/**", "/swagger-ui.html",
-                                                                "/v3/api-docs/**")
-                                                .permitAll()
-                                                .requestMatchers("/api/v1/auth/login", "/api/v1/auth/refresh")
-                                                .permitAll()
+                                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+                                        .requestMatchers("/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
+                                        
+                                        // REVISI: Izinkan semua user yang login untuk akses log sinkronisasi & profil sendiri
+                                        .requestMatchers("/api/v1/activity-logs/last-sync").authenticated()
+                                        .requestMatchers("/api/v1/users/me", "/api/v1/users/profile", "/api/v1/kodepos").authenticated() 
 
-                                                // Specific: Last Sync (Visible to Marketing roles)
-                                                .requestMatchers("/api/v1/activity-logs/last-sync")
-                                                .hasAnyRole("ADMIN", "SPV_MARKETING", "MARKETING")
+                                        // REVISI: Pastikan endpoint stok bisa diakses operasional
+                                        .requestMatchers("/api/v1/stock", "/api/v1/stock/**", "/api/v1/stocks", "/api/v1/stocks/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_SPV_TEKNISI", "ROLE_MARKETING", "ROLE_MARKETING_TOKO", "ROLE_MARKETING_PROJECT", "ROLE_MARKETING_DISTRIBUSI", "ROLE_GUDANG", "ROLE_DELIVERY", "ROLE_TEKNISI", "ROLE_NOTA")
+                                        .requestMatchers("/api/sn", "/api/sn/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_SPV_TEKNISI", "ROLE_MARKETING", "ROLE_MARKETING_TOKO", "ROLE_MARKETING_PROJECT", "ROLE_MARKETING_DISTRIBUSI", "ROLE_GUDANG", "ROLE_TEKNISI", "ROLE_DELIVERY", "ROLE_NOTA")
 
-                                                // RBAC: ADMIN ONLY
-                                                .requestMatchers("/api/v1/users/**", "/api/v1/activity-logs/**",
-                                                                "/api/v1/old-data/**", "/api/v1/sales/export",
-                                                                "/api/v1/purchases/export")
-                                                .hasRole("ADMIN")
-                                                .requestMatchers("/api/v1/sales/**", "/api/v1/purchase/**",
-                                                                "/api/v1/purchases/**")
-                                                .hasRole("ADMIN")
+                                        // PENJADWALAN
+                                        .requestMatchers(HttpMethod.GET, "/api/v1/penjadwalan", "/api/v1/penjadwalan/**").authenticated()
+                                        .requestMatchers(HttpMethod.PUT, "/api/v1/penjadwalan/*/reassign", "/api/v1/penjadwalan/*/reassign/").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_MARKETING", "ROLE_MARKETING_TOKO", "ROLE_MARKETING_PROJECT", "ROLE_MARKETING_DISTRIBUSI", "ROLE_GUDANG")
+                                        .requestMatchers(HttpMethod.POST, "/api/v1/penjadwalan", "/api/v1/penjadwalan/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_SPV_TEKNISI", "ROLE_MARKETING", "ROLE_MARKETING_TOKO", "ROLE_MARKETING_PROJECT", "ROLE_MARKETING_DISTRIBUSI", "ROLE_GUDANG", "ROLE_TEKNISI", "ROLE_DELIVERY")
+                                        .requestMatchers(HttpMethod.PUT, "/api/v1/penjadwalan", "/api/v1/penjadwalan/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_SPV_TEKNISI", "ROLE_MARKETING", "ROLE_MARKETING_TOKO", "ROLE_MARKETING_PROJECT", "ROLE_MARKETING_DISTRIBUSI", "ROLE_GUDANG", "ROLE_TEKNISI", "ROLE_DELIVERY")
 
-                                                // RBAC: ADMIN, SPV_MARKETING, MARKETING
-                                                .requestMatchers("/api/v1/tkdn/**", "/api/v1/canvasing/**",
-                                                                "/api/v1/stock/**",
-                                                                "/api/v1/stocks/**",
-                                                                "/api/v1/migration/**")
-                                                .hasAnyRole("ADMIN", "SPV_MARKETING", "MARKETING")
+                                        // MEMOS (Strict RBAC)
+                                        .requestMatchers(HttpMethod.POST, "/api/v1/memos/*/penjadwalan", "/api/v1/memos/*/konfirmasi-kirim").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_SPV_TEKNISI", "ROLE_MARKETING", "ROLE_MARKETING_TOKO", "ROLE_MARKETING_PROJECT", "ROLE_MARKETING_DISTRIBUSI", "ROLE_GUDANG", "ROLE_TEKNISI", "ROLE_DELIVERY")
+                                        .requestMatchers(HttpMethod.POST, "/api/v1/memos", "/api/v1/memos/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_MARKETING", "ROLE_MARKETING_TOKO", "ROLE_MARKETING_PROJECT", "ROLE_MARKETING_DISTRIBUSI")
+                                        .requestMatchers(HttpMethod.PUT, "/api/v1/memos/*/gudang-finish", "/api/v1/memos/*/invoice-finish", "/api/v1/memos/*/technician-finish", "/api/v1/memos/*/delivery-finish", "/api/v1/memos/*/pickup-route", "/api/v1/memos/*/pickup-final", "/api/v1/memos/*/delivery-route", "/api/v1/memos/*/complete").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_SPV_TEKNISI", "ROLE_GUDANG", "ROLE_TEKNISI", "ROLE_DELIVERY", "ROLE_MARKETING", "ROLE_MARKETING_TOKO", "ROLE_MARKETING_PROJECT", "ROLE_MARKETING_DISTRIBUSI", "ROLE_NOTA")
+                                        .requestMatchers(HttpMethod.PUT, "/api/v1/memos", "/api/v1/memos/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_SPV_TEKNISI", "ROLE_MARKETING", "ROLE_MARKETING_TOKO", "ROLE_MARKETING_PROJECT", "ROLE_MARKETING_DISTRIBUSI", "ROLE_GUDANG", "ROLE_DELIVERY", "ROLE_TEKNISI", "ROLE_NOTA")
+                                        .requestMatchers(HttpMethod.GET, "/api/v1/memos", "/api/v1/memos/**").authenticated()
+                                        
+                                        // REQUEST DELIVERY (New System)
+                                        .requestMatchers(HttpMethod.GET, "/api/v1/request-delivery", "/api/v1/request-delivery/", "/api/v1/request-delivery/**").authenticated()
+                                        .requestMatchers(HttpMethod.POST, "/api/v1/request-delivery", "/api/v1/request-delivery/", "/api/v1/request-delivery/**").authenticated()
 
-                                                // RBAC: ADMIN, SPV_MARKETING ONLY
-                                                .requestMatchers("/api/v1/data-canvasing/**", "/api/sn/**","/api/v1/dashboard/**")
-                                                .hasAnyRole("ADMIN", "SPV_MARKETING")
 
-                                                .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
-                                                .anyRequest().authenticated())
+                                        // Endpoint Admin & Spv (Data sensitif)
+                                        .requestMatchers(HttpMethod.GET, "/api/v1/users", "/api/v1/users/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_SPV_TEKNISI", "ROLE_GUDANG", "ROLE_MARKETING", "ROLE_TEKNISI", "ROLE_DELIVERY")
+                                        .requestMatchers("/api/v1/users/**", "/api/v1/activity-logs/**", "/api/v1/old-data/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_SPV_TEKNISI")
+                                        .requestMatchers("/api/v1/sales/export", "/api/v1/purchases/export").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_SPV_TEKNISI")
+
+                                        // Catch-all sisanya
+                                        .anyRequest().authenticated()
+                                        )
                                 .authenticationProvider(authenticationProvider())
                                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                                 .formLogin(login -> login.disable())
@@ -126,10 +134,10 @@ public class SecurityConfig {
         public SecurityFilterChain webSecurityFilterChain(HttpSecurity http) throws Exception {
                 http
                                 .securityMatcher("/", "/check-db", "/login", "/logout", "/dashboard", "/login.html")
+                                .cors(Customizer.withDefaults())
                                 .csrf(csrf -> csrf.disable())
                                 .authorizeHttpRequests(auth -> auth
-                                                .requestMatchers("/", "/check-db", "/login", "/logout", "/login.html")
-                                                .permitAll()
+                                                .requestMatchers("/", "/check-db", "/login", "/logout", "/login.html").permitAll()
                                                 .anyRequest().authenticated())
                                 .authenticationProvider(authenticationProvider())
                                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
@@ -139,5 +147,22 @@ public class SecurityConfig {
                                 .logout(logout -> logout.permitAll())
                                 .httpBasic(basic -> basic.disable());
                 return http.build();
+        }
+
+        @Bean
+        public CorsConfigurationSource corsConfigurationSource() {
+                CorsConfiguration configuration = new CorsConfiguration();
+                
+                configuration.setAllowedOriginPatterns(List.of("*")); 
+                
+                configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+                
+                configuration.setAllowedHeaders(List.of("*"));
+                
+                configuration.setAllowCredentials(true);
+
+                UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+                source.registerCorsConfiguration("/**", configuration); 
+                return source;
         }
 }

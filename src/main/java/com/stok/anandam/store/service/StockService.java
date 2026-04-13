@@ -12,6 +12,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import com.stok.anandam.store.core.postgres.model.Role;
+import com.stok.anandam.store.core.postgres.model.User;
+import com.stok.anandam.store.core.postgres.repository.UserRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -35,8 +40,22 @@ public class StockService {
         @Autowired
         private PurchaseRepository purchaseRepository;
 
+        @Autowired
+        private MemoItemRepository memoItemRepository;
+
+        @Autowired
+        private UserRepository userRepository;
+
         public Page<StockGroupedResponse> getGroupedStocks(int page, int size, String sortBy, String direction,
-                        String search, String kategori) {
+                        String search, String kategori, String username) {
+                User user = userRepository.findByUsername(username)
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+                Role role = user.getRole();
+                boolean isMarketing = role == Role.MARKETING ||
+                                role == Role.MARKETING_TOKO ||
+                                role == Role.MARKETING_PROJECT ||
+                                role == Role.MARKETING_DISTRIBUSI;
+
                 Sort.Direction sortDirection = direction.equalsIgnoreCase("desc") ? Sort.Direction.DESC
                                 : Sort.Direction.ASC;
                 String actualSortBy = sortBy;
@@ -144,7 +163,7 @@ public class StockService {
                         com.stok.anandam.store.core.postgres.model.Pricelist priceInfo = pricelistMap
                                         .get(trimmedName);
 
-                        return StockGroupedResponse.builder()
+                        StockGroupedResponse res = StockGroupedResponse.builder()
                                         .id(first.getId())
                                         .itemCode(first.getItemCode())
                                         .itemName(first.getItemName())
@@ -158,10 +177,41 @@ public class StockService {
                                         .finalPricelist(priceInfo != null ? priceInfo.getFinalPricelist() : null)
                                         .lastSalesDate(lastSalesDates.get(trimmedName))
                                         .lastPurchaseDate(lastPurchaseDates.get(trimmedName))
-                                        .parName(lastPurchasePartners.get(trimmedName))
-                                        .warehouses(warehouses)
-                                        .build();
+                                         .parName(lastPurchasePartners.get(trimmedName))
+                                         .warehouses(warehouses)
+                                         .totalPending(0) // Default
+                                         .pendingDetails(new ArrayList<>()) // Default
+                                         .build();
+
+                        if (isMarketing) {
+                            res.setHargaHpp(null);
+                        }
+                        return res;
                 }).collect(Collectors.toList());
+
+                // Fetch all Pending Items (Only Approved ones)
+                List<MemoItem> allPendingItems = memoItemRepository.findByMemo_StatusAkhir(com.stok.anandam.store.core.postgres.model.enums.MemoStatus.DISETUJUI);
+                
+                // Group all pending items by normalized name
+                Map<String, List<MemoItem>> pendingByName = allPendingItems.stream()
+                        .collect(Collectors.groupingBy(item -> com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(item.getNamaBarang())));
+
+                // Enrich groupedResponses with pending info by matching normalized itemName
+                for (StockGroupedResponse resp : groupedResponses) {
+                    String respNormalized = com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(resp.getItemName());
+                    List<MemoItem> items = pendingByName.get(respNormalized);
+                    if (items != null) {
+                        int totalPending = items.stream().mapToInt(MemoItem::getQty).sum();
+                        List<com.stok.anandam.store.dto.PendingStockDTO> details = items.stream()
+                                .map(item -> com.stok.anandam.store.dto.PendingStockDTO.builder()
+                                        .marketingNama(item.getMemo().getMarketing().getNama())
+                                        .qty(item.getQty())
+                                        .build())
+                                .collect(Collectors.toList());
+                        resp.setTotalPending(totalPending);
+                        resp.setPendingDetails(details);
+                    }
+                }
 
                 return new org.springframework.data.domain.PageImpl<>(groupedResponses, pageable,
                                 itemCodePage.getTotalElements());
@@ -304,7 +354,15 @@ public class StockService {
                 return finalData;
         }
 
-        public Stock getSingleStockDetail(Long id) {
+        public Stock getSingleStockDetail(Long id, String username) {
+                User user = userRepository.findByUsername(username)
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+                Role role = user.getRole();
+                boolean isMarketing = role == Role.MARKETING ||
+                                role == Role.MARKETING_TOKO ||
+                                role == Role.MARKETING_PROJECT ||
+                                role == Role.MARKETING_DISTRIBUSI;
+
                 Stock stock = stockRepository.findById(id)
                                 .orElseThrow(() -> new ResourceNotFoundException("Stock not found with id: " + id));
 
@@ -324,6 +382,10 @@ public class StockService {
                         stock.setModal(p.getModal());
                         stock.setFinalPricelist(p.getFinalPricelist());
                 });
+
+                if (isMarketing) {
+                        stock.setHargaHpp(null);
+                }
 
                 return stock;
         }

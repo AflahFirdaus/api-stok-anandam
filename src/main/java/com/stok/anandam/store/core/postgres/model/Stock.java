@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 @AllArgsConstructor
@@ -50,6 +51,9 @@ public class Stock {
 
     @Column(name = "warehouse", length = 100)
     private String warehouse;
+
+    @Column(name = "last_synced")
+    private LocalDateTime lastSynced;
 
     @Transient
     private LocalDate lastSalesDate;

@@ -64,7 +64,12 @@ public class SalesService {
                 return salesRepository.findAllByFilters(start, end, empCode, search);
         }
 
-        public java.util.List<String> getEmployeeCodes() {
-                return salesRepository.findDistinctEmpCodeOrderByEmpCode();
+        public java.util.List<com.stok.anandam.store.dto.EmployeeOption> getEmployeeCodes() {
+                return salesRepository.findDistinctEmpCodeAndName().stream()
+                                .map(obj -> com.stok.anandam.store.dto.EmployeeOption.builder()
+                                                .empCode((String) obj[0])
+                                                .empName((String) obj[1])
+                                                .build())
+                                .collect(java.util.stream.Collectors.toList());
         }
 }

@@ -29,4 +29,6 @@ public class StockGroupedResponse {
     private LocalDate lastPurchaseDate;
     private String parName;
     private List<WarehouseStockDTO> warehouses;
+    private Integer totalPending;
+    private List<PendingStockDTO> pendingDetails;
 }

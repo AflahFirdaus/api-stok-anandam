@@ -10,12 +10,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.annotation.PostConstruct;
 
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
@@ -31,6 +33,7 @@ import java.io.InputStreamReader;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
@@ -62,16 +65,17 @@ public class MigrationService {
 
     private static final String SQL_PURCHASE = """
                 SELECT
-                    d.doc_date, d.doc_no, m.code AS code, d.par_name,
-                    dept.code AS dep_code, m.code AS item_code, m.name AS item_name,
-                    CASE WHEN d.doc_no LIKE '%%RB%%' THEN -t.qty_def ELSE t.qty_def END AS qty_def,
-                    t.price,
-                    (CASE WHEN d.doc_no LIKE '%%RB%%' THEN -t.qty_def ELSE t.qty_def END * t.price) AS grand_total
+                    MAX(d.doc_date) as doc_date, d.doc_no, MAX(d.par_name) as par_name,
+                    MAX(dept.code) AS dep_code, m.code AS item_code, MAX(m.name) AS item_name,
+                    SUM(CASE WHEN d.doc_no LIKE '%%RB%%' THEN -t.qty_def ELSE t.qty_def END) AS qty_def,
+                    MAX(t.price) as price,
+                    SUM(CASE WHEN d.doc_no LIKE '%%RB%%' THEN -t.qty_def ELSE t.qty_def END * t.price) AS grand_total
                 FROM dbtpurchasedoc d
                 LEFT JOIN dbtpurchasetrans t ON d.id = t.doc_id
                 LEFT JOIN dbmitem m ON t.ite_id = m.id
                 LEFT JOIN dbmdepartment dept ON m.dep_id = dept.id
-                ORDER BY d.doc_date DESC, d.id DESC
+                GROUP BY d.doc_no, m.code
+                ORDER BY doc_date DESC, MAX(d.id) DESC
             """;
 
     private String getSqlPurchase() {
@@ -80,12 +84,16 @@ public class MigrationService {
 
     @Async
     public CompletableFuture<String> migratePurchaseData() {
+        LocalDateTime syncTime = LocalDateTime.now();
         long startTime = System.currentTimeMillis();
 
-        log.info("=== START MIGRASI PURCHASE ===");
+        log.info("=== START MIGRASI PURCHASE (UPSERT) ===");
+        
+        // Fix: Update users_role_check constraint before processing
+        fixUserRoleConstraint();
 
         try {
-            // 0. HITUNG ESTIMASI DATA (pakai schema dari config agar data terbaru)
+            // 0. HITUNG ESTIMASI DATA
             String countSql = "SELECT COUNT(*) FROM (" + getSqlPurchase() + ") as total";
             try {
                 Integer totalRows = legacyJdbcTemplate.queryForObject(countSql, Integer.class);
@@ -94,15 +102,10 @@ public class MigrationService {
                 log.warn("Gagal menghitung total data source: {}", e.getMessage());
             }
 
-            // 1. BERSIHKAN DATA LAMA DULU (TRUNCATE)
-            log.info("Membersihkan tabel Purchase di PostgreSQL...");
-            resetTable();
-            log.info("Tabel bersih. ID di-reset ke 1.");
-
             final List<Purchase> buffer = new ArrayList<>();
             final int[] totalProcessed = { 0 };
 
-            // 2. MULAI STREAMING DATA BARU (ORDER BY doc_date DESC = terbaru dulu)
+            // 1. MULAI STREAMING DATA BARU
             legacyJdbcTemplate.query(getSqlPurchase(), new RowCallbackHandler() {
                 @Override
                 public void processRow(ResultSet rs) throws SQLException {
@@ -121,19 +124,18 @@ public class MigrationService {
                         p.setQty(rs.getInt("qty_def"));
                         p.setPrice(rs.getBigDecimal("price"));
                         p.setGrandTotal(rs.getBigDecimal("grand_total"));
+                        p.setLastSynced(syncTime);
 
-                        buffer.add(p); // Tambah data ke buffer
+                        buffer.add(p);
 
-                        // Cek apakah buffer sudah penuh?
                         if (buffer.size() >= BATCH_SIZE) {
-                            // 1. HITUNG DULU SEBELUM DIHAPUS (FIX DISINI)
                             totalProcessed[0] += buffer.size();
-
-                            // 2. BARU SIMPAN (Ini akan mengosongkan buffer)
                             self.saveBatch(buffer);
 
                             log.info("Migrated: {} data...", totalProcessed[0]);
                         }
+                    } catch (BadSqlGrammarException e) {
+                        throw e; // Rethrow fatal SQL errors to stop migration
                     } catch (Exception e) {
                         log.warn("Error processing row: {}", e.getMessage());
                     }
@@ -142,9 +144,14 @@ public class MigrationService {
 
             // Di luar looping (sisa data < 1000)
             if (!buffer.isEmpty()) {
-                totalProcessed[0] += buffer.size(); // Hitung dulu
-                self.saveBatch(buffer); // Baru simpan
+                totalProcessed[0] += buffer.size();
+                self.saveBatch(buffer);
             }
+
+            // 2. CLEANUP DATA LAMA (Logical Delete)
+            log.info("Cleaning up old Purchase data...");
+            int deleted = pgJdbcTemplate.update("DELETE FROM purchases WHERE last_synced < ?", syncTime);
+            log.info("Cleaned up {} stale Purchase records.", deleted);
 
             long duration = System.currentTimeMillis() - startTime;
             String result = "=== SELESAI === Total Data: " + totalProcessed[0] + ". Waktu: " + (duration / 1000)
@@ -160,6 +167,52 @@ public class MigrationService {
         }
     }
 
+    @PostConstruct
+    public void fixUserRoleConstraint() {
+        log.info("Checking and fixing users_role_check constraint...");
+        try {
+            String sqlDrop = "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check";
+            String sqlAdd = "ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('ADMIN', 'SPV_MARKETING', 'SPV_GUDANG', 'SPV_TEKNISI', 'MARKETING', 'MARKETING_TOKO', 'MARKETING_PROJECT', 'MARKETING_DISTRIBUSI', 'GUDANG', 'NOTA', 'DELIVERY', 'TEKNISI'))";
+            
+            pgJdbcTemplate.execute(sqlDrop);
+            pgJdbcTemplate.execute(sqlAdd);
+            log.info("Successfully updated users_role_check constraint.");
+        } catch (Exception e) {
+            log.error("Failed to update users_role_check constraint: {}", e.getMessage());
+        }
+    }
+
+    @PostConstruct
+    public void fixMemoStatuses() {
+        log.info("Starting legacy MemoStatus migration in database...");
+        try {
+            // Mappings for 'memos' table
+            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'MENUNGGU_PERSETUJUAN' WHERE status_akhir = 'PENDING_MENUNGGU'");
+            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'DISETUJUI' WHERE status_akhir = 'PENDING_DISETUJUI'");
+            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'DITOLAK' WHERE status_akhir = 'PENDING_DITOLAK'");
+            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'SIAP_PENUGASAN' WHERE status_akhir = 'READY_DI_GUDANG'");
+            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'PROSES_GUDANG' WHERE status_akhir = 'PERSIAPAN_GUDANG'");
+            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'SIAP_PENUGASAN' WHERE status_akhir = 'VERIFIKASI_AKHIR_GUDANG'");
+            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'DITERIMA_USER' WHERE status_akhir = 'SUDAH_DIKIRIM'");
+            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'TERKIRIM_SEBAGIAN' WHERE status_akhir = 'PARTIAL_DELIVERED'");
+            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'TERKIRIM_SEBAGIAN' WHERE status_akhir = 'DIKIRIM_SEBAGIAN'");
+            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'DALAM_PENGIRIMAN' WHERE status_akhir = 'PROSES_PENGIRIMAN'");
+            
+            // Mappings for 'memo_logs' table (optional but good for consistency)
+            pgJdbcTemplate.execute("UPDATE memo_logs SET status = 'MENUNGGU_PERSETUJUAN' WHERE status = 'PENDING_MENUNGGU'");
+            pgJdbcTemplate.execute("UPDATE memo_logs SET status = 'DISETUJUI' WHERE status = 'PENDING_DISETUJUI'");
+            pgJdbcTemplate.execute("UPDATE memo_logs SET status = 'DITOLAK' WHERE status = 'PENDING_DITOLAK'");
+            pgJdbcTemplate.execute("UPDATE memo_logs SET status = 'SIAP_PENUGASAN' WHERE status = 'READY_DI_GUDANG'");
+            pgJdbcTemplate.execute("UPDATE memo_logs SET status = 'PROSES_GUDANG' WHERE status = 'PERSIAPAN_GUDANG'");
+            pgJdbcTemplate.execute("UPDATE memo_logs SET status = 'DITERIMA_USER' WHERE status = 'SUDAH_DIKIRIM'");
+            pgJdbcTemplate.execute("UPDATE memo_logs SET status = 'TERKIRIM_SEBAGIAN' WHERE status = 'PARTIAL_DELIVERED'");
+
+            log.info("Successfully migrated legacy memo statuses in database.");
+        } catch (Exception e) {
+            log.error("Failed to migrate legacy memo statuses: {}", e.getMessage());
+        }
+    }
+
     // Helper: Reset Table (Dipisah biar Transaction-nya jelas)
     // Tidak perlu @Transactional di sini karena sudah ada di Repository
     public void resetTable() {
@@ -169,31 +222,48 @@ public class MigrationService {
     @Transactional
     public void saveBatch(List<Purchase> purchases) {
         String sql = """
-                    INSERT INTO purchases (id, doc_date, doc_no_p, par_name, dep_code, item_code, item_name, qty, price, grand_total)
-                    VALUES (nextval('purchase_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO purchases (id, doc_date, doc_no_p, par_name, dep_code, item_code, item_name, qty, price, grand_total, last_synced)
+                    VALUES (nextval('purchase_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (doc_no_p, item_code) DO UPDATE SET
+                        doc_date = EXCLUDED.doc_date,
+                        par_name = EXCLUDED.par_name,
+                        dep_code = EXCLUDED.dep_code,
+                        item_name = EXCLUDED.item_name,
+                        qty = EXCLUDED.qty,
+                        price = EXCLUDED.price,
+                        grand_total = EXCLUDED.grand_total,
+                        last_synced = EXCLUDED.last_synced
                 """;
 
-        pgJdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
-            @Override
-            public void setValues(java.sql.PreparedStatement ps, int i) throws SQLException {
-                Purchase p = purchases.get(i);
-                ps.setDate(1, java.sql.Date.valueOf(p.getDocDate()));
-                ps.setString(2, p.getDocNoP());
-                ps.setString(3, p.getParName());
-                ps.setString(4, p.getDepCode());
-                ps.setString(5, p.getItemCode());
-                ps.setString(6, p.getItemName());
-                ps.setInt(7, p.getQty());
-                ps.setBigDecimal(8, p.getPrice());
-                ps.setBigDecimal(9, p.getGrandTotal());
-            }
+        try {
+            pgJdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+                @Override
+                public void setValues(java.sql.PreparedStatement ps, int i) throws SQLException {
+                    Purchase p = purchases.get(i);
+                    ps.setDate(1, java.sql.Date.valueOf(p.getDocDate()));
+                    ps.setString(2, p.getDocNoP());
+                    ps.setString(3, p.getParName());
+                    ps.setString(4, p.getDepCode());
+                    ps.setString(5, p.getItemCode());
+                    ps.setString(6, p.getItemName());
+                    ps.setInt(7, p.getQty());
+                    ps.setBigDecimal(8, p.getPrice());
+                    ps.setBigDecimal(9, p.getGrandTotal());
+                    ps.setTimestamp(10, java.sql.Timestamp.valueOf(p.getLastSynced()));
+                }
 
-            @Override
-            public int getBatchSize() {
-                return purchases.size();
-            }
-        });
-        purchases.clear();
+                @Override
+                public int getBatchSize() {
+                    return purchases.size();
+                }
+            });
+        } catch (BadSqlGrammarException e) {
+            log.error("CRITICAL SQL ERROR in Purchase Migration (Schema Mismatch): {}", e.getSQLException().getMessage());
+            log.warn("Lakukan eksekusi script fix_migration_schema.sql di database PostgreSQL segera.");
+            throw e; // Biar transaksi rollback, tapi di level migrate, kita tangkap agar tidak loop.
+        } finally {
+            purchases.clear();
+        }
     }
 
     @Autowired
@@ -201,29 +271,34 @@ public class MigrationService {
 
     private static final String SQL_SALES = """
                 SELECT
-                    d.doc_date,
+                    MAX(d.doc_date) as doc_date,
                     d.doc_no,
-                    p.code,
-                    d.par_name,
+                    MAX(p.code) as code,
+                    MAX(d.par_name) as par_name,
                     t.ite_name,
-                    CASE
-                        WHEN d.doc_no LIKE '%%RJ%%' THEN -t.qty_def
-                        ELSE t.qty_def
-                    END AS qty_def,
-                    t.price,
-                    (
+                    SUM(
                         CASE
                             WHEN d.doc_no LIKE '%%RJ%%' THEN -t.qty_def
                             ELSE t.qty_def
-                        END * t.price
+                        END
+                    ) AS qty_def,
+                    MAX(t.price) as price,
+                    SUM(
+                        (
+                            CASE
+                                WHEN d.doc_no LIKE '%%RJ%%' THEN -t.qty_def
+                                ELSE t.qty_def
+                            END * t.price
+                        )
                     ) AS grand_total,
-                    e.code AS emp_code,
-                    e.name AS emp_name
+                    MAX(e.code) AS emp_code,
+                    MAX(e.name) AS emp_name
                 FROM dbtsalesdoc d
                 LEFT JOIN dbtsalestrans t ON d.id = t.doc_id
                 LEFT JOIN dbmemployee e ON d.emp_id = e.id
                 LEFT JOIN dbmpartner p ON d.par_id = p.id
-                ORDER BY d.doc_date DESC, d.id DESC
+                GROUP BY d.doc_no, t.ite_name
+                ORDER BY doc_date DESC, MAX(d.id) DESC
             """;
 
     private String getSqlSales() {
@@ -232,12 +307,13 @@ public class MigrationService {
 
     @Async
     public CompletableFuture<String> migrateSalesData() {
+        LocalDateTime syncTime = LocalDateTime.now();
         long startTime = System.currentTimeMillis();
 
-        log.info("=== START MIGRASI SALES ===");
+        log.info("=== START MIGRASI SALES (UPSERT) ===");
 
         try {
-            // 0. HITUNG ESTIMASI DATA (schema dari config)
+            // 0. HITUNG ESTIMASI DATA
             String countSql = "SELECT COUNT(*) FROM (" + getSqlSales() + ") as total";
             try {
                 Integer totalRows = legacyJdbcTemplate.queryForObject(countSql, Integer.class);
@@ -246,14 +322,10 @@ public class MigrationService {
                 log.warn("Gagal menghitung total data source: {}", e.getMessage());
             }
 
-            // 1. Bersihkan Tabel
-            log.info("Membersihkan tabel Sales...");
-            salesRepository.truncateTable();
-
             final List<Sales> buffer = new ArrayList<>();
             final int[] totalProcessed = { 0 };
 
-            // 2. Streaming Data (data terbaru dulu)
+            // 1. Streaming Data
             legacyJdbcTemplate.query(getSqlSales(), new RowCallbackHandler() {
                 @Override
                 public void processRow(ResultSet rs) throws SQLException {
@@ -266,27 +338,26 @@ public class MigrationService {
                             s.setDocDate(sqlDate.toLocalDate());
 
                         s.setDocNo(rs.getString("doc_no"));
-                        s.setCode(rs.getString("code")); // p.code
+                        s.setCode(rs.getString("code"));
                         s.setParName(rs.getString("par_name"));
-                        s.setItemName(rs.getString("ite_name")); // t.ite_name
-
-                        // Logic minus/plus sudah dihandle di SQL Query (CASE WHEN)
-                        // Jadi di Java tinggal ambil nilainya saja
+                        s.setItemName(rs.getString("ite_name"));
                         s.setQty(rs.getInt("qty_def"));
                         s.setPrice(rs.getBigDecimal("price"));
                         s.setGrandTotal(rs.getBigDecimal("grand_total"));
-
                         s.setEmpCode(rs.getString("emp_code"));
                         s.setEmpName(rs.getString("emp_name"));
+                        s.setLastSynced(syncTime);
 
                         buffer.add(s);
 
                         // Batch Save
                         if (buffer.size() >= BATCH_SIZE) {
-                            totalProcessed[0] += buffer.size(); // Hitung dulu (FIX BUG 0)
-                            self.saveSalesBatch(buffer); // Simpan & Clear
+                            totalProcessed[0] += buffer.size();
+                            self.saveSalesBatch(buffer);
                             log.info("Sales Migrated: {}...", totalProcessed[0]);
                         }
+                    } catch (BadSqlGrammarException e) {
+                        throw e;
                     } catch (Exception e) {
                         log.warn("Error processing Sales row: {}", e.getMessage());
                     }
@@ -298,6 +369,11 @@ public class MigrationService {
                 totalProcessed[0] += buffer.size();
                 self.saveSalesBatch(buffer);
             }
+
+            // 2. CLEANUP DATA LAMA
+            log.info("Cleaning up old Sales data...");
+            int deleted = pgJdbcTemplate.update("DELETE FROM sales WHERE last_synced < ?", syncTime);
+            log.info("Cleaned up {} stale Sales records.", deleted);
 
             long duration = System.currentTimeMillis() - startTime;
             String result = "=== SALES SELESAI === Total: " + totalProcessed[0] + ". Waktu: " + (duration / 1000)
@@ -315,32 +391,50 @@ public class MigrationService {
     @Transactional
     public void saveSalesBatch(List<Sales> salesList) {
         String sql = """
-                    INSERT INTO sales (id, doc_date, doc_no, code, par_name, item_name, qty, price, grand_total, emp_code, emp_name)
-                    VALUES (nextval('sales_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO sales (id, doc_date, doc_no, code, par_name, item_name, qty, price, grand_total, emp_code, emp_name, last_synced)
+                    VALUES (nextval('sales_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (doc_no, item_name) DO UPDATE SET
+                        doc_date = EXCLUDED.doc_date,
+                        code = EXCLUDED.code,
+                        par_name = EXCLUDED.par_name,
+                        qty = EXCLUDED.qty,
+                        price = EXCLUDED.price,
+                        grand_total = EXCLUDED.grand_total,
+                        emp_code = EXCLUDED.emp_code,
+                        emp_name = EXCLUDED.emp_name,
+                        last_synced = EXCLUDED.last_synced
                 """;
 
-        pgJdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
-            @Override
-            public void setValues(java.sql.PreparedStatement ps, int i) throws SQLException {
-                Sales s = salesList.get(i);
-                ps.setDate(1, java.sql.Date.valueOf(s.getDocDate()));
-                ps.setString(2, s.getDocNo());
-                ps.setString(3, s.getCode());
-                ps.setString(4, s.getParName());
-                ps.setString(5, s.getItemName());
-                ps.setInt(6, s.getQty());
-                ps.setBigDecimal(7, s.getPrice());
-                ps.setBigDecimal(8, s.getGrandTotal());
-                ps.setString(9, s.getEmpCode());
-                ps.setString(10, s.getEmpName());
-            }
+        try {
+            pgJdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+                @Override
+                public void setValues(java.sql.PreparedStatement ps, int i) throws SQLException {
+                    Sales s = salesList.get(i);
+                    ps.setDate(1, java.sql.Date.valueOf(s.getDocDate()));
+                    ps.setString(2, s.getDocNo());
+                    ps.setString(3, s.getCode());
+                    ps.setString(4, s.getParName());
+                    ps.setString(5, s.getItemName());
+                    ps.setInt(6, s.getQty());
+                    ps.setBigDecimal(7, s.getPrice());
+                    ps.setBigDecimal(8, s.getGrandTotal());
+                    ps.setString(9, s.getEmpCode());
+                    ps.setString(10, s.getEmpName());
+                    ps.setTimestamp(11, java.sql.Timestamp.valueOf(s.getLastSynced()));
+                }
 
-            @Override
-            public int getBatchSize() {
-                return salesList.size();
-            }
-        });
-        salesList.clear();
+                @Override
+                public int getBatchSize() {
+                    return salesList.size();
+                }
+            });
+        } catch (BadSqlGrammarException e) {
+            log.error("CRITICAL SQL ERROR in Sales Migration (Schema Mismatch): {}", e.getSQLException().getMessage());
+            log.warn("Pastikan UNIQUE CONSTRAINT (doc_no, item_name) tersedia di tabel sales.");
+            throw e;
+        } finally {
+            salesList.clear();
+        }
     }
 
     @Autowired
@@ -512,13 +606,11 @@ public class MigrationService {
 
     @Async
     public CompletableFuture<String> migrateStockData() {
+        LocalDateTime syncTime = LocalDateTime.now();
         long startTime = System.currentTimeMillis();
-        log.info("=== START MIGRASI STOK ===");
+        log.info("=== START MIGRASI STOK (UPSERT) ===");
 
         try {
-            log.info("Membersihkan tabel Stok...");
-            stockRepository.truncateTable();
-
             final List<Stock> buffer = new ArrayList<>();
             final int[] totalProcessed = { 0 };
 
@@ -536,12 +628,7 @@ public class MigrationService {
                         s.setNormalizedItemName(com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(name));
 
                         // === LOGIC UPDATE KATEGORI ===
-
-                        // 1. Kategori dari ITEM CODE (Split berdasarkan strip '-')
-                        // Contoh: "LCD-AC_22..." -> diambil "LCD"
                         if (code != null && !code.isEmpty()) {
-                            // Cek apakah ada strip "-", jika ada ambil depannya.
-                            // Jika tidak ada strip, ambil kata pertama (spasi) atau ambil semuanya.
                             if (code.contains("-")) {
                                 s.setKategoriItemcode(code.split("-")[0]);
                             } else {
@@ -549,8 +636,6 @@ public class MigrationService {
                             }
                         }
 
-                        // 2. Kategori dari ITEM NAME (Split berdasarkan spasi ' ')
-                        // Contoh: "KULKAS 2 PINTU" -> diambil "KULKAS"
                         if (name != null && !name.isEmpty()) {
                             s.setKategoriNama(name.split(" ")[0]);
                         }
@@ -559,14 +644,17 @@ public class MigrationService {
                         s.setHargaHpp(rs.getBigDecimal("harga_hpp"));
                         s.setGrandTotal(rs.getBigDecimal("grand_total"));
                         s.setWarehouse(rs.getString("warehouse_name"));
+                        s.setLastSynced(syncTime);
 
                         buffer.add(s);
 
                         if (buffer.size() >= BATCH_SIZE) {
                             totalProcessed[0] += buffer.size();
-                            self.saveStockBatch(buffer); // Panggil method batch insert kamu
+                            self.saveStockBatch(buffer);
                             log.info("Stock Migrated: {}...", totalProcessed[0]);
                         }
+                    } catch (BadSqlGrammarException e) {
+                        throw e;
                     } catch (Exception e) {
                         log.warn("Error processing Stock row: {}", e.getMessage());
                     }
@@ -578,12 +666,17 @@ public class MigrationService {
                 self.saveStockBatch(buffer);
             }
 
+            // CLEANUP DATA LAMA
+            log.info("Cleaning up old Stock data...");
+            int deleted = pgJdbcTemplate.update("DELETE FROM stok WHERE last_synced < ?", syncTime);
+            log.info("Cleaned up {} stale Stock records.", deleted);
+
             long duration = System.currentTimeMillis() - startTime;
             String result = "=== STOK SELESAI === Total: " + totalProcessed[0] + ". Waktu: "
-                    + (duration / 1000)
-                    + " detik.";
+                    + (duration / 1000) + " detik.";
             log.info("{}", result);
             return CompletableFuture.completedFuture(result);
+
         } catch (Exception e) {
             log.error("CRITICAL ERROR during Stock Data Migration: {}", e.getMessage(), e);
             logConnectionCause(e);
@@ -788,49 +881,61 @@ public class MigrationService {
     @Transactional
     public void saveStockBatch(List<Stock> stockList) {
         String sql = """
-                INSERT INTO
+                    INSERT INTO stok (id, item_code, item_name, kategori_nama, kategori_itemcode, final_stok, harga_hpp, grand_total, warehouse, last_synced, normalized_item_name)
+                    VALUES (nextval('stok_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (item_code, warehouse) DO UPDATE SET
+                        item_name = EXCLUDED.item_name,
+                        kategori_nama = EXCLUDED.kategori_nama,
+                        kategori_itemcode = EXCLUDED.kategori_itemcode,
+                        final_stok = EXCLUDED.final_stok,
+                        harga_hpp = EXCLUDED.harga_hpp,
+                        grand_total = EXCLUDED.grand_total,
+                        last_synced = EXCLUDED.last_synced,
+                        normalized_item_name = EXCLUDED.normalized_item_name
+                """;
 
-                stok (id, item_code, item_name, kategori_nama, kategori_itemcode, final_stok, harga_hpp, grand_total, warehouse)
-                                VALUES (nextval('stok_seq'), ?, ?, ?, ?, ?, ?, ?, ?)
-                            """;
+        try {
+            pgJdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+                @Override
+                public void setValues(java.sql.PreparedStatement ps, int i) throws SQLException {
+                    Stock s = stockList.get(i);
+                    ps.setString(1, s.getItemCode());
+                    ps.setString(2, s.getItemName());
+                    ps.setString(3, s.getKategoriNama());
+                    ps.setString(4, s.getKategoriItemcode());
 
-        pgJdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
-            @Override
-            public void setValues(java.sql.PreparedStatement ps, int i) throws SQLException {
-                Stock s = stockList.get(i);
-                ps.setString(1, s.getItemCode());
-                ps.setString(2, s.getItemName());
-                ps.setString(3, s.getKategoriNama());
-                ps.setString(4, s.getKategoriItemcode());
+                    if (s.getFinalStok() != null) {
+                        ps.setInt(5, s.getFinalStok());
+                    } else {
+                        ps.setNull(5, java.sql.Types.INTEGER);
+                    }
 
-                // Handle null safe for Integer
-                if (s.getFinalStok() != null) {
-                    ps.setInt(5, s.getFinalStok());
-                } else {
-                    ps.setNull(5, java.sql.Types.INTEGER);
+                    ps.setBigDecimal(6, s.getHargaHpp());
+                    ps.setBigDecimal(7, s.getGrandTotal());
+                    ps.setString(8, s.getWarehouse());
+                    ps.setTimestamp(9, java.sql.Timestamp.valueOf(s.getLastSynced()));
+                    ps.setString(10, s.getNormalizedItemName());
                 }
 
-                ps.setBigDecimal(6, s.getHargaHpp());
-                ps.setBigDecimal(7, s.getGrandTotal());
-                ps.setString(8, s.getWarehouse());
-            }
-
-            @Override
-            public int getBatchSize() {
-                return stockList.size();
-            }
-        });
-        stockList.clear();
+                @Override
+                public int getBatchSize() {
+                    return stockList.size();
+                }
+            });
+        } catch (BadSqlGrammarException e) {
+            log.error("CRITICAL SQL ERROR in Stock Migration: {}", e.getSQLException().getMessage());
+            log.warn("Pastikan UNIQUE CONSTRAINT (item_code, warehouse) tersedia di tabel stok.");
+            throw e;
+        } finally {
+            stockList.clear();
+        }
     }
 
     @Async
     public CompletableFuture<String> migrateSnData() {
-        log.info("=== START MIGRASI SERIAL NUMBER ===");
+        LocalDateTime syncTime = LocalDateTime.now();
+        log.info("=== START MIGRASI SERIAL NUMBER (UPSERT) ===");
         try {
-            // 1. Bersihkan tabel tujuan di Postgres (Pastikan kamu sudah buat
-            // repository-nya)
-            pgJdbcTemplate.execute("TRUNCATE TABLE item_serial_numbers RESTART IDENTITY");
-
             // 2. Query Gabungan (Masuk & Keluar) dari Legacy MySQL
             String sqlSource = """
                         SELECT p.doc_date AS tanggal, p.doc_no AS doc_id, p.par_name AS user_name, m.name AS item_name, sn.sn, 'MASUK' as type
@@ -854,7 +959,8 @@ public class MigrationService {
                         rs.getString("user_name"),
                         rs.getString("item_name"),
                         rs.getString("sn"),
-                        rs.getString("type")
+                        rs.getString("type"),
+                        java.sql.Timestamp.valueOf(syncTime)
                 };
                 buffer.add(row);
                 if (buffer.size() >= BATCH_SIZE) {
@@ -865,6 +971,11 @@ public class MigrationService {
 
             if (!buffer.isEmpty())
                 saveSnBatch(buffer);
+
+            // CLEANUP DATA LAMA
+            log.info("Cleaning up old SN data...");
+            int deleted = pgJdbcTemplate.update("DELETE FROM item_serial_numbers WHERE last_synced < ?", syncTime);
+            log.info("Cleaned up {} stale SN records.", deleted);
 
             return CompletableFuture.completedFuture("Migrasi SN Selesai.");
         } catch (Exception e) {
@@ -893,11 +1004,28 @@ public class MigrationService {
     }
 
     private void saveSnBatch(List<Object[]> data) {
-        String sqlInsert = "INSERT INTO item_serial_numbers (tanggal, doc_id, user_name, item_name, sn, type) VALUES (?, ?, ?, ?, ?, ?)";
-        pgJdbcTemplate.batchUpdate(sqlInsert, data, new int[] {
-                java.sql.Types.TIMESTAMP, java.sql.Types.VARCHAR, java.sql.Types.VARCHAR,
-                java.sql.Types.VARCHAR, java.sql.Types.VARCHAR, java.sql.Types.VARCHAR
-        });
+        String sql = """
+                    INSERT INTO item_serial_numbers (tanggal, doc_id, user_name, item_name, sn, type, last_synced)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (sn, doc_id, type) DO UPDATE SET
+                        tanggal = EXCLUDED.tanggal,
+                        user_name = EXCLUDED.user_name,
+                        item_name = EXCLUDED.item_name,
+                        last_synced = EXCLUDED.last_synced
+                """;
+        try {
+            pgJdbcTemplate.batchUpdate(sql, data, new int[] {
+                    java.sql.Types.TIMESTAMP, java.sql.Types.VARCHAR, java.sql.Types.VARCHAR,
+                    java.sql.Types.VARCHAR, java.sql.Types.VARCHAR, java.sql.Types.VARCHAR,
+                    java.sql.Types.TIMESTAMP
+            });
+        } catch (BadSqlGrammarException e) {
+            log.error("CRITICAL SQL ERROR in SN Migration: {}", e.getSQLException().getMessage());
+            log.warn("Pastikan UNIQUE CONSTRAINT (sn, doc_id, type) tersedia di tabel item_serial_numbers.");
+            throw e;
+        } finally {
+            data.clear();
+        }
     }
 
     @Autowired
@@ -905,12 +1033,9 @@ public class MigrationService {
 
     @Async
     public CompletableFuture<String> migrateCanvasingData() {
+        LocalDateTime syncTime = LocalDateTime.now();
         long startTime = System.currentTimeMillis();
-        log.info("=== START MIGRASI CANVASING (OPTIMIZED) ===");
-
-        // Clear existing data before migration to prevent duplication
-        log.info("Cleaning up canvasing table...");
-        canvasingRepository.truncateTable();
+        log.info("=== START MIGRASI CANVASING (UPSERT) ===");
 
         final List<Canvasing> buffer = new ArrayList<>();
         final int[] totalProcessed = { 0 };
@@ -930,33 +1055,28 @@ public class MigrationService {
                 if (isHeader) {
                     isHeader = false;
                     continue;
-                } // Skip Header
+                }
 
-                // Split CSV sederhana
-                // Hati-hati: Jika isi data mengandung koma, logic ini perlu library OpenCSV.
-                // Tapi untuk data sederhana, split(",") sudah cukup.
                 String[] data = line.split(",");
 
                 if (data.length >= 2) {
                     Canvasing c = new Canvasing();
 
-                    // Logic mapping safe (menghindari error array out of bounds)
                     c.setKategori(safeGet(data, 0));
                     c.setNamaInstansi(safeGet(data, 1));
                     c.setProvinsi(safeGet(data, 2));
                     c.setKabupaten(safeGet(data, 3));
                     c.setKecamatan(safeGet(data, 4));
+                    c.setLastSynced(syncTime);
 
-                    // Filter: Jika nama instansi kosong, skip (sesuai logic Python kamu)
                     if (c.getNamaInstansi() != null && !c.getNamaInstansi().isEmpty()) {
                         buffer.add(c);
                     }
                 }
 
-                // Cek Buffer
                 if (buffer.size() >= BATCH_SIZE) {
                     totalProcessed[0] += buffer.size();
-                    self.saveCanvasingBatch(buffer); // Pake JDBC Template
+                    self.saveCanvasingBatch(buffer);
                     log.info("Canvasing Migrated: {}...", totalProcessed[0]);
                 }
             }
@@ -967,6 +1087,11 @@ public class MigrationService {
                 totalProcessed[0] += buffer.size();
                 self.saveCanvasingBatch(buffer);
             }
+
+            // CLEANUP DATA LAMA
+            log.info("Cleaning up old Canvasing data...");
+            int deleted = pgJdbcTemplate.update("DELETE FROM canvasing WHERE last_synced < ?", syncTime);
+            log.info("Cleaned up {} stale Canvasing records.", deleted);
 
         } catch (Exception e) {
             log.error("Error during Canvasing migration: {}", e.getMessage(), e);
@@ -993,28 +1118,40 @@ public class MigrationService {
     @Transactional
     public void saveCanvasingBatch(List<Canvasing> list) {
         String sql = """
-                    INSERT INTO canvasing (id, kategori, nama_instansi, provinsi, kabupaten, kecamatan)
-                    VALUES (nextval('canvasing_seq'), ?, ?, ?, ?, ?)
+                    INSERT INTO canvasing (id, kategori, nama_instansi, provinsi, kabupaten, kecamatan, last_synced)
+                    VALUES (nextval('canvasing_seq'), ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (nama_instansi, kategori) DO UPDATE SET
+                        provinsi = EXCLUDED.provinsi,
+                        kabupaten = EXCLUDED.kabupaten,
+                        kecamatan = EXCLUDED.kecamatan,
+                        last_synced = EXCLUDED.last_synced
                 """;
 
-        pgJdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
-            @Override
-            public void setValues(java.sql.PreparedStatement ps, int i) throws SQLException {
-                Canvasing c = list.get(i);
-                ps.setString(1, c.getKategori());
-                ps.setString(2, c.getNamaInstansi());
-                ps.setString(3, c.getProvinsi());
-                ps.setString(4, c.getKabupaten());
-                ps.setString(5, c.getKecamatan());
-            }
+        try {
+            pgJdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+                @Override
+                public void setValues(java.sql.PreparedStatement ps, int i) throws SQLException {
+                    Canvasing c = list.get(i);
+                    ps.setString(1, c.getKategori());
+                    ps.setString(2, c.getNamaInstansi());
+                    ps.setString(3, c.getProvinsi());
+                    ps.setString(4, c.getKabupaten());
+                    ps.setString(5, c.getKecamatan());
+                    ps.setTimestamp(6, java.sql.Timestamp.valueOf(c.getLastSynced()));
+                }
 
-            @Override
-            public int getBatchSize() {
-                return list.size();
-            }
-        });
-
-        list.clear(); // Kosongkan buffer
+                @Override
+                public int getBatchSize() {
+                    return list.size();
+                }
+            });
+        } catch (BadSqlGrammarException e) {
+            log.error("CRITICAL SQL ERROR in Canvasing Migration: {}", e.getSQLException().getMessage());
+            log.warn("Pastikan UNIQUE CONSTRAINT (nama_instansi, kategori) tersedia di tabel canvasing.");
+            throw e;
+        } finally {
+            list.clear(); // Kosongkan buffer
+        }
     }
 
     @Autowired

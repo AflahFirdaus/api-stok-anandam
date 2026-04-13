@@ -6,7 +6,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.math.BigDecimal;
+import com.stok.anandam.store.core.postgres.model.User;
+import com.stok.anandam.store.core.postgres.model.Role;
 import com.stok.anandam.store.dto.EmployeeSalesResponse;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class DashboardService {
@@ -21,12 +25,17 @@ public class DashboardService {
     private DataCanvasingRepository canvasRepo;
     @Autowired
     private TkdnRepository tkdnRepo;
+    @Autowired
+    private UserRepository userRepo;
 
-    public DashboardResponse getDashboardData() {
+    public DashboardResponse getDashboardData(String username) {
+        User user = userRepo.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
         LocalDate today = LocalDate.now();
         int lowStockThreshold = 10;
 
-        return DashboardResponse.builder()
+        DashboardResponse response = DashboardResponse.builder()
                 .totalSalesToday(salesRepo.sumTotalByDate(today))
                 .totalPurchasesToday(purchaseRepo.sumTotalByDate(today))
                 .totalVisitsToday(canvasRepo.countByTanggal(today))
@@ -42,5 +51,16 @@ public class DashboardService {
                                 .build())
                         .collect(java.util.stream.Collectors.toList()))
                 .build();
+
+        // FILTER HPP FOR MARKETING
+        Role role = user.getRole();
+        if (role == Role.MARKETING || 
+            role == Role.MARKETING_TOKO || 
+            role == Role.MARKETING_PROJECT || 
+            role == Role.MARKETING_DISTRIBUSI) {
+            response.setTotalHpp(null);
+        }
+
+        return response;
     }
 }

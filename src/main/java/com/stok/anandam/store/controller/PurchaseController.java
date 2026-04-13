@@ -11,7 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/v1/purchases")
+@RequestMapping({"/api/v1/purchases", "/api/v1/purchase"})
 public class PurchaseController {
 
         @Autowired

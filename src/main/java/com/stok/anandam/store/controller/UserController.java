@@ -109,4 +109,19 @@ public class UserController {
 
                 return ResponseEntity.ok(response);
         }
+
+        @PostMapping("/{id}/clear-sessions")
+        @LogActivity("BERSIHKAN SESI USER")
+        public ResponseEntity<WebResponse<UserResponse>> clearUserSessions(@PathVariable(name = "id") Long id) {
+                UserResponse userResponse = userService.clearUserSessions(id);
+
+                WebResponse<UserResponse> response = WebResponse.<UserResponse>builder()
+                                .status(HttpStatus.OK.value())
+                                .message("Sesi user berhasil dibersihkan")
+                                .data(userResponse)
+                                .paging(null)
+                                .build();
+
+                return ResponseEntity.ok(response);
+        }
 }

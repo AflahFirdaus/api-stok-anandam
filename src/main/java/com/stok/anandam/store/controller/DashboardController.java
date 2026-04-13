@@ -17,8 +17,8 @@ public class DashboardController {
     private DashboardService dashboardService;
 
     @GetMapping("/summary")
-    public ResponseEntity<WebResponse<DashboardResponse>> getSummary() {
-        DashboardResponse data = dashboardService.getDashboardData();
+    public ResponseEntity<WebResponse<DashboardResponse>> getSummary(java.security.Principal principal) {
+        DashboardResponse data = dashboardService.getDashboardData(principal.getName());
         
         return ResponseEntity.ok(WebResponse.<DashboardResponse>builder()
                 .status(200)

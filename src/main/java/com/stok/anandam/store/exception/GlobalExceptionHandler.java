@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -123,7 +124,29 @@ public class GlobalExceptionHandler {
         @ExceptionHandler(DateTimeParseException.class)
         public ResponseEntity<WebResponse<ApiErrorResponse>> handleDateTimeParse(DateTimeParseException ex,
                         HttpServletRequest request) {
-                String message = "Format tanggal tidak valid. Gunakan yyyy-MM-dd (contoh: 2024-01-15).";
+                String message = "Format tanggal tidak valid. Gunakan dd-MM-yyyy (contoh: 15-01-2024).";
+                ApiErrorResponse error = new ApiErrorResponse(
+                                HttpStatus.BAD_REQUEST.value(),
+                                "Bad Request",
+                                message,
+                                request.getRequestURI());
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(WebResponse.<ApiErrorResponse>builder()
+                                .status(HttpStatus.BAD_REQUEST.value())
+                                .message(message)
+                                .data(error)
+                                .paging(null)
+                                .build());
+        }
+
+        // 5c. Handle JSON Syntax / Enum Typo (400)
+        @ExceptionHandler(HttpMessageNotReadableException.class)
+        public ResponseEntity<WebResponse<ApiErrorResponse>> handleMessageNotReadable(HttpMessageNotReadableException ex,
+                        HttpServletRequest request) {
+                String message = "Format JSON tidak valid atau ada kesalahan penulisan (Typo).";
+                if (ex.getMessage() != null && ex.getMessage().contains("Enum")) {
+                    message = "Kesalahan penulisan status/enum. Silakan cek kembali pilihan status yang diizinkan.";
+                }
+
                 ApiErrorResponse error = new ApiErrorResponse(
                                 HttpStatus.BAD_REQUEST.value(),
                                 "Bad Request",

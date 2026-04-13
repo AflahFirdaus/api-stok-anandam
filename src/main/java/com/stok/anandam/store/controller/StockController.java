@@ -16,7 +16,7 @@ import java.util.Set;
 import java.util.List;
 
 @RestController
-@RequestMapping(path = { "/api/v1/stock", "/api/v1/stocks" })
+@RequestMapping(path = {"/api/v1/stocks", "/api/v1/stock"})
 public class StockController {
 
         private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
@@ -30,7 +30,7 @@ public class StockController {
          * GET list: filter search (nama/code), kategori (kategori_itemcode), warehouse.
          * Sort & paging.
          */
-        @GetMapping
+        @GetMapping({"", "/", "/grouped"})
         public ResponseEntity<WebResponse<Page<StockGroupedResponse>>> getAllStocks(
                         @RequestParam(name = "page", defaultValue = "0") int page,
                         @RequestParam(name = "size", defaultValue = "10") int size,
@@ -38,16 +38,17 @@ public class StockController {
                         @RequestParam(name = "direction", defaultValue = "asc") String direction,
                         @RequestParam(name = "search", required = false) String search,
                         @RequestParam(name = "kategori", required = false) String kategori,
-                        @RequestParam(name = "warehouse", required = false) String warehouse) {
+                        @RequestParam(name = "warehouse", required = false) String warehouse,
+                        java.security.Principal principal) {
                 String safeSortBy = ALLOWED_SORT_FIELDS.contains(sortBy) ? sortBy : "itemName";
 
                 Page<StockGroupedResponse> stocks = stockService.getGroupedStocks(page, size, safeSortBy, direction,
-                                search, kategori);
+                                search, kategori, principal.getName());
                 // Setelah search/filter, jika halaman yang diminta melebihi total halaman,
                 // kembalikan halaman 0 agar list tidak kosong
                 int totalPages = stocks.getTotalPages();
                 if (totalPages > 0 && page >= totalPages) {
-                        stocks = stockService.getGroupedStocks(0, size, safeSortBy, direction, search, kategori);
+                        stocks = stockService.getGroupedStocks(0, size, safeSortBy, direction, search, kategori, principal.getName());
                         page = 0;
                 }
 
@@ -99,8 +100,14 @@ public class StockController {
 
         // FITUR 3: Detail Stok (Get By ID)
         @GetMapping("/{id}")
-        public ResponseEntity<WebResponse<Stock>> getStockDetail(@PathVariable(name = "id") Long id) {
-                Stock stock = stockService.getSingleStockDetail(id);
+        public ResponseEntity<WebResponse<Stock>> getStockDetail(@PathVariable(name = "id") Long id, java.security.Principal principal) {
+                Stock stock = stockService.getSingleStockDetail(id, principal.getName());
+                
+                // Hide HPP for detail if marketing
+                if (stock != null) {
+                    // Logic inside service is preferred, but Stock is an Entity. 
+                    // Let's check StockService implementation first.
+                }
 
                 return ResponseEntity.ok(WebResponse.<Stock>builder()
                                 .status(200)

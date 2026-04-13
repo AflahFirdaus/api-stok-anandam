@@ -24,4 +24,7 @@ public class ItemSerialNumber {
     private String itemName;
     private String sn;
     private String type; // MASUK / KELUAR
+
+    @Column(name = "last_synced")
+    private LocalDateTime lastSynced;
 }

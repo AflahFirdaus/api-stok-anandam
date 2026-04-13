@@ -1,9 +1,16 @@
 package com.stok.anandam.store.core.postgres.model;
 
+import java.time.LocalDateTime;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.NoArgsConstructor;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @Entity
 @Table(name = "users")
 public class User {
@@ -15,16 +22,34 @@ public class User {
     @Column(nullable = false)
     private String nama;
 
-    @Column(unique = true, nullable = false)
+    @Column(nullable = false, unique = true)
     private String username;
 
     @Column(nullable = false)
-    private String password; // Nanti ini akan diisi password yang sudah di-encrypt (BCrypt)
+    private String password;
 
-    @Enumerated(EnumType.STRING) // Agar tersimpan sebagai tulisan "ADMIN", bukan angka 0
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role;
 
+    @Builder.Default
     @Column(columnDefinition = "boolean default true")
     private Boolean active = true;
+
+    private String noHp;
+
+    @Column(name = "employee_code")
+    private String employeeCode;
+
+    @Builder.Default
+    @Column(columnDefinition = "boolean default false")
+    private Boolean isOnline = false;
+
+    @Builder.Default
+    @Column(columnDefinition = "integer default 0")
+    private Integer deviceCount = 0;
+
+    private LocalDateTime lastActivity;
+
+    private LocalDateTime lastLogin;
 }

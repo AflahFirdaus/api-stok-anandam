@@ -20,4 +20,5 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> 
 
     // Ambil log terakhir berdasarkan awalan action
     java.util.Optional<ActivityLog> findFirstByActionStartingWithOrderByTimestampDesc(String actionPrefix);
+
 }

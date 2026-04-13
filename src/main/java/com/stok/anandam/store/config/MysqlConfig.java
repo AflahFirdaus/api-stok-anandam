@@ -30,16 +30,16 @@ public class MysqlConfig {
 
     private static final Logger log = LoggerFactory.getLogger(MysqlConfig.class);
 
-    @Value("${spring.datasource.mysql.jdbc-url}")
+    @Value("${spring.datasource.mysql.jdbc-url:}")
     private String url;
 
-    @Value("${spring.datasource.mysql.username}")
+    @Value("${spring.datasource.mysql.username:}")
     private String username;
 
-    @Value("${spring.datasource.mysql.password}")
+    @Value("${spring.datasource.mysql.password:}")
     private String password;
 
-    @Value("${spring.datasource.mysql.driver-class-name}")
+    @Value("${spring.datasource.mysql.driver-class-name:com.mysql.cj.jdbc.Driver}")
     private String driverClassName;
 
     @Value("${spring.datasource.mysql.maximum-pool-size:5}")

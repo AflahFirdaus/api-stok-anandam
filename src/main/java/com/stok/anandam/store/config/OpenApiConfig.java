@@ -19,12 +19,19 @@ public class OpenApiConfig {
     public OpenAPI customOpenAPI() {
         final String bearerAuth = "bearerAuth";
         
+        // 1. Tambahkan Local Server
+        Server localServer = new Server()
+                .url("http://localhost:8080") // Pastikan port-nya sesuai dengan aplikasi lokalmu
+                .description("Local Server (HTTP)");
+
+        // 2. Server Production kamu
         Server httpsServer = new Server()
                 .url("https://api.anandamcomputer.com")
                 .description("Production Server (HTTPS)");
 
         return new OpenAPI()
-                .servers(List.of(httpsServer))
+                // 3. Masukkan KEDUA server tersebut ke dalam List
+                .servers(List.of(localServer, httpsServer))
                 .info(new Info()
                         .title("Store Anandam API")
                         .version("1.0")
@@ -38,5 +45,5 @@ public class OpenApiConfig {
                                         .scheme("bearer")
                                         .bearerFormat("JWT")
                                         .description("Login via POST /api/v1/auth/login, lalu isi token di sini.")));
-        }
+    }
 }

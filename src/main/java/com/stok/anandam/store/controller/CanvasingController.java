@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/v1/canvasing")
+@RequestMapping({"/api/v1/canvasings", "/api/v1/canvasing"})
 public class CanvasingController {
 
     @Autowired

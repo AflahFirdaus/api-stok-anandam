@@ -11,7 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/v1/sales")
+@RequestMapping({"/api/v1/sales", "/api/v1/sale"})
 public class SalesController {
 
         @Autowired
@@ -57,9 +57,9 @@ public class SalesController {
          * filter (satu request).
          */
         @GetMapping("/employee-codes")
-        public ResponseEntity<WebResponse<java.util.List<String>>> getEmployeeCodes() {
-                java.util.List<String> codes = salesService.getEmployeeCodes();
-                return ResponseEntity.ok(WebResponse.<java.util.List<String>>builder()
+        public ResponseEntity<WebResponse<java.util.List<com.stok.anandam.store.dto.EmployeeOption>>> getEmployeeCodes() {
+                java.util.List<com.stok.anandam.store.dto.EmployeeOption> codes = salesService.getEmployeeCodes();
+                return ResponseEntity.ok(WebResponse.<java.util.List<com.stok.anandam.store.dto.EmployeeOption>>builder()
                                 .status(200)
                                 .message("Success fetch employee codes")
                                 .data(codes)

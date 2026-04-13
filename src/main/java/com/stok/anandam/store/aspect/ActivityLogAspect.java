@@ -55,7 +55,7 @@ public class ActivityLogAspect {
 
             // Ambil IP Address
             HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes()).getRequest();
-            String ip = request.getRemoteAddr();
+            String ip = getClientIp(request);
 
             ActivityLog activityLog = new ActivityLog();
             activityLog.setUsername(username);
@@ -68,5 +68,31 @@ public class ActivityLogAspect {
         } catch (Exception e) {
             log.warn("Gagal menyimpan log aktivitas: {}", e.getMessage());
         }
+    }
+
+    private String getClientIp(HttpServletRequest request) {
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("Proxy-Client-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("WL-Proxy-Client-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("HTTP_CLIENT_IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("HTTP_X_FORWARDED_FOR");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+        
+        // Jika ada multiple IP (misal dari proxy bertingkat), ambil yang pertama
+        if (ip != null && ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
+        }
+        
+        return ip;
     }
 }

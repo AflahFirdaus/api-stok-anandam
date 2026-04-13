@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1/tkdn")
+@RequestMapping({"/api/v1/tkdns", "/api/v1/tkdn"})
 public class TkdnController {
 
         @Autowired
