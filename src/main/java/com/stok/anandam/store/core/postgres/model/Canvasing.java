@@ -12,7 +12,9 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @Builder
 @Entity
-@Table(name = "canvasing")
+@Table(name = "canvasing", uniqueConstraints = {
+    @UniqueConstraint(columnNames = {"nama_instansi", "kategori"})
+})
 public class Canvasing {
 
     @Id

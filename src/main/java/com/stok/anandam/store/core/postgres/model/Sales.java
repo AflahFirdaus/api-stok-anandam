@@ -15,7 +15,9 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @Builder
 @Entity
-@Table(name = "sales") // Nama tabel di database baru
+@Table(name = "sales", uniqueConstraints = {
+    @UniqueConstraint(columnNames = {"doc_no", "item_name"})
+})
 public class Sales {
 
     @Id

@@ -12,7 +12,9 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @Builder
 @Entity
-@Table(name = "item_serial_numbers")
+@Table(name = "item_serial_numbers", uniqueConstraints = {
+    @UniqueConstraint(columnNames = {"sn", "doc_id", "type"})
+})
 public class ItemSerialNumber {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
