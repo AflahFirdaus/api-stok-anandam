@@ -97,14 +97,8 @@ public class JwtFilter extends OncePerRequestFilter {
                 // Masukkan user ke context Spring Security (User dianggap LOGIN)
                 SecurityContextHolder.getContext().setAuthentication(authToken);
 
-                // Update activity status
-                com.stok.anandam.store.core.postgres.repository.UserRepository userRepository = 
-                    ApplicationContextProvider.getBean(com.stok.anandam.store.core.postgres.repository.UserRepository.class);
-                userRepository.findByUsername(username).ifPresent(user -> {
-                    user.setLastActivity(java.time.LocalDateTime.now());
-                    user.setIsOnline(true);
-                    userRepository.save(user);
-                });
+                // TODO: Update activity status dipindahkan ke asinkron/Redis untuk performa
+                // Jangan lakukan userRepository.save() di dalam filter ini karena dipanggil setiap request!
             }
         }
 

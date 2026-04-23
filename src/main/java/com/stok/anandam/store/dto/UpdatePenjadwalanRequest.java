@@ -20,4 +20,7 @@ public class UpdatePenjadwalanRequest {
     private String catatan;
     
     private String alasan; // Untuk log re-assign
+
+    private Double latitude;
+    private Double longitude;
 }

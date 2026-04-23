@@ -61,13 +61,31 @@ public class MapService {
                             .isExpedition(schedule != null && schedule.getTipeTugas() == com.stok.anandam.store.core.postgres.model.enums.TipeTugas.DROP_OFF_EKSPEDISI);
 
                     if (schedule != null) {
+                        String desa = schedule.getKodepos() != null ? schedule.getKodepos().getDesaKelurahan() : null;
+                        String kec = schedule.getKodepos() != null ? schedule.getKodepos().getKecamatan() : null;
+                        String kab = schedule.getKodepos() != null ? schedule.getKodepos().getKabupatenKota() : null;
+
+                        // Fallback parsing from alamatLengkap
+                        if (kec == null && schedule.getAlamatLengkap() != null) {
+                            String[] parts = schedule.getAlamatLengkap().split(",");
+                            if (parts.length >= 1) desa = parts[0].trim();
+                            if (parts.length >= 2) kec = parts[1].trim();
+                            
+                            // Ambil yang sebelum 'Indonesia' atau yang paling belakang jika bukan Indonesia
+                            int lastIdx = parts.length - 1;
+                            if (parts[lastIdx].trim().equalsIgnoreCase("Indonesia") && lastIdx > 0) {
+                                lastIdx--;
+                            }
+                            if (lastIdx >= 2) kab = parts[lastIdx].trim();
+                        }
+
                         builder.status(schedule.getStatusJadwal().name())
-                                .desa(schedule.getKodepos() != null ? schedule.getKodepos().getDesaKelurahan() : "N/A")
-                                .kecamatan(schedule.getKodepos() != null ? schedule.getKodepos().getKecamatan() : "N/A")
-                                .kabupaten(schedule.getKodepos() != null ? schedule.getKodepos().getKabupatenKota() : "N/A")
+                                .desa(desa != null ? desa : "Wilayah")
+                                .kecamatan(kec != null ? kec : "N/A")
+                                .kabupaten(kab != null ? kab : "N/A")
                                 .kodePos(schedule.getKodepos() != null ? schedule.getKodepos().getKodePos() : memo.getKodePos())
-                                .lat(schedule.getKodepos() != null ? schedule.getKodepos().getLatitude() : null)
-                                .lng(schedule.getKodepos() != null ? schedule.getKodepos().getLongitude() : null)
+                                .lat(schedule.getLatitude() != null ? new java.math.BigDecimal(schedule.getLatitude().toString()) : (schedule.getKodepos() != null ? schedule.getKodepos().getLatitude() : null))
+                                .lng(schedule.getLongitude() != null ? new java.math.BigDecimal(schedule.getLongitude().toString()) : (schedule.getKodepos() != null ? schedule.getKodepos().getLongitude() : null))
                                 .mapUrl(schedule.getAlamatMaps());
                                 
                         if (schedule.getMarketingName() != null) {
@@ -141,10 +159,14 @@ public class MapService {
                     if (kec == null && manual.getAlamatLengkap() != null) {
                         try {
                             String[] parts = manual.getAlamatLengkap().split(",");
-                            if (parts.length >= 2) {
-                                kec = parts[parts.length > 2 ? parts.length - 2 : 0].trim();
-                                if (parts.length >= 3) kab = parts[parts.length - 1].trim();
+                            if (parts.length >= 1) desa = parts[0].trim();
+                            if (parts.length >= 2) kec = parts[1].trim();
+                            
+                            int lastIdx = parts.length - 1;
+                            if (parts[lastIdx].trim().equalsIgnoreCase("Indonesia") && lastIdx > 0) {
+                                lastIdx--;
                             }
+                            if (lastIdx >= 2) kab = parts[lastIdx].trim();
                         } catch (Exception ignored) {}
                     }
 
@@ -163,8 +185,8 @@ public class MapService {
                             .kecamatan(kec != null ? kec : "N/A")
                             .kabupaten(kab != null ? kab : "N/A")
                             .kodePos(manual.getKodepos() != null ? manual.getKodepos().getKodePos() : "N/A")
-                            .lat(manual.getKodepos() != null ? manual.getKodepos().getLatitude() : null)
-                            .lng(manual.getKodepos() != null ? manual.getKodepos().getLongitude() : null);
+                            .lat(manual.getLatitude() != null ? new java.math.BigDecimal(manual.getLatitude().toString()) : (manual.getKodepos() != null ? manual.getKodepos().getLatitude() : null))
+                            .lng(manual.getLongitude() != null ? new java.math.BigDecimal(manual.getLongitude().toString()) : (manual.getKodepos() != null ? manual.getKodepos().getLongitude() : null));
 
                     // Robust coordinate extraction from URL/String
                     if (builder.build().getLat() == null) {
@@ -220,6 +242,8 @@ public class MapService {
                                 .isExpedition(false) // Not set until scheduled
                                 .status("BELUM_DIJADWALKAN")
                                 .mapUrl(rd.getAlamatMaps())
+                                .lat(rd.getLatitude() != null ? new java.math.BigDecimal(rd.getLatitude().toString()) : null)
+                                .lng(rd.getLongitude() != null ? new java.math.BigDecimal(rd.getLongitude().toString()) : null)
                                 .kodePos(rd.getKodePos() != null ? rd.getKodePos() : "N/A");
 
                         // Robust coordinate extraction from URL/String

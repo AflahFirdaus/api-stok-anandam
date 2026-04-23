@@ -321,7 +321,9 @@ public class MemoService {
                 .estimasiWaktu(p.getEstimasiWaktu())
                 .catatan(p.getCatatan())
                 .tanggalJadwal(p.getTanggalJadwal() != null ? p.getTanggalJadwal().format(DATE_FORMATTER) : null)
-                .personelId(p.getPersonelId());
+                .personelId(p.getPersonelId())
+                .latitude(p.getLatitude())
+                .longitude(p.getLongitude());
         
         if (p.getKodepos() != null) {
             builder.kecamatan(p.getKodepos().getKecamatan())
@@ -540,6 +542,8 @@ public class MemoService {
         jadwal.setTanggalJadwal(request.getTanggalJadwal() != null ? LocalDate.parse(request.getTanggalJadwal(), DATE_FORMATTER) : LocalDate.now());
         jadwal.setAlamatLengkap(request.getAlamatLengkap());
         jadwal.setAlamatMaps(request.getAlamatMaps());
+        jadwal.setLatitude(request.getLatitude());
+        jadwal.setLongitude(request.getLongitude());
         jadwal.setIdKodepos(request.getIdKodepos());
         jadwal.setEstimasiWaktu(request.getEstimasiWaktu());
         jadwal.setCatatan(request.getCatatan());

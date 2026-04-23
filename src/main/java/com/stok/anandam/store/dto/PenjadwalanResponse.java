@@ -43,4 +43,7 @@ public class PenjadwalanResponse {
     private String kecamatan;
     private String desaKelurahan;
     private String kabupatenKota;
+
+    private Double latitude;
+    private Double longitude;
 }

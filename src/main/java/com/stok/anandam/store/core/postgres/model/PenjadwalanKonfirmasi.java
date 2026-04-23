@@ -90,6 +90,12 @@ public class PenjadwalanKonfirmasi {
     @Column(name = "id_kodepos")
     private Integer idKodepos;
 
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "id_kodepos", insertable = false, updatable = false)
     @NotFound(action = NotFoundAction.IGNORE)

@@ -40,7 +40,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
         @Query("SELECT s FROM Stock s WHERE " +
                         "(:search IS NULL OR :search = '' OR LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.itemCode) LIKE LOWER(CONCAT('%', :search, '%'))) AND "
                         +
-                        "(:kategori IS NULL OR :kategori = '' OR LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) = LOWER(TRIM(:kategori)) OR LOWER(s.kategoriItemcode) LIKE LOWER(CONCAT('%', :kategori, '%'))) AND "
+                        "(:kategori IS NULL OR :kategori = '' OR LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) = LOWER(TRIM(:kategori))) AND "
                         +
                         "(:warehouse IS NULL OR :warehouse = '' OR LOWER(COALESCE(s.warehouse, '')) LIKE LOWER(CONCAT('%', :warehouse, '%'))) AND "
                         +
@@ -52,7 +52,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
         @Query("SELECT s.itemCode FROM Stock s WHERE " +
                         "(:search IS NULL OR :search = '' OR LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.itemCode) LIKE LOWER(CONCAT('%', :search, '%'))) AND "
                         +
-                        "(:kategori IS NULL OR :kategori = '' OR LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) = LOWER(TRIM(:kategori)) OR LOWER(s.kategoriItemcode) LIKE LOWER(CONCAT('%', :kategori, '%'))) AND "
+                        "(:kategori IS NULL OR :kategori = '' OR LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) = LOWER(TRIM(:kategori))) AND "
                         +
                         "s.finalStok >= 1 " +
                         "GROUP BY s.itemCode, s.itemName")
@@ -63,7 +63,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
         @Query("SELECT s.itemCode FROM Stock s LEFT JOIN Pricelist p ON s.normalizedItemName = p.itemName WHERE " +
                         "(:search IS NULL OR :search = '' OR LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.itemCode) LIKE LOWER(CONCAT('%', :search, '%'))) AND "
                         +
-                        "(:kategori IS NULL OR :kategori = '' OR LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) = LOWER(TRIM(:kategori)) OR LOWER(s.kategoriItemcode) LIKE LOWER(CONCAT('%', :kategori, '%'))) AND "
+                        "(:kategori IS NULL OR :kategori = '' OR LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) = LOWER(TRIM(:kategori))) AND "
                         +
                         "s.finalStok >= 1 " +
                         "GROUP BY s.itemCode, s.itemName, p.modal, p.finalPricelist, p.spesifikasi " +

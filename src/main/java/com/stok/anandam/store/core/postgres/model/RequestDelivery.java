@@ -40,6 +40,12 @@ public class RequestDelivery {
     @Column(name = "alamat_maps")
     private String alamatMaps;
 
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
+
     @Column(columnDefinition = "text")
     private String keterangan;
 

@@ -137,6 +137,8 @@ public class PenjadwalanService {
                     .kabupatenKota(tugas.getKodepos() != null ? tugas.getKodepos().getKabupatenKota() : null)
                     .isExpeditionOutlet(tugas.getIsExpeditionOutlet())
                     .manifestNomors(getManifestNomors(tugas))
+                    .latitude(tugas.getLatitude())
+                    .longitude(tugas.getLongitude())
                     .build();
         }).collect(Collectors.toList());
 
@@ -205,6 +207,8 @@ public class PenjadwalanService {
                 .kabupatenKota(tugas.getKodepos() != null ? tugas.getKodepos().getKabupatenKota() : null)
                 .isExpeditionOutlet(tugas.getIsExpeditionOutlet())
                 .manifestNomors(getManifestNomors(tugas))
+                .latitude(tugas.getLatitude())
+                .longitude(tugas.getLongitude())
                 .build();
 
         return WebResponse.<PenjadwalanResponse>builder()
@@ -299,6 +303,16 @@ public class PenjadwalanService {
         // 4. Update Catatan
         if (request.getCatatan() != null) {
             jadwal.setCatatan(request.getCatatan());
+            isChanged = true;
+        }
+
+        // 5. Update Latitude & Longitude
+        if (request.getLatitude() != null) {
+            jadwal.setLatitude(request.getLatitude());
+            isChanged = true;
+        }
+        if (request.getLongitude() != null) {
+            jadwal.setLongitude(request.getLongitude());
             isChanged = true;
         }
 
@@ -440,6 +454,8 @@ public class PenjadwalanService {
                 .receiverPhone(request.getNoHp())
                 .alamatLengkap(request.getAlamatLengkap())
                 .alamatMaps(request.getAlamatMaps())
+                .latitude(request.getLatitude())
+                .longitude(request.getLongitude())
                 .keterangan(request.getCatatan())
                 .status(com.stok.anandam.store.core.postgres.model.enums.RequestDeliveryStatus.MENUNGGU_GUDANG)
                 .creator(creator)
@@ -454,6 +470,8 @@ public class PenjadwalanService {
         jadwal.setStatusJadwal(StatusJadwal.MENUNGGU_KONFIRMASI);
         jadwal.setAlamatLengkap(request.getAlamatLengkap());
         jadwal.setAlamatMaps(request.getAlamatMaps());
+        jadwal.setLatitude(request.getLatitude());
+        jadwal.setLongitude(request.getLongitude());
         jadwal.setIdKodepos(request.getIdKodepos());
         jadwal.setCatatan(request.getCatatan());
         jadwal.setEstimasiWaktu(request.getEstimasiWaktu());

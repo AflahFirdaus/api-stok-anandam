@@ -35,6 +35,9 @@ public class CreateManualJadwalRequest {
 
     private String alamatMaps;
 
+    private Double latitude;
+    private Double longitude;
+
     private String catatan;
 
     @NotNull(message = "Tipe Tugas harus dipilih")

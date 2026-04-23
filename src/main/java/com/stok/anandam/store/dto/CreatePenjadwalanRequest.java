@@ -13,4 +13,6 @@ public class CreatePenjadwalanRequest {
     private String alamatLengkap;
     private String alamatMaps;
     private String estimasiWaktu;
+    private Double latitude;
+    private Double longitude;
 }

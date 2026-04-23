@@ -15,6 +15,11 @@ public class WebConfig implements WebMvcConfigurer {
         return new ObjectMapper();
     }
 
+    @Bean
+    public org.springframework.web.client.RestTemplate restTemplate() {
+        return new org.springframework.web.client.RestTemplate();
+    }
+
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         registry.addResourceHandler("/uploads/**")
