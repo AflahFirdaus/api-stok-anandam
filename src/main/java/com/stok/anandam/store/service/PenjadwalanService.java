@@ -16,13 +16,13 @@ import com.stok.anandam.store.core.postgres.model.RequestDelivery;
 import com.stok.anandam.store.core.postgres.repository.MemoItemRepository;
 import com.stok.anandam.store.core.postgres.repository.RequestDeliveryRepository;
 import com.stok.anandam.store.dto.*;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.server.ResponseStatusException;
-
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -33,7 +33,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class PenjadwalanService {
 
     private final PenjadwalanKonfirmasiRepository penjadwalanRepo;
@@ -43,8 +42,35 @@ public class PenjadwalanService {
     private final MemoItemRepository memoItemRepository;
     private final RequestDeliveryRepository requestDeliveryRepository;
     private final FileService fileService;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final ObjectMapper objectMapper;
+
+    public PenjadwalanService(
+            PenjadwalanKonfirmasiRepository penjadwalanRepo,
+            MemoRepository memoRepository,
+            MemoLogRepository memoLogRepository,
+            UserRepository userRepository,
+            MemoItemRepository memoItemRepository,
+            RequestDeliveryRepository requestDeliveryRepository,
+            FileService fileService,
+            SimpMessagingTemplate messagingTemplate,
+            ObjectMapper objectMapper) {
+        this.penjadwalanRepo = penjadwalanRepo;
+        this.memoRepository = memoRepository;
+        this.memoLogRepository = memoLogRepository;
+        this.userRepository = userRepository;
+        this.memoItemRepository = memoItemRepository;
+        this.requestDeliveryRepository = requestDeliveryRepository;
+        this.fileService = fileService;
+        this.messagingTemplate = messagingTemplate;
+        this.objectMapper = objectMapper;
+    }
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
+    private void sendMemoRefreshSignal() {
+        messagingTemplate.convertAndSend("/topic/memos", "REFRESH");
+    }
 
     public WebResponse<List<PenjadwalanResponse>> getListTugas(TipeTugas tipe, StatusJadwal status, String username) {
         User aktor = userRepository.findByUsername(username)
@@ -250,6 +276,8 @@ public class PenjadwalanService {
             requestDeliveryRepository.save(rd);
         }
 
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder()
                 .status(200)
                 .message("Tugas berhasil dimulai. Selamat bertugas!")
@@ -328,6 +356,7 @@ public class PenjadwalanService {
                         "Update Penjadwalan " + jadwal.getTipeTugas() + ": " + logMsg.toString()
                 ));
             }
+            sendMemoRefreshSignal();
         }
 
         return WebResponse.<String>builder()
@@ -364,6 +393,8 @@ public class PenjadwalanService {
                     msg
             ));
         }
+
+        sendMemoRefreshSignal();
 
         return WebResponse.<String>builder()
                 .status(200)
@@ -434,6 +465,8 @@ public class PenjadwalanService {
             rd.setStatus(com.stok.anandam.store.core.postgres.model.enums.RequestDeliveryStatus.SELESAI);
             requestDeliveryRepository.save(rd);
         }
+
+        sendMemoRefreshSignal();
 
         return WebResponse.<String>builder()
                 .status(HttpStatus.OK.value())
@@ -615,6 +648,8 @@ public class PenjadwalanService {
         );
         memoLogRepository.save(log);
 
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder()
                 .status(HttpStatus.OK.value())
                 .message("Konfirmasi pengiriman via Jadwal berhasil disimpan. Status Memo: " + targetStatus)
@@ -747,6 +782,8 @@ public class PenjadwalanService {
             }
         }
 
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder()
                 .status(200)
                 .message("Berhasil menjadwalkan " + count + " tugas")
@@ -803,6 +840,8 @@ public class PenjadwalanService {
             rd.setStatus(com.stok.anandam.store.core.postgres.model.enums.RequestDeliveryStatus.MENUNGGU_PENGIRIMAN);
             requestDeliveryRepository.save(rd);
         }
+
+        sendMemoRefreshSignal();
 
         return WebResponse.<String>builder()
                 .status(201)

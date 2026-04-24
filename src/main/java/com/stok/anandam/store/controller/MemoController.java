@@ -18,6 +18,20 @@ public class MemoController {
 
     private final MemoService memoService;
 
+    @LogActivity("User memperbarui nomor resi memo")
+    @PutMapping(
+            path = "/{memoId}/resi",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public WebResponse<String> updateResi(
+            @PathVariable(name = "memoId") UUID memoId,
+            @RequestBody @Validated com.stok.anandam.store.dto.UpdateResiRequest request,
+            java.security.Principal principal) {
+        
+        return memoService.updateResi(memoId, request, principal.getName());
+    }
+
     @LogActivity("User mengubah status tracking memo")
     @PutMapping(
             path = "/{memoId}/status",

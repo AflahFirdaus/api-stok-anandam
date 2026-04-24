@@ -78,7 +78,7 @@ public class StockService {
                 Pageable pageable = PageRequest.of(page, size); // Manual sorting in query if complex
 
                 Page<String> itemCodePage;
-                if (actualSortBy.startsWith("p.") || actualSortBy.startsWith("SUM")) {
+                if (actualSortBy.startsWith("p.") || actualSortBy.startsWith("SUM") || actualSortBy.equals("s.itemName")) {
                         // Need special query for joined/agg sorting
                         itemCodePage = stockRepository.findDistinctItemCodesSortedByPricelist(
                                         search, kategori, actualSortBy, direction, pageable);
@@ -144,8 +144,19 @@ public class StockService {
 
                 List<StockGroupedResponse> groupedResponses = itemCodes.stream().map(code -> {
                         List<Stock> stocks = groupedByCode.get(code);
-                        Stock first = stocks.get(0);
-                        String trimmedName = first.getItemName() != null ? first.getItemName().trim() : "";
+                        if (stocks == null || stocks.isEmpty()) return null;
+                        
+                        // Pick the best stock record to represent this code (priority to one matching search term)
+                        Stock displayStock = stocks.get(0);
+                        if (search != null && !search.isEmpty()) {
+                            final String searchLower = search.toLowerCase();
+                            displayStock = stocks.stream()
+                                .filter(s -> s.getItemName() != null && s.getItemName().toLowerCase().contains(searchLower))
+                                .findFirst()
+                                .orElse(displayStock);
+                        }
+                        
+                        String trimmedName = displayStock.getItemName() != null ? displayStock.getItemName().trim() : "";
 
                         List<WarehouseStockDTO> warehouses = stocks.stream()
                                         .map(s -> WarehouseStockDTO.builder()
@@ -164,13 +175,13 @@ public class StockService {
                                         .get(trimmedName);
 
                         StockGroupedResponse res = StockGroupedResponse.builder()
-                                        .id(first.getId())
-                                        .itemCode(first.getItemCode())
-                                        .itemName(first.getItemName())
-                                        .kategoriNama(first.getKategoriNama())
-                                        .kategoriItemcode(first.getKategoriItemcode())
+                                        .id(displayStock.getId())
+                                        .itemCode(displayStock.getItemCode())
+                                        .itemName(displayStock.getItemName())
+                                        .kategoriNama(displayStock.getKategoriNama())
+                                        .kategoriItemcode(displayStock.getKategoriItemcode())
                                         .totalStok(totalStok)
-                                        .hargaHpp(first.getHargaHpp())
+                                        .hargaHpp(displayStock.getHargaHpp())
                                         .grandTotal(grandTotal)
                                         .spesifikasi(priceInfo != null ? priceInfo.getSpesifikasi() : null)
                                         .modal(priceInfo != null ? priceInfo.getModal() : null)
@@ -187,7 +198,7 @@ public class StockService {
                             res.setHargaHpp(null);
                         }
                         return res;
-                }).collect(Collectors.toList());
+                }).filter(Objects::nonNull).collect(Collectors.toList());
 
                 // Fetch all Pending Items (Only Approved ones)
                 List<MemoItem> allPendingItems = memoItemRepository.findByMemo_StatusAkhir(com.stok.anandam.store.core.postgres.model.enums.MemoStatus.DISETUJUI);
@@ -203,10 +214,16 @@ public class StockService {
                     if (items != null) {
                         int totalPending = items.stream().mapToInt(MemoItem::getQty).sum();
                         List<com.stok.anandam.store.dto.PendingStockDTO> details = items.stream()
-                                .map(item -> com.stok.anandam.store.dto.PendingStockDTO.builder()
-                                        .marketingNama(item.getMemo().getMarketing().getNama())
+                                .map(item -> {
+                                    String mkt = "Unknown";
+                                    if (item.getMemo() != null && item.getMemo().getMarketing() != null) {
+                                        mkt = item.getMemo().getMarketing().getNama();
+                                    }
+                                    return com.stok.anandam.store.dto.PendingStockDTO.builder()
+                                        .marketingNama(mkt)
                                         .qty(item.getQty())
-                                        .build())
+                                        .build();
+                                })
                                 .collect(Collectors.toList());
                         resp.setTotalPending(totalPending);
                         resp.setPendingDetails(details);

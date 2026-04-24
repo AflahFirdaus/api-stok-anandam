@@ -86,6 +86,7 @@ public class SecurityConfig {
                                 .authorizeHttpRequests(auth -> auth
                                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                                         .requestMatchers("/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
+                                        .requestMatchers("/ws/**").permitAll()
                                         
                                         // REVISI: Izinkan semua user yang login untuk akses log sinkronisasi & profil sendiri
                                         .requestMatchers("/api/v1/activity-logs/last-sync").authenticated()

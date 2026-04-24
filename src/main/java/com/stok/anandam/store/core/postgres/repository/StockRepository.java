@@ -48,37 +48,77 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
         Page<Stock> findByFilters(@Param("search") String search, @Param("kategori") String kategori,
                         @Param("warehouse") String warehouse, Pageable pageable);
 
-        /** Fetch unique item codes with filtering. */
-        @Query("SELECT s.itemCode FROM Stock s WHERE " +
-                        "(:search IS NULL OR :search = '' OR LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.itemCode) LIKE LOWER(CONCAT('%', :search, '%'))) AND "
+        @Query(value = "SELECT s.itemCode FROM Stock s WHERE " +
+                        "(:search IS NULL OR :search = '' OR " +
+                        "LOWER(TRIM(s.itemName)) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+                        "LOWER(TRIM(s.itemCode)) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+                        "LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+                        "LOWER(TRIM(COALESCE(s.kategoriNama, ''))) LIKE LOWER(CONCAT('%', :search, '%'))) AND "
                         +
-                        "(:kategori IS NULL OR :kategori = '' OR LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) = LOWER(TRIM(:kategori))) AND "
+                        "(:kategori IS NULL OR :kategori = '' OR " +
+                        "LOWER(TRIM(s.kategoriItemcode)) LIKE LOWER(CONCAT('%', :kategori, '%')) OR " +
+                        "LOWER(TRIM(s.kategoriNama)) LIKE LOWER(CONCAT('%', :kategori, '%')) OR " +
+                        "(LOWER(TRIM(:kategori)) = 'lcd' AND (LOWER(TRIM(s.itemCode)) LIKE 'lcd%' OR LOWER(TRIM(s.kategoriItemcode)) LIKE '%mon%' OR LOWER(TRIM(s.kategoriNama)) LIKE '%monitor%'))) AND "
                         +
                         "s.finalStok >= 1 " +
-                        "GROUP BY s.itemCode, s.itemName")
+                        "GROUP BY s.itemCode", countQuery = "SELECT count(DISTINCT s.itemCode) FROM Stock s WHERE " +
+                                        "(:search IS NULL OR :search = '' OR " +
+                                        "LOWER(TRIM(s.itemName)) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+                                        "LOWER(TRIM(s.itemCode)) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+                                        "LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+                                        "LOWER(TRIM(COALESCE(s.kategoriNama, ''))) LIKE LOWER(CONCAT('%', :search, '%'))) AND "
+                                        +
+                                        "(:kategori IS NULL OR :kategori = '' OR " +
+                                        "LOWER(TRIM(s.kategoriItemcode)) LIKE LOWER(CONCAT('%', :kategori, '%')) OR " +
+                                        "LOWER(TRIM(s.kategoriNama)) LIKE LOWER(CONCAT('%', :kategori, '%')) OR " +
+                                        "(LOWER(TRIM(:kategori)) = 'lcd' AND (LOWER(TRIM(s.itemCode)) LIKE 'lcd%' OR LOWER(TRIM(s.kategoriItemcode)) LIKE '%mon%' OR LOWER(TRIM(s.kategoriNama)) LIKE '%monitor%'))) AND "
+                                        +
+                                        "s.finalStok >= 1")
         Page<String> findDistinctItemCodes(@Param("search") String search, @Param("kategori") String kategori,
                         Pageable pageable);
 
         /** Fetch unique item codes with joined sorting. */
-        @Query("SELECT s.itemCode FROM Stock s LEFT JOIN Pricelist p ON s.normalizedItemName = p.itemName WHERE " +
-                        "(:search IS NULL OR :search = '' OR LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.itemCode) LIKE LOWER(CONCAT('%', :search, '%'))) AND "
+        @Query(value = "SELECT s.itemCode FROM Stock s LEFT JOIN Pricelist p ON s.normalizedItemName = p.itemName WHERE " +
+                        "(:search IS NULL OR :search = '' OR " +
+                        "LOWER(TRIM(s.itemName)) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+                        "LOWER(TRIM(s.itemCode)) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+                        "LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+                        "LOWER(TRIM(COALESCE(s.kategoriNama, ''))) LIKE LOWER(CONCAT('%', :search, '%'))) AND "
                         +
-                        "(:kategori IS NULL OR :kategori = '' OR LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) = LOWER(TRIM(:kategori))) AND "
+                        "(:kategori IS NULL OR :kategori = '' OR " +
+                        "LOWER(TRIM(s.kategoriItemcode)) LIKE LOWER(CONCAT('%', :kategori, '%')) OR " +
+                        "LOWER(TRIM(s.kategoriNama)) LIKE LOWER(CONCAT('%', :kategori, '%')) OR " +
+                        "(LOWER(TRIM(:kategori)) = 'lcd' AND (LOWER(TRIM(s.itemCode)) LIKE 'lcd%' OR LOWER(TRIM(s.kategoriItemcode)) LIKE '%mon%' OR LOWER(TRIM(s.kategoriNama)) LIKE '%monitor%'))) AND "
                         +
                         "s.finalStok >= 1 " +
-                        "GROUP BY s.itemCode, s.itemName, p.modal, p.finalPricelist, p.spesifikasi " +
+                        "GROUP BY s.itemCode, p.modal, p.finalPricelist, p.spesifikasi " +
                         "ORDER BY " +
+                        "CASE WHEN :direction = 'asc' AND :sortBy = 's.itemName' THEN MIN(s.itemName) END ASC, " +
                         "CASE WHEN :direction = 'asc' AND :sortBy = 'p.modal' THEN p.modal END ASC, " +
                         "CASE WHEN :direction = 'asc' AND :sortBy = 'p.finalPricelist' THEN p.finalPricelist END ASC, "
                         +
                         "CASE WHEN :direction = 'asc' AND :sortBy = 'p.spesifikasi' THEN p.spesifikasi END ASC, " +
                         "CASE WHEN :direction = 'asc' AND :sortBy = 'SUM(s.finalStok)' THEN SUM(s.finalStok) END ASC, "
                         +
+                        "CASE WHEN :direction = 'desc' AND :sortBy = 's.itemName' THEN MIN(s.itemName) END DESC, " +
                         "CASE WHEN :direction = 'desc' AND :sortBy = 'p.modal' THEN p.modal END DESC, " +
                         "CASE WHEN :direction = 'desc' AND :sortBy = 'p.finalPricelist' THEN p.finalPricelist END DESC, "
                         +
                         "CASE WHEN :direction = 'desc' AND :sortBy = 'p.spesifikasi' THEN p.spesifikasi END DESC, " +
-                        "CASE WHEN :direction = 'desc' AND :sortBy = 'SUM(s.finalStok)' THEN SUM(s.finalStok) END DESC")
+                        "CASE WHEN :direction = 'desc' AND :sortBy = 'SUM(s.finalStok)' THEN SUM(s.finalStok) END DESC", countQuery = "SELECT count(DISTINCT s.itemCode) FROM Stock s LEFT JOIN Pricelist p ON s.normalizedItemName = p.itemName WHERE "
+                                        +
+                                        "(:search IS NULL OR :search = '' OR " +
+                                        "LOWER(TRIM(s.itemName)) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+                                        "LOWER(TRIM(s.itemCode)) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+                                        "LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+                                        "LOWER(TRIM(COALESCE(s.kategoriNama, ''))) LIKE LOWER(CONCAT('%', :search, '%'))) AND "
+                                        +
+                                        "(:kategori IS NULL OR :kategori = '' OR " +
+                                        "LOWER(TRIM(s.kategoriItemcode)) LIKE LOWER(CONCAT('%', :kategori, '%')) OR " +
+                                        "LOWER(TRIM(s.kategoriNama)) LIKE LOWER(CONCAT('%', :kategori, '%')) OR " +
+                                        "(LOWER(TRIM(:kategori)) = 'lcd' AND (LOWER(TRIM(s.itemCode)) LIKE 'lcd%' OR LOWER(TRIM(s.kategoriItemcode)) LIKE '%mon%' OR LOWER(TRIM(s.kategoriNama)) LIKE '%monitor%'))) AND "
+                                        +
+                                        "s.finalStok >= 1")
         Page<String> findDistinctItemCodesSortedByPricelist(@Param("search") String search,
                         @Param("kategori") String kategori,
                         @Param("sortBy") String sortBy,

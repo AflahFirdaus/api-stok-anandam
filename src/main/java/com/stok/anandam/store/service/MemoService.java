@@ -29,6 +29,16 @@ public class MemoService {
 
     private final MemoRepository memoRepository;
     private final MemoLogRepository memoLogRepository;
+    private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
+
+    private void sendMemoRefreshSignal() {
+        try {
+            messagingTemplate.convertAndSend("/topic/memos", "REFRESH");
+        } catch (Exception e) {
+            // Jangan biarkan error websocket menggagalkan transaksi utama
+            System.err.println("Gagal mengirim sinyal WebSocket: " + e.getMessage());
+        }
+    }
     private final PenjadwalanKonfirmasiRepository penjadwalanRepo;
     private final MemoItemRepository memoItemRepository;
     private final UserRepository userRepository;
@@ -78,6 +88,8 @@ public class MemoService {
         } else if ("GUDANG".equals(roleName) || "SPV_GUDANG".equals(roleName)) {
             memos = memos.stream()
                     .filter(m -> 
+                        m.getStatusAkhir() == MemoStatus.PENDING ||
+                        m.getStatusAkhir() == MemoStatus.MENUNGGU_PERSETUJUAN ||
                         m.getStatusAkhir() == MemoStatus.MENUNGGU_GUDANG ||
                         m.getStatusAkhir() == MemoStatus.MENUNGGU_NOTA ||
                         m.getStatusAkhir() == MemoStatus.DIBUAT_NOTA ||
@@ -493,10 +505,36 @@ public class MemoService {
 
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.DRAFT.name(), aktor.getId(), "Memo Draft diperbarui oleh " + username));
 
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder()
                 .data(memo.getId().toString())
                 .status(HttpStatus.OK.value())
                 .message("Memo berhasil diperbarui")
+                .build();
+    }
+
+    @Transactional
+    public WebResponse<String> updateResi(UUID memoId, UpdateResiRequest request, String username) {
+        Memo memo = memoRepository.findById(memoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
+
+        User aktor = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
+
+        String oldResi = memo.getResi() != null ? memo.getResi() : "-";
+        memo.setResi(request.getResi());
+        memoRepository.save(memo);
+
+        memoLogRepository.save(new MemoLog(memo.getId(), memo.getStatusAkhir().name(), aktor.getId(), 
+                "Nomor Resi diperbarui dari " + oldResi + " menjadi " + request.getResi() + " oleh " + username));
+
+        sendMemoRefreshSignal();
+
+        return WebResponse.<String>builder()
+                .data("OK")
+                .status(200)
+                .message("Nomor Resi berhasil diperbarui")
                 .build();
     }
 
@@ -514,6 +552,8 @@ public class MemoService {
 
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), targetStatus.name(), aktor.getId(), request.getKeteranganLog()));
+
+        sendMemoRefreshSignal();
 
         return WebResponse.<String>builder()
                 .data("OK")
@@ -578,6 +618,8 @@ public class MemoService {
         }
         memoLogRepository.save(new MemoLog(memo.getId(), memo.getStatusAkhir().name(), aktor.getId(), logMessage));
 
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder()
                 .data("OK")
                 .status(HttpStatus.CREATED.value())
@@ -635,6 +677,8 @@ public class MemoService {
         memoLogRepository.save(new MemoLog(memo.getId(), targetStatus.name(), aktor.getId(), "Konfirmasi pengiriman oleh " + username));
         
         syncTaskStatus(memo.getId(), StatusJadwal.SELESAI, null);
+
+        sendMemoRefreshSignal();
 
         return WebResponse.<String>builder()
                 .status(HttpStatus.OK.value())
@@ -698,7 +742,7 @@ public class MemoService {
                 .tanggalMemo(LocalDateTime.now())
                 .isTeknisRequired(false)
                 .isDeliveryRequired(false)
-                .statusAkhir(MemoStatus.PENDING)
+                .statusAkhir(MemoStatus.MENUNGGU_PERSETUJUAN)
                 .totalHarga(request.getTotalHarga())
                 .deskripsi(request.getDeskripsi())
                 .memoType(request.getMemoType())
@@ -721,7 +765,9 @@ public class MemoService {
             }
         }
 
-        memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.PENDING.name(), creator.getId(), "Memo Pending baru diajukan oleh " + username));
+        memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.MENUNGGU_PERSETUJUAN.name(), creator.getId(), "Memo Pending baru diajukan oleh " + username));
+
+        sendMemoRefreshSignal();
 
         return WebResponse.<String>builder()
                 .data(memo.getId().toString())
@@ -738,13 +784,18 @@ public class MemoService {
         User aktor = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
 
-        if (!aktor.getRole().name().equals("ADMIN") && !aktor.getRole().name().equals("SPV_MARKETING")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Hanya Admin atau Supervisor yang dapat menyetujui memo");
+        if (!aktor.getRole().name().equals("ADMIN") && 
+            !aktor.getRole().name().equals("SPV_MARKETING") && 
+            !aktor.getRole().name().equals("SPV_GUDANG") && 
+            !aktor.getRole().name().equals("GUDANG")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Hanya Admin, Supervisor, atau Bagian Gudang yang dapat menyetujui memo");
         }
 
-        memo.setStatusAkhir(MemoStatus.MENUNGGU_GUDANG);
+        memo.setStatusAkhir(MemoStatus.DISETUJUI);
         memoRepository.save(memo);
-        memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.MENUNGGU_GUDANG.name(), aktor.getId(), "Memo Pending disetujui oleh " + username));
+        memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.DISETUJUI.name(), aktor.getId(), "Memo Pending disetujui oleh " + username));
+
+        sendMemoRefreshSignal();
 
         return WebResponse.<String>builder().data("OK").status(200).message("Memo berhasil disetujui").build();
     }
@@ -757,10 +808,18 @@ public class MemoService {
         User aktor = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
 
-        memo.setStatusAkhir(MemoStatus.DELETED);
-        memo.setDeletedAt(LocalDateTime.now());
+        if (!aktor.getRole().name().equals("ADMIN") && 
+            !aktor.getRole().name().equals("SPV_MARKETING") && 
+            !aktor.getRole().name().equals("SPV_GUDANG") && 
+            !aktor.getRole().name().equals("GUDANG")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Hanya Admin, Supervisor, atau Bagian Gudang yang dapat menolak memo");
+        }
+
+        memo.setStatusAkhir(MemoStatus.DITOLAK);
         memoRepository.save(memo);
-        memoLogRepository.save(new MemoLog(memo.getId(), "REJECTED", aktor.getId(), "Memo Pending ditolak oleh " + username + ". Alasan: " + alasan));
+        memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.DITOLAK.name(), aktor.getId(), "Memo Pending ditolak oleh " + username + ". Alasan: " + alasan));
+
+        sendMemoRefreshSignal();
 
         return WebResponse.<String>builder().data("OK").status(200).message("Memo Pending berhasil ditolak").build();
     }
@@ -772,6 +831,9 @@ public class MemoService {
         memo.setStatusAkhir(MemoStatus.DRAFT);
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.DRAFT.name(), aktor.getId(), "Memo Pending dirilis kembali ke Draft oleh " + username));
+        
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder().data("OK").status(200).message("Memo berhasil dirilis").build();
     }
 
@@ -783,6 +845,9 @@ public class MemoService {
         memo.setStatusAkhir(MemoStatus.MENUNGGU_GUDANG);
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.MENUNGGU_GUDANG.name(), aktor.getId(), "Memo Pending dilanjutkan menjadi Memo " + request.getDetails().getMemoType() + " oleh " + username));
+        
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder().data("OK").status(200).message("Memo berhasil dilanjutkan").build();
     }
 
@@ -793,6 +858,9 @@ public class MemoService {
         memo.setStatusAkhir(MemoStatus.SELESAI);
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.SELESAI.name(), aktor.getId(), "Memo Pending diselesaikan oleh " + username));
+        
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder().data("OK").status(200).message("Memo berhasil diselesaikan").build();
     }
 
@@ -803,6 +871,9 @@ public class MemoService {
         memo.setStatusAkhir(MemoStatus.MENUNGGU_GUDANG);
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.MENUNGGU_GUDANG.name(), aktor.getId(), "Memo difinalisasi ke Gudang oleh " + username));
+        
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder().data("OK").status(200).message("Memo berhasil difinalisasi").build();
     }
 
@@ -813,6 +884,9 @@ public class MemoService {
         memo.setStatusAkhir(MemoStatus.MENUNGGU_NOTA);
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.MENUNGGU_NOTA.name(), aktor.getId(), "Gudang selesai menyiapkan barang. Menunggu Nota/Invoice."));
+        
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder().data("OK").status(200).message("Proses gudang selesai").build();
     }
 
@@ -824,6 +898,9 @@ public class MemoService {
         memo.setStatusAkhir(MemoStatus.DIBUAT_NOTA);
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.DIBUAT_NOTA.name(), aktor.getId(), "Invoice/Nota berhasil dibuat (JL: " + request.getNomorJl() + ") oleh " + username));
+        
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder().data("OK").status(200).message("Invoice berhasil dibuat").build();
     }
 
@@ -881,6 +958,9 @@ public class MemoService {
         memoRepository.save(memo);
 
         memoLogRepository.save(new MemoLog(memo.getId(), targetStatus.name(), aktor.getId(), logMsg));
+
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder().data("OK").status(200).message("Penugasan/Rute berhasil dikonfirmasi").build();
     }
 
@@ -904,6 +984,9 @@ public class MemoService {
         memo.setStatusAkhir(MemoStatus.DITERIMA_USER);
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.DITERIMA_USER.name(), aktor.getId(), "Serah terima barang (Gudang) telah difoto oleh " + username + ". Status berubah menjadi Diterima User."));
+        
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder().data("OK").status(200).message("Pickup berhasil difoto, status berubah menjadi Diterima User").build();
     }
 
@@ -923,6 +1006,9 @@ public class MemoService {
         memo.setStatusAkhir(MemoStatus.SELESAI);
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.SELESAI.name(), aktor.getId(), "Serah terima barang dikonfirmasi SELESAI oleh " + username));
+        
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder().data("OK").status(200).message("Memo berhasil diselesaikan").build();
     }
 
@@ -933,6 +1019,9 @@ public class MemoService {
         memo.setStatusAkhir(MemoStatus.KENDALA_BARANG);
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.KENDALA_BARANG.name(), aktor.getId(), "Kendala barang dilaporkan oleh " + username));
+        
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder().data("OK").status(200).message("Kendala berhasil dilaporkan").build();
     }
 
@@ -943,6 +1032,9 @@ public class MemoService {
         memo.setStatusAkhir(MemoStatus.SELESAI);
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.SELESAI.name(), aktor.getId(), "Memo diselesaikan secara paksa oleh Admin: " + username));
+        
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder().data("OK").status(200).message("Memo berhasil diselesaikan secara paksa").build();
     }
 
@@ -971,6 +1063,9 @@ public class MemoService {
         memo.setStatusAkhir(targetStatus);
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), targetStatus.name(), aktor.getId(), logKeterangan));
+        
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder().data("OK").status(200).message("Proses teknisi selesai").build();
     }
 
@@ -993,6 +1088,9 @@ public class MemoService {
         memo.setBuktiFoto(fileName);
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.DITERIMA_USER.name(), aktor.getId(), "Pengiriman diselesaikan oleh User: " + aktor.getNama() + " (Diterima User). Catatan: " + (catatan != null ? catatan : "-")));
+        
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder().data("OK").status(200).message("Pengiriman selesai, status: Diterima User").build();
     }
 
@@ -1003,6 +1101,9 @@ public class MemoService {
         memo.setStatusAkhir(MemoStatus.SELESAI);
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.SELESAI.name(), aktor.getId(), "Memo dinyatakan Selesai oleh " + username));
+        
+        sendMemoRefreshSignal();
+
         return WebResponse.<String>builder().data("OK").status(200).message("Memo selesai").build();
     }
 
