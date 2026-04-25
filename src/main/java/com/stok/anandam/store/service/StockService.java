@@ -213,18 +213,26 @@ public class StockService {
                     List<MemoItem> items = pendingByName.get(respNormalized);
                     if (items != null) {
                         int totalPending = items.stream().mapToInt(MemoItem::getQty).sum();
-                        List<com.stok.anandam.store.dto.PendingStockDTO> details = items.stream()
-                                .map(item -> {
-                                    String mkt = "Unknown";
-                                    if (item.getMemo() != null && item.getMemo().getMarketing() != null) {
-                                        mkt = item.getMemo().getMarketing().getNama();
+                        // Group by marketing name and sum quantities
+                        Map<String, Integer> groupedDetails = items.stream()
+                                .collect(Collectors.groupingBy(item -> {
+                                    if (item.getMemo() == null) return "Unknown";
+                                    if (item.getMemo().getMarketing() != null) {
+                                        return item.getMemo().getMarketing().getNama();
                                     }
-                                    return com.stok.anandam.store.dto.PendingStockDTO.builder()
-                                        .marketingNama(mkt)
-                                        .qty(item.getQty())
-                                        .build();
-                                })
+                                    if (item.getMemo().getMarketingName() != null && !item.getMemo().getMarketingName().isEmpty()) {
+                                        return item.getMemo().getMarketingName();
+                                    }
+                                    return "Unknown";
+                                }, Collectors.summingInt(MemoItem::getQty)));
+
+                        List<com.stok.anandam.store.dto.PendingStockDTO> details = groupedDetails.entrySet().stream()
+                                .map(entry -> com.stok.anandam.store.dto.PendingStockDTO.builder()
+                                        .marketingNama(entry.getKey())
+                                        .qty(entry.getValue())
+                                        .build())
                                 .collect(Collectors.toList());
+                        
                         resp.setTotalPending(totalPending);
                         resp.setPendingDetails(details);
                     }

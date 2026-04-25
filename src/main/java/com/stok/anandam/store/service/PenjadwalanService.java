@@ -344,6 +344,20 @@ public class PenjadwalanService {
             isChanged = true;
         }
 
+        // 6. Update Regional Components
+        if (request.getKabupatenKota() != null) {
+            jadwal.setKabupatenKota(request.getKabupatenKota());
+            isChanged = true;
+        }
+        if (request.getKecamatan() != null) {
+            jadwal.setKecamatan(request.getKecamatan());
+            isChanged = true;
+        }
+        if (request.getDesaKelurahan() != null) {
+            jadwal.setDesaKelurahan(request.getDesaKelurahan());
+            isChanged = true;
+        }
+
         if (isChanged) {
             jadwal.setStatusJadwal(StatusJadwal.DIJADWALKAN);
             penjadwalanRepo.save(jadwal);
@@ -510,6 +524,11 @@ public class PenjadwalanService {
         jadwal.setEstimasiWaktu(request.getEstimasiWaktu());
         jadwal.setIsUrgen(request.getIsUrgen() != null && request.getIsUrgen());
         jadwal.setMarketingName(creator.getNama());
+        
+        // Save regional data components
+        jadwal.setKabupatenKota(request.getKabupatenKota());
+        jadwal.setKecamatan(request.getKecamatan());
+        jadwal.setDesaKelurahan(request.getDesaKelurahan());
 
         if (request.getTanggalJadwal() != null && !request.getTanggalJadwal().isBlank()) {
             jadwal.setTanggalJadwal(LocalDate.parse(request.getTanggalJadwal(), DATE_FORMATTER));

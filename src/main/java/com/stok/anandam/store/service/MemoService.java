@@ -90,6 +90,8 @@ public class MemoService {
                     .filter(m -> 
                         m.getStatusAkhir() == MemoStatus.PENDING ||
                         m.getStatusAkhir() == MemoStatus.MENUNGGU_PERSETUJUAN ||
+                        m.getStatusAkhir() == MemoStatus.DISETUJUI ||
+                        m.getStatusAkhir() == MemoStatus.DITOLAK ||
                         m.getStatusAkhir() == MemoStatus.MENUNGGU_GUDANG ||
                         m.getStatusAkhir() == MemoStatus.MENUNGGU_NOTA ||
                         m.getStatusAkhir() == MemoStatus.DIBUAT_NOTA ||
@@ -174,6 +176,26 @@ public class MemoService {
             allMemos = allMemos.stream()
                     .filter(m -> m.getStatusAkhir() == MemoStatus.MENUNGGU_TEKNISI || 
                                  m.getStatusAkhir() == MemoStatus.PROSES_TEKNISI)
+                    .collect(Collectors.toList());
+        } else if ("GUDANG".equals(roleName) || "SPV_GUDANG".equals(roleName)) {
+            allMemos = allMemos.stream()
+                    .filter(m -> 
+                        m.getStatusAkhir() == MemoStatus.PENDING ||
+                        m.getStatusAkhir() == MemoStatus.MENUNGGU_PERSETUJUAN ||
+                        m.getStatusAkhir() == MemoStatus.DISETUJUI ||
+                        m.getStatusAkhir() == MemoStatus.DITOLAK ||
+                        m.getStatusAkhir() == MemoStatus.MENUNGGU_GUDANG ||
+                        m.getStatusAkhir() == MemoStatus.MENUNGGU_NOTA ||
+                        m.getStatusAkhir() == MemoStatus.DIBUAT_NOTA ||
+                        m.getStatusAkhir() == MemoStatus.KENDALA_BARANG ||
+                        m.getStatusAkhir() == MemoStatus.MENUNGGU_TEKNISI ||
+                        m.getStatusAkhir() == MemoStatus.PROSES_TEKNISI ||
+                        m.getStatusAkhir() == MemoStatus.BUFFER_ZONE ||
+                        m.getStatusAkhir() == MemoStatus.MENUNGGU_PENGIRIMAN ||
+                        m.getStatusAkhir() == MemoStatus.DALAM_PENGIRIMAN ||
+                        m.getStatusAkhir() == MemoStatus.TERKIRIM_SEBAGIAN ||
+                        m.getStatusAkhir() == MemoStatus.SELESAI
+                    )
                     .collect(Collectors.toList());
         }
 
@@ -587,6 +609,11 @@ public class MemoService {
         jadwal.setIdKodepos(request.getIdKodepos());
         jadwal.setEstimasiWaktu(request.getEstimasiWaktu());
         jadwal.setCatatan(request.getCatatan());
+        
+        // Save regional data components
+        jadwal.setKabupatenKota(request.getKabupatenKota());
+        jadwal.setKecamatan(request.getKecamatan());
+        jadwal.setDesaKelurahan(request.getDesaKelurahan());
         
         if (jadwal.getId() == null) {
             jadwal.setStatusJadwal(StatusJadwal.MENUNGGU_KONFIRMASI);

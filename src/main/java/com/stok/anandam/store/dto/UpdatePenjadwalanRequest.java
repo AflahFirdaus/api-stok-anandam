@@ -23,4 +23,8 @@ public class UpdatePenjadwalanRequest {
 
     private Double latitude;
     private Double longitude;
+
+    private String kabupatenKota;
+    private String kecamatan;
+    private String desaKelurahan;
 }

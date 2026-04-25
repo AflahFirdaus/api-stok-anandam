@@ -15,4 +15,8 @@ public class CreatePenjadwalanRequest {
     private String estimasiWaktu;
     private Double latitude;
     private Double longitude;
+
+    private String kabupatenKota;
+    private String kecamatan;
+    private String desaKelurahan;
 }

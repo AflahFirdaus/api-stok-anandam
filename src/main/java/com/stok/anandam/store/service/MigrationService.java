@@ -524,7 +524,7 @@ public class MigrationService {
                                 WHEN 'BL' THEN COALESCE(t.qty_def,0)
                                 WHEN 'RB' THEN -COALESCE(t.qty_def,0)
                                 WHEN 'KM' THEN COALESCE(t.qty_def,0)
-                                WHEN 'KK' THEN -COALESCE(t.qty_def,0)
+                                WHEN 'KK' THEN COALESCE(t.qty_def,0)
                                 ELSE 0
                             END AS qty_movement
                         FROM anandamid26.dbtpurchasedoc d
@@ -542,7 +542,7 @@ public class MigrationService {
                                 WHEN 'II' THEN COALESCE(t.qty_def,0)
                                 WHEN 'IO' THEN -COALESCE(t.qty_def,0)
                                 WHEN 'KM' THEN COALESCE(t.qty_def,0)
-                                WHEN 'KK' THEN -COALESCE(t.qty_def,0)
+                                WHEN 'KK' THEN COALESCE(t.qty_def,0)
                                 ELSE 0
                             END AS qty_movement
                         FROM anandamid26.dbtitemtransferdoc d
@@ -560,7 +560,7 @@ public class MigrationService {
                                 WHEN 'JL' THEN -COALESCE(t.qty_def,0)
                                 WHEN 'RJ' THEN COALESCE(t.qty_def,0)
                                 WHEN 'KM' THEN COALESCE(t.qty_def,0)
-                                WHEN 'KK' THEN -COALESCE(t.qty_def,0)
+                                WHEN 'KK' THEN COALESCE(t.qty_def,0)
                                 ELSE 0
                             END AS qty_movement
                         FROM anandamid26.dbtsalesdoc d

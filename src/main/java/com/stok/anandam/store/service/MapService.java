@@ -56,14 +56,20 @@ public class MapService {
                             .customerName(memo.getCustomer() != null ? memo.getCustomer().getNamaPelanggan() : "N/A")
                             .memoStatus(memo.getStatusAkhir().name())
                             .senderName(memo.getMarketingName() != null ? memo.getMarketingName() : "Admin")
+                            .alamatLengkap(memo.getCustomer() != null ? memo.getCustomer().getAlamatDefault() : (schedule != null ? schedule.getAlamatLengkap() : "N/A"))
                             .isUrgen(schedule != null && schedule.getIsUrgen() != null && schedule.getIsUrgen())
                             .isManual(false)
                             .isExpedition(schedule != null && schedule.getTipeTugas() == com.stok.anandam.store.core.postgres.model.enums.TipeTugas.DROP_OFF_EKSPEDISI);
 
                     if (schedule != null) {
-                        String desa = schedule.getKodepos() != null ? schedule.getKodepos().getDesaKelurahan() : null;
-                        String kec = schedule.getKodepos() != null ? schedule.getKodepos().getKecamatan() : null;
-                        String kab = schedule.getKodepos() != null ? schedule.getKodepos().getKabupatenKota() : null;
+                        String desa = schedule.getDesaKelurahan();
+                        if (desa == null && schedule.getKodepos() != null) desa = schedule.getKodepos().getDesaKelurahan();
+                        
+                        String kec = schedule.getKecamatan();
+                        if (kec == null && schedule.getKodepos() != null) kec = schedule.getKodepos().getKecamatan();
+                        
+                        String kab = schedule.getKabupatenKota();
+                        if (kab == null && schedule.getKodepos() != null) kab = schedule.getKodepos().getKabupatenKota();
 
                         // Fallback parsing from alamatLengkap
                         if (kec == null && schedule.getAlamatLengkap() != null) {
@@ -71,12 +77,23 @@ public class MapService {
                             if (parts.length >= 1) desa = parts[0].trim();
                             if (parts.length >= 2) kec = parts[1].trim();
                             
-                            // Ambil yang sebelum 'Indonesia' atau yang paling belakang jika bukan Indonesia
-                            int lastIdx = parts.length - 1;
-                            if (parts[lastIdx].trim().equalsIgnoreCase("Indonesia") && lastIdx > 0) {
-                                lastIdx--;
+                            // Smarter Kabupaten/Regency extraction
+                            for (String part : parts) {
+                                String p = part.trim().toLowerCase();
+                                if (p.contains("bantul") || p.contains("sleman") || 
+                                    p.contains("kulon progo") || p.contains("gunung") || 
+                                    p.contains("yogyakarta")) {
+                                    kab = part.trim();
+                                    break;
+                                }
                             }
-                            if (lastIdx >= 2) kab = parts[lastIdx].trim();
+                            // Last resort fallback
+                            if (kab == null && parts.length >= 2) {
+                                kab = parts[parts.length - 1].trim();
+                                if (kab.equalsIgnoreCase("Indonesia") && parts.length >= 3) {
+                                    kab = parts[parts.length - 2].trim();
+                                }
+                            }
                         }
 
                         builder.status(schedule.getStatusJadwal().name())
@@ -152,9 +169,14 @@ public class MapService {
                     if (sender == null || sender.isBlank()) sender = "Manual Request";
 
                     // Fallback hierarchy for Address components
-                    String desa = manual.getKodepos() != null ? manual.getKodepos().getDesaKelurahan() : null;
-                    String kec = manual.getKodepos() != null ? manual.getKodepos().getKecamatan() : null;
-                    String kab = manual.getKodepos() != null ? manual.getKodepos().getKabupatenKota() : null;
+                    String desa = manual.getDesaKelurahan();
+                    if (desa == null && manual.getKodepos() != null) desa = manual.getKodepos().getDesaKelurahan();
+                    
+                    String kec = manual.getKecamatan();
+                    if (kec == null && manual.getKodepos() != null) kec = manual.getKodepos().getKecamatan();
+                    
+                    String kab = manual.getKabupatenKota();
+                    if (kab == null && manual.getKodepos() != null) kab = manual.getKodepos().getKabupatenKota();
                     
                     if (kec == null && manual.getAlamatLengkap() != null) {
                         try {
@@ -162,11 +184,21 @@ public class MapService {
                             if (parts.length >= 1) desa = parts[0].trim();
                             if (parts.length >= 2) kec = parts[1].trim();
                             
-                            int lastIdx = parts.length - 1;
-                            if (parts[lastIdx].trim().equalsIgnoreCase("Indonesia") && lastIdx > 0) {
-                                lastIdx--;
+                            for (String part : parts) {
+                                String p = part.trim().toLowerCase();
+                                if (p.contains("bantul") || p.contains("sleman") || 
+                                    p.contains("kulon progo") || p.contains("gunung") || 
+                                    p.contains("yogyakarta")) {
+                                    kab = part.trim();
+                                    break;
+                                }
                             }
-                            if (lastIdx >= 2) kab = parts[lastIdx].trim();
+                            if (kab == null && parts.length >= 2) {
+                                kab = parts[parts.length - 1].trim();
+                                if (kab.equalsIgnoreCase("Indonesia") && parts.length >= 3) {
+                                    kab = parts[parts.length - 2].trim();
+                                }
+                            }
                         } catch (Exception ignored) {}
                     }
 
@@ -175,6 +207,7 @@ public class MapService {
                             .nomorMemo(manual.getRequestDelivery() != null ? manual.getRequestDelivery().getNomorRequest() : "MANUAL-" + manual.getId())
                             .customerName(name)
                             .senderName(sender)
+                            .alamatLengkap(manual.getAlamatLengkap())
                             .memoStatus("MANUAL")
                             .isUrgen(manual.getIsUrgen() != null && manual.getIsUrgen())
                             .isManual(true)
@@ -236,6 +269,7 @@ public class MapService {
                                 .nomorMemo(rd.getNomorRequest())
                                 .customerName(rd.getReceiverName())
                                 .senderName(sender)
+                                .alamatLengkap(rd.getAlamatLengkap())
                                 .memoStatus("MANUAL")
                                 .isUrgen(rd.getIsUrgen() != null && rd.getIsUrgen())
                                 .isManual(true)

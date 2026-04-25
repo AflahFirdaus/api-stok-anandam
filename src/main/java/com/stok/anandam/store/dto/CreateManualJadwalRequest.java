@@ -45,4 +45,8 @@ public class CreateManualJadwalRequest {
 
     @Builder.Default
     private Boolean isUrgen = false;
+
+    private String kabupatenKota;
+    private String kecamatan;
+    private String desaKelurahan;
 }

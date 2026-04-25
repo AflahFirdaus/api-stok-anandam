@@ -25,6 +25,7 @@ public class MapDeliveryResponse {
     private String memoStatus;
     private String mapUrl;
     private String senderName;
+    private String alamatLengkap;
     private Boolean isUrgen;
     private Boolean isManual;
     private Boolean isExpedition;

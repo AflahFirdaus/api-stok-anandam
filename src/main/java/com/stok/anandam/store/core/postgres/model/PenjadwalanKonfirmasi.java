@@ -138,6 +138,15 @@ public class PenjadwalanKonfirmasi {
     @Column(name = "marketing_name")
     private String marketingName;
 
+    @Column(name = "kecamatan")
+    private String kecamatan;
+
+    @Column(name = "desa_kelurahan")
+    private String desaKelurahan;
+
+    @Column(name = "kabupaten_kota")
+    private String kabupatenKota;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
