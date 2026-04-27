@@ -81,6 +81,12 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
                         "ORDER BY SUM(s.grandTotal) DESC")
         List<Object[]> sumSalesByEmployeeToday(@Param("today") LocalDate today);
 
+        @Query("SELECT s.empCode, MIN(s.empName), COALESCE(SUM(s.grandTotal), 0) FROM Sales s " +
+                        "WHERE s.docDate BETWEEN :start AND :end " +
+                        "GROUP BY s.empCode " +
+                        "ORDER BY SUM(s.grandTotal) DESC")
+        List<Object[]> sumSalesByEmployeeMonth(@Param("start") LocalDate start, @Param("end") LocalDate end);
+
         @Query("SELECT DISTINCT s.empCode, s.empName FROM Sales s WHERE s.empCode IS NOT NULL AND TRIM(s.empCode) <> '' ORDER BY s.empCode")
         java.util.List<Object[]> findDistinctEmpCodeAndName();
 

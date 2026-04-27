@@ -46,6 +46,7 @@ public class MemoService {
     private final KodeposRepository kodeposRepository;
     private final FileService fileService;
     private final ObjectMapper objectMapper;
+    private final ActivityLogService activityLogService;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd-MM-yyyy");
 
@@ -575,6 +576,10 @@ public class MemoService {
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), targetStatus.name(), aktor.getId(), request.getKeteranganLog()));
 
+        // Audit Log
+        activityLogService.log(username, "MEMO_STATUS_UPDATE", 
+            "Mengubah status Memo " + memo.getNomorMemo() + " menjadi " + targetStatus);
+
         sendMemoRefreshSignal();
 
         return WebResponse.<String>builder()
@@ -702,6 +707,10 @@ public class MemoService {
 
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), targetStatus.name(), aktor.getId(), "Konfirmasi pengiriman oleh " + username));
+        
+        // Audit Log
+        activityLogService.log(username, "MEMO_DELIVERY_CONFIRMED", 
+            "Konfirmasi pengiriman Memo " + memo.getNomorMemo() + ". Status akhir: " + targetStatus);
         
         syncTaskStatus(memo.getId(), StatusJadwal.SELESAI, null);
 

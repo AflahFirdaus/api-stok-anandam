@@ -24,6 +24,9 @@ public class AuthService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private ActivityLogService activityLogService;
+
     // Method ini hanya bertugas memverifikasi password
     public void authenticate(LoginUserRequest request) {
         try {
@@ -41,6 +44,9 @@ public class AuthService {
                 user.setIsOnline(true);
                 user.setDeviceCount((user.getDeviceCount() == null ? 0 : user.getDeviceCount()) + 1);
                 userRepository.save(user);
+                
+                // Log activity
+                activityLogService.log(request.getUsername(), "USER_LOGIN", "Berhasil login ke aplikasi");
             });
         } catch (DisabledException e) {
             throw new ResponseStatusException(
@@ -55,6 +61,9 @@ public class AuthService {
                 user.setIsOnline(false);
             }
             userRepository.save(user);
+            
+            // Log activity
+            activityLogService.log(username, "USER_LOGOUT", "Berhasil logout dari aplikasi");
         });
     }
 }

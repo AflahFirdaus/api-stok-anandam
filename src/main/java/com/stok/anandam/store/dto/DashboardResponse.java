@@ -16,5 +16,8 @@ public class DashboardResponse {
     private List<Stock> lowStockPreview;
     private long totalTkdnItems;
     private BigDecimal totalHpp;
+    private BigDecimal pendingValue;
+    private long pendingStock;
     private List<EmployeeSalesResponse> employeeSalesToday;
+    private List<EmployeeSalesResponse> employeeSalesMonth;
 }

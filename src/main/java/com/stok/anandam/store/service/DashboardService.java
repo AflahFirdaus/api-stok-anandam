@@ -27,13 +27,26 @@ public class DashboardService {
     private TkdnRepository tkdnRepo;
     @Autowired
     private UserRepository userRepo;
+    @Autowired
+    private MemoItemRepository memoItemRepository;
+    @Autowired
+    private PricelistRepository pricelistRepo;
 
     public DashboardResponse getDashboardData(String username) {
         User user = userRepo.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
         LocalDate today = LocalDate.now();
+        LocalDate startOfMonth = today.withDayOfMonth(1);
         int lowStockThreshold = 10;
+
+        // Fetch active/pending memo items using optimized native query
+        com.stok.anandam.store.core.postgres.repository.MemoItemRepository.PendingSummary summary = memoItemRepository.calculatePendingSummaryNative();
+        
+        long totalPendingStock = (summary != null && summary.getTotalQty() != null) ? summary.getTotalQty() : 0L;
+        BigDecimal totalPendingValue = (summary != null && summary.getTotalValue() != null) ? summary.getTotalValue() : BigDecimal.ZERO;
+
+        System.out.println("DEBUG DASHBOARD (Optimized): Pending Stock = " + totalPendingStock + ", Pending Value = " + totalPendingValue);
 
         DashboardResponse response = DashboardResponse.builder()
                 .totalSalesToday(salesRepo.sumTotalByDate(today))
@@ -43,7 +56,16 @@ public class DashboardService {
                 .lowStockPreview(stockRepo.findTop5ByLowStock(lowStockThreshold))
                 .totalTkdnItems(tkdnRepo.count())
                 .totalHpp(stockRepo.sumAllGrandTotal())
+                .pendingStock(totalPendingStock)
+                .pendingValue(totalPendingValue)
                 .employeeSalesToday(salesRepo.sumSalesByEmployeeToday(today).stream()
+                        .map(obj -> EmployeeSalesResponse.builder()
+                                .empCode((String) obj[0])
+                                .empName((String) obj[1])
+                                .totalSales((BigDecimal) obj[2])
+                                .build())
+                        .collect(java.util.stream.Collectors.toList()))
+                .employeeSalesMonth(salesRepo.sumSalesByEmployeeMonth(startOfMonth, today).stream()
                         .map(obj -> EmployeeSalesResponse.builder()
                                 .empCode((String) obj[0])
                                 .empName((String) obj[1])
@@ -59,6 +81,7 @@ public class DashboardService {
             role == Role.MARKETING_PROJECT || 
             role == Role.MARKETING_DISTRIBUSI) {
             response.setTotalHpp(null);
+            response.setPendingValue(null);
         }
 
         return response;
