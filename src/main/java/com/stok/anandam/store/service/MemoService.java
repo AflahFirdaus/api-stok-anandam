@@ -255,7 +255,7 @@ public class MemoService {
             boolean isSameRole = memo.getCreator() != null && memo.getCreator().getRole() == aktor.getRole();
             
             boolean isAssigned = penjadwalanRepo.findByMemo_IdAndDeletedAtIsNull(memoId).stream()
-                .anyMatch(t -> t.getPersonelId() != null && t.getPersonelId().equals(aktor.getId()));
+                .anyMatch(t -> aktor.getId().equals(t.getPersonelId()));
 
             if (memo.getStatusAkhir() == MemoStatus.DRAFT) {
                 if (!isCreator && !isSameRole) {

@@ -112,7 +112,7 @@ public class PenjadwalanService {
         // ROLE-BASED FILTERING
         // Teknisi, Delivery & Marketing hanya dapat melihat tugas yang di-assign ke diri mereka sendiri
         String roleName = aktor.getRole().name();
-        if (roleName.equals("DELIVERY")) {
+        if (roleName.equals("DELIVERY") || roleName.startsWith("MARKETING")) {
             listTugas = listTugas.stream()
                 .filter(t -> t.getPersonelId() != null && t.getPersonelId().equals(aktor.getId()))
                 .collect(Collectors.toList());
@@ -154,8 +154,9 @@ public class PenjadwalanService {
                     .tanggalJadwal(tugas.getTanggalJadwal() != null ? tugas.getTanggalJadwal().format(DATE_FORMATTER) : null)
                     .personelId(tugas.getPersonelId())
                     .isUrgen(tugas.getIsUrgen())
-                    .marketingName(tugas.getMarketingName())
-                    .manualCustomerName(tugas.getRequestDelivery() != null ? tugas.getRequestDelivery().getReceiverName() : tugas.getManualCustomerName())
+                    .marketingName(tugas.getMemo() != null ? (tugas.getMemo().getMarketingName() != null ? tugas.getMemo().getMarketingName() : (tugas.getMemo().getMarketing() != null ? tugas.getMemo().getMarketing().getNama() : null)) : tugas.getMarketingName())
+                    .manualCustomerName(tugas.getMemo() != null ? tugas.getMemo().getCustomerName() : 
+                                        (tugas.getRequestDelivery() != null ? tugas.getRequestDelivery().getReceiverName() : tugas.getManualCustomerName()))
                     .manualNoHp(tugas.getRequestDelivery() != null ? tugas.getRequestDelivery().getReceiverPhone() : tugas.getManualNoHp())
                     .kodePos(tugas.getKodepos() != null ? tugas.getKodepos().getKodePos() : null)
                     .desaKelurahan(tugas.getKodepos() != null ? tugas.getKodepos().getDesaKelurahan() : null)
@@ -224,8 +225,9 @@ public class PenjadwalanService {
                 .tanggalJadwal(tugas.getTanggalJadwal() != null ? tugas.getTanggalJadwal().format(DATE_FORMATTER) : null)
                 .personelId(tugas.getPersonelId())
                 .isUrgen(tugas.getIsUrgen())
-                .marketingName(tugas.getMarketingName())
-                .manualCustomerName(tugas.getRequestDelivery() != null ? tugas.getRequestDelivery().getReceiverName() : tugas.getManualCustomerName())
+                .marketingName(tugas.getMemo() != null ? (tugas.getMemo().getMarketingName() != null ? tugas.getMemo().getMarketingName() : (tugas.getMemo().getMarketing() != null ? tugas.getMemo().getMarketing().getNama() : null)) : tugas.getMarketingName())
+                .manualCustomerName(tugas.getMemo() != null ? tugas.getMemo().getCustomerName() : 
+                                    (tugas.getRequestDelivery() != null ? tugas.getRequestDelivery().getReceiverName() : tugas.getManualCustomerName()))
                 .manualNoHp(tugas.getRequestDelivery() != null ? tugas.getRequestDelivery().getReceiverPhone() : tugas.getManualNoHp())
                 .kodePos(tugas.getKodepos() != null ? tugas.getKodepos().getKodePos() : null)
                 .desaKelurahan(tugas.getKodepos() != null ? tugas.getKodepos().getDesaKelurahan() : null)
