@@ -155,7 +155,7 @@ public class PenjadwalanService {
                     .personelId(tugas.getPersonelId())
                     .isUrgen(tugas.getIsUrgen())
                     .marketingName(tugas.getMemo() != null ? (tugas.getMemo().getMarketingName() != null ? tugas.getMemo().getMarketingName() : (tugas.getMemo().getMarketing() != null ? tugas.getMemo().getMarketing().getNama() : null)) : tugas.getMarketingName())
-                    .manualCustomerName(tugas.getMemo() != null ? tugas.getMemo().getCustomerName() : 
+                    .manualCustomerName(tugas.getMemo() != null ? (tugas.getMemo().getCustomer() != null ? tugas.getMemo().getCustomer().getNamaPelanggan() : "Tanpa Nama") : 
                                         (tugas.getRequestDelivery() != null ? tugas.getRequestDelivery().getReceiverName() : tugas.getManualCustomerName()))
                     .manualNoHp(tugas.getRequestDelivery() != null ? tugas.getRequestDelivery().getReceiverPhone() : tugas.getManualNoHp())
                     .kodePos(tugas.getKodepos() != null ? tugas.getKodepos().getKodePos() : null)
@@ -226,7 +226,7 @@ public class PenjadwalanService {
                 .personelId(tugas.getPersonelId())
                 .isUrgen(tugas.getIsUrgen())
                 .marketingName(tugas.getMemo() != null ? (tugas.getMemo().getMarketingName() != null ? tugas.getMemo().getMarketingName() : (tugas.getMemo().getMarketing() != null ? tugas.getMemo().getMarketing().getNama() : null)) : tugas.getMarketingName())
-                .manualCustomerName(tugas.getMemo() != null ? tugas.getMemo().getCustomerName() : 
+                .manualCustomerName(tugas.getMemo() != null ? (tugas.getMemo().getCustomer() != null ? tugas.getMemo().getCustomer().getNamaPelanggan() : "Tanpa Nama") : 
                                     (tugas.getRequestDelivery() != null ? tugas.getRequestDelivery().getReceiverName() : tugas.getManualCustomerName()))
                 .manualNoHp(tugas.getRequestDelivery() != null ? tugas.getRequestDelivery().getReceiverPhone() : tugas.getManualNoHp())
                 .kodePos(tugas.getKodepos() != null ? tugas.getKodepos().getKodePos() : null)
