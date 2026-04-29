@@ -50,12 +50,14 @@ public class SecurityConfig {
                 return authConfig.getAuthenticationManager();
         }
 
-        /** Actuator: health & info (Tanpa Auth) */
+        /** Actuator: health & info (Tanpa Auth), lainnya butuh ADMIN */
         @Bean
         public SecurityFilterChain actuatorSecurityFilterChain(HttpSecurity http) throws Exception {
                 http
                                 .securityMatcher("/actuator/**")
-                                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                                .authorizeHttpRequests(auth -> auth
+                                                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                                                .anyRequest().hasRole("ADMIN"))
                                 .csrf(csrf -> csrf.disable());
                 return http.build();
         }

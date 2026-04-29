@@ -22,8 +22,10 @@ public class DataCanvasingController {
 
     // === 1. TAMBAH DATA ===
     @PostMapping
-    public ResponseEntity<WebResponse<DataCanvasing>> create(@Valid @RequestBody DataCanvasingRequest request) {
-        DataCanvasing result = service.create(request);
+    public ResponseEntity<WebResponse<DataCanvasing>> create(
+            @Valid @RequestBody DataCanvasingRequest request,
+            java.security.Principal principal) {
+        DataCanvasing result = service.create(request, principal.getName());
         return ResponseEntity.ok(WebResponse.<DataCanvasing>builder()
                 .status(200)
                 .message("Berhasil Menambahkan Data Kunjungan")

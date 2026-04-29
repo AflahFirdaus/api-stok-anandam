@@ -16,7 +16,7 @@ public interface DataCanvasingRepository extends JpaRepository<DataCanvasing, Lo
     /** Filter: date range, search (nama instansi), canvasingId (toko), canvasVisit (Canvas/Visit). */
     @Query("SELECT d FROM DataCanvasing d WHERE " +
             "(d.tanggal BETWEEN :startDate AND :endDate) AND " +
-            "(:search IS NULL OR :search = '' OR LOWER(d.canvasing.namaInstansi) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
+            "(:search IS NULL OR :search = '' OR LOWER(d.canvasing.namaInstansi) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(d.creatorName) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
             "(:canvasingId IS NULL OR d.canvasing.id = :canvasingId) AND " +
             "(:canvasVisit IS NULL OR :canvasVisit = '' OR LOWER(TRIM(COALESCE(d.canvasVisit, ''))) = LOWER(TRIM(:canvasVisit)))")
     Page<DataCanvasing> findByFilters(

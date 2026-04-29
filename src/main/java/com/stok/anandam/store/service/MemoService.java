@@ -39,6 +39,34 @@ public class MemoService {
             System.err.println("Gagal mengirim sinyal WebSocket: " + e.getMessage());
         }
     }
+
+    private void validateImageFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) return;
+        
+        // 1. Cek tipe file (MIME type)
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File harus berupa gambar (JPEG/PNG)");
+        }
+        
+        // 2. Cek ekstensi
+        String fileName = file.getOriginalFilename();
+        if (fileName != null) {
+            int lastIndex = fileName.lastIndexOf(".");
+            if (lastIndex == -1) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File tidak memiliki ekstensi");
+            }
+            String ext = fileName.substring(lastIndex + 1).toLowerCase();
+            if (!java.util.List.of("jpg", "jpeg", "png", "webp").contains(ext)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ekstensi file tidak didukung. Gunakan JPG, PNG, atau WEBP.");
+            }
+        }
+        
+        // 3. Cek ukuran (maks 5MB)
+        if (file.getSize() > 5 * 1024 * 1024) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ukuran file maksimal adalah 5MB");
+        }
+    }
     private final PenjadwalanKonfirmasiRepository penjadwalanRepo;
     private final MemoItemRepository memoItemRepository;
     private final UserRepository userRepository;
@@ -697,6 +725,7 @@ public class MemoService {
         memo.setStatusAkhir(targetStatus);
 
         if (photo != null && !photo.isEmpty()) {
+            validateImageFile(photo);
             try {
                 String fileName = fileService.saveMemoPhoto(photo);
                 memo.setBuktiFoto(fileName);
@@ -1006,6 +1035,7 @@ public class MemoService {
         User aktor = userRepository.findByUsername(username).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
 
         if (photo != null && !photo.isEmpty()) {
+            validateImageFile(photo);
             String fileName = "memo_pickup_" + memoId + "_" + System.currentTimeMillis() + ".jpg";
             try {
                 java.nio.file.Path path = java.nio.file.Paths.get("uploads/memos/" + fileName);
@@ -1111,6 +1141,7 @@ public class MemoService {
         User aktor = userRepository.findByUsername(username).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
         String fileName = null;
         if (photo != null && !photo.isEmpty()) {
+            validateImageFile(photo);
             fileName = "memo_delivery_" + memoId + "_" + System.currentTimeMillis() + ".jpg";
             try {
                 java.nio.file.Path path = java.nio.file.Paths.get("uploads/memos/" + fileName);

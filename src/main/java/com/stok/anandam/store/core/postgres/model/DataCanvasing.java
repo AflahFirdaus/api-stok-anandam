@@ -37,4 +37,11 @@ public class DataCanvasing {
 
     @Column(name = "catatan", columnDefinition = "TEXT")
     private String catatan;
+
+    @Column(name = "creator_name")
+    private String creatorName;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "creator_id")
+    private User creator;
 }

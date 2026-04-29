@@ -12,6 +12,7 @@ import java.util.Optional;
 @Repository
 public interface PricelistRepository extends JpaRepository<Pricelist, Long> {
     Optional<Pricelist> findByItemName(String itemName);
+    java.util.List<Pricelist> findByItemNameIn(java.util.Collection<String> itemNames);
 
     @Modifying
     @Transactional

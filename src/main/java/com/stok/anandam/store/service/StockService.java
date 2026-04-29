@@ -135,11 +135,18 @@ public class StockService {
                 Map<String, List<Stock>> groupedByCode = allStocks.stream()
                                 .collect(Collectors.groupingBy(Stock::getItemCode));
 
-                // Fetch pricelist data for all items in one go
+                // Fetch pricelist data for all items in one go (Optimized: Fix N+1)
+                List<String> normalizedNames = itemNames.stream()
+                                .map(com.stok.anandam.store.util.NormalizationUtil::normalizeItemName)
+                                .collect(Collectors.toList());
+                
                 Map<String, com.stok.anandam.store.core.postgres.model.Pricelist> pricelistMap = new HashMap<>();
-                itemNames.forEach(name -> {
-                        String normalized = com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(name);
-                        pricelistRepository.findByItemName(normalized).ifPresent(p -> pricelistMap.put(name, p));
+                pricelistRepository.findByItemNameIn(normalizedNames).forEach(p -> {
+                    // Map back to original name for lookup convenience in the stream below
+                    // We need to find which original name matches this normalized one
+                    itemNames.stream()
+                        .filter(original -> com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(original).equals(p.getItemName()))
+                        .forEach(original -> pricelistMap.put(original, p));
                 });
 
                 List<StockGroupedResponse> groupedResponses = itemCodes.stream().map(code -> {

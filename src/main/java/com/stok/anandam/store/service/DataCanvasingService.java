@@ -2,8 +2,10 @@ package com.stok.anandam.store.service;
 
 import com.stok.anandam.store.core.postgres.model.Canvasing;
 import com.stok.anandam.store.core.postgres.model.DataCanvasing;
+import com.stok.anandam.store.core.postgres.model.User;
 import com.stok.anandam.store.core.postgres.repository.CanvasingRepository;
 import com.stok.anandam.store.core.postgres.repository.DataCanvasingRepository;
+import com.stok.anandam.store.core.postgres.repository.UserRepository;
 import com.stok.anandam.store.dto.DataCanvasingRequest;
 import com.stok.anandam.store.exception.ResourceNotFoundException;
 
@@ -26,12 +28,19 @@ public class DataCanvasingService {
     @Autowired
     private CanvasingRepository canvasingRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
     // === 1. CREATE (Input Data Kunjungan) ===
     @Transactional
-    public DataCanvasing create(DataCanvasingRequest request) {
+    public DataCanvasing create(DataCanvasingRequest request, String username) {
         // Cari Master Toko
         Canvasing canvasing = canvasingRepository.findById(request.getCanvasingId())
                 .orElseThrow(() -> new ResourceNotFoundException("ID Canvasing " + request.getCanvasingId() + " tidak ditemukan"));
+
+        // Cari User Pembuat
+        User creator = userRepository.findByUsername(username)
+                .orElse(null);
 
         // Buat Data Transaksi
         DataCanvasing data = DataCanvasing.builder()
@@ -40,6 +49,8 @@ public class DataCanvasingService {
                 .canvasVisit(request.getCanvasVisit())
                 .keterangan(request.getKeterangan())
                 .catatan(request.getCatatan())
+                .creator(creator)
+                .creatorName(creator != null ? creator.getNama() : "System")
                 .build();
 
         return dataCanvasingRepository.save(data);
