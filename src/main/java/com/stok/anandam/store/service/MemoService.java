@@ -386,7 +386,10 @@ public class MemoService {
                 .tanggalJadwal(p.getTanggalJadwal() != null ? p.getTanggalJadwal().format(DATE_FORMATTER) : null)
                 .personelId(p.getPersonelId())
                 .latitude(p.getLatitude())
-                .longitude(p.getLongitude());
+                .longitude(p.getLongitude())
+                .kecamatan(p.getKecamatan())
+                .desaKelurahan(p.getDesaKelurahan())
+                .kabupatenKota(p.getKabupatenKota());
         
         if (p.getKodepos() != null) {
             builder.kecamatan(p.getKodepos().getKecamatan())
