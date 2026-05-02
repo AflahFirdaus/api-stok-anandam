@@ -45,13 +45,8 @@ public class AppUpdateController {
     // 2. ENDPOINT INTERNAL (Diakses oleh GitHub Actions saat publish)
     @PostMapping("/api/v1/internal/app/publish")
     public ResponseEntity<?> publishUpdate(
-            @RequestHeader("X-Internal-Key") String authKey,
             @RequestBody AppUpdatePublishRequest request) {
-        
-        // Cek keamanan (Apakah GitHub mengirim kunci yang benar?)
-        if (!internalApiKey.equals(authKey)) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
-        }
+        // Cek keamanan sudah dilakukan oleh ApiKeyFilter
 
         AppUpdate update = new AppUpdate();
         update.setVersionName(request.getVersionName());
