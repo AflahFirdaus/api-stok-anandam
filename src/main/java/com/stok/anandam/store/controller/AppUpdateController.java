@@ -28,8 +28,9 @@ public class AppUpdateController {
 
     // 1. ENDPOINT PUBLIK (Diakses oleh HP untuk cek update)
     @GetMapping("/api/v1/public/app/latest")
-    public ResponseEntity<?> getLatestUpdate() {
-        Optional<AppUpdate> latest = appUpdateRepository.findFirstByOrderByVersionCodeDesc();
+    public ResponseEntity<?> getLatestUpdate(
+            @RequestParam(name = "platform", defaultValue = "ANDROID") String platform) {
+        Optional<AppUpdate> latest = appUpdateRepository.findFirstByPlatformOrderByVersionCodeDesc(platform.toUpperCase());
         
         Map<String, Object> response = new HashMap<>();
         if (latest.isPresent()) {
@@ -51,6 +52,7 @@ public class AppUpdateController {
         AppUpdate update = new AppUpdate();
         update.setVersionName(request.getVersionName());
         update.setVersionCode(request.getVersionCode());
+        update.setPlatform(request.getPlatform() != null ? request.getPlatform().toUpperCase() : "ANDROID");
         update.setDownloadUrl(request.getDownloadUrl());
         update.setReleaseNotes(request.getReleaseNotes());
         update.setIsForceUpdate(request.getIsForceUpdate() != null ? request.getIsForceUpdate() : false);

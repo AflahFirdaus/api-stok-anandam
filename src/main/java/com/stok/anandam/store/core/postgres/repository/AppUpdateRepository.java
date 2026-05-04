@@ -9,7 +9,10 @@ import java.util.Optional;
 
 @Repository
 public interface AppUpdateRepository extends JpaRepository<AppUpdate, Long> {
-    // Mengambil versi dengan versionCode paling tinggi
+    // Mengambil versi terbaru berdasarkan platform
+    Optional<AppUpdate> findFirstByPlatformOrderByVersionCodeDesc(String platform);
+
+    // Legacy support (optional)
     Optional<AppUpdate> findFirstByOrderByVersionCodeDesc();
 }
 

@@ -7,6 +7,7 @@ public class AppUpdatePublishRequest {
     private String versionName;
     private Integer versionCode;
     private String downloadUrl;
+    private String platform; // e.g., ANDROID, WINDOWS
     private String releaseNotes;
     private Boolean isForceUpdate;
 }

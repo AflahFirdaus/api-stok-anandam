@@ -6,7 +6,9 @@ import java.time.LocalDateTime;
 
 @Data
 @Entity
-@Table(name = "app_updates")
+@Table(name = "app_updates", uniqueConstraints = {
+    @UniqueConstraint(columnNames = {"versionCode", "platform"})
+})
 public class AppUpdate {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -15,8 +17,11 @@ public class AppUpdate {
     @Column(nullable = false)
     private String versionName;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private Integer versionCode;
+
+    @Column(nullable = false)
+    private String platform = "ANDROID";
 
     @Column(nullable = false)
     private String downloadUrl;
