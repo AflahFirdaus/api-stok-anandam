@@ -54,7 +54,8 @@ public class StockService {
                 boolean isMarketing = role == Role.MARKETING ||
                                 role == Role.MARKETING_TOKO ||
                                 role == Role.MARKETING_PROJECT ||
-                                role == Role.MARKETING_DISTRIBUSI;
+                                role == Role.MARKETING_DISTRIBUSI ||
+                                role == Role.MARKETING_ONLINE;
 
                 Sort.Direction sortDirection = direction.equalsIgnoreCase("desc") ? Sort.Direction.DESC
                                 : Sort.Direction.ASC;
@@ -393,7 +394,8 @@ public class StockService {
                 boolean isMarketing = role == Role.MARKETING ||
                                 role == Role.MARKETING_TOKO ||
                                 role == Role.MARKETING_PROJECT ||
-                                role == Role.MARKETING_DISTRIBUSI;
+                                role == Role.MARKETING_DISTRIBUSI ||
+                                role == Role.MARKETING_ONLINE;
 
                 Stock stock = stockRepository.findById(id)
                                 .orElseThrow(() -> new ResourceNotFoundException("Stock not found with id: " + id));

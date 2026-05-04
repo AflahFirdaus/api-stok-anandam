@@ -79,7 +79,8 @@ public class DashboardService {
         if (role == Role.MARKETING || 
             role == Role.MARKETING_TOKO || 
             role == Role.MARKETING_PROJECT || 
-            role == Role.MARKETING_DISTRIBUSI) {
+            role == Role.MARKETING_DISTRIBUSI ||
+            role == Role.MARKETING_ONLINE) {
             response.setTotalHpp(null);
             response.setPendingValue(null);
         }
