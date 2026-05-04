@@ -35,6 +35,9 @@ public class UserService {
     @Autowired
     private RefreshTokenRepository refreshTokenRepository;
 
+    @Autowired
+    private ActivityLogService activityLogService;
+
     /**
      * List user dengan filter opsional: search (nama/username), role. Jika halaman
      * melebihi total, kembalikan halaman 0.
@@ -180,6 +183,9 @@ public class UserService {
 
         // 2. Delete all refresh tokens for this user
         refreshTokenRepository.deleteByUser(user);
+
+        // 3. Log activity
+        activityLogService.log(user.getUsername(), "CLEAR_SESSIONS", "Seluruh sesi user dibersihkan oleh admin");
 
         return toUserResponse(user);
     }

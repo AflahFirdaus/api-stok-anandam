@@ -42,7 +42,8 @@ public class AuthService {
                 user.setLastLogin(LocalDateTime.now());
                 user.setLastActivity(LocalDateTime.now());
                 user.setIsOnline(true);
-                user.setDeviceCount((user.getDeviceCount() == null ? 0 : user.getDeviceCount()) + 1);
+                // Karena RefreshTokenService membatasi 1 user = 1 token, maka count selalu 1 saat login
+                user.setDeviceCount(1);
                 userRepository.save(user);
                 
                 // Log activity
@@ -52,14 +53,22 @@ public class AuthService {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "Akun Anda telah dinonaktifkan. Silakan hubungi admin.");}}
+
+    @Autowired
+    private RefreshTokenService refreshTokenService;
+
     public void logout() {
-        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) return;
+        
+        String username = auth.getName();
         userRepository.findByUsername(username).ifPresent(user -> {
-            int currentCount = user.getDeviceCount() == null ? 0 : user.getDeviceCount();
-            user.setDeviceCount(Math.max(0, currentCount - 1));
-            if (user.getDeviceCount() == 0) {
-                user.setIsOnline(false);
-            }
+            // Hapus token refresh dari database agar benar-benar logout
+            refreshTokenService.deleteByUsername(username);
+            
+            // Reset status online dan device count
+            user.setDeviceCount(0);
+            user.setIsOnline(false);
             userRepository.save(user);
             
             // Log activity
