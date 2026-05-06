@@ -454,7 +454,6 @@ public class MigrationService {
     private static final String TKDN_SPREADSHEET_ID = "173w5Y8hynv8lOphrsjtCx0tc8CJIQThuLrMIttwtw30";
     private static final String TKDN_RANGE = "TKDN!A1:AE";
 
-    @Async
     public void checkAndTriggerMigration() {
         log.info("Checking for database changes in dbslog...");
         try {
