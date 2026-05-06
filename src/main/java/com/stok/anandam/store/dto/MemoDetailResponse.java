@@ -46,6 +46,7 @@ public class MemoDetailResponse {
     private String deskripsi;
     private String nomorJl;
     private String tempo;
+    private String badanUsaha;
     
     // Geographic fallbacks (from postal code table)
     private String desaKelurahan;

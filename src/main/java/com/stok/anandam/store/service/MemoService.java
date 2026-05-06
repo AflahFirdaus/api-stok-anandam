@@ -339,6 +339,7 @@ public class MemoService {
                 .ekspedisi(memo.getEkspedisi())
                 .platform(memo.getPlatform())
                 .tempo(memo.getTempo())
+                .badanUsaha(memo.getBadanUsaha())
                 .isTeknisRequired(java.lang.Boolean.TRUE.equals(memo.getIsTeknisRequired()))
                 .isDeliveryRequired(java.lang.Boolean.TRUE.equals(memo.getIsDeliveryRequired()))
                 .opsiPengiriman(memo.getOpsiPengiriman())
@@ -453,6 +454,7 @@ public class MemoService {
                 .platform(request.getPlatform())
                 .kodePos(request.getKodePos())
                 .tempo(request.getTempo())
+                .badanUsaha(request.getBadanUsaha())
                 .build();
 
         memo = memoRepository.save(memo);
@@ -536,6 +538,7 @@ public class MemoService {
         memo.setPlatform(request.getPlatform());
         memo.setKodePos(request.getKodePos());
         memo.setTempo(request.getTempo());
+        memo.setBadanUsaha(request.getBadanUsaha());
 
         memoRepository.save(memo);
 
@@ -814,6 +817,7 @@ public class MemoService {
                 .totalHarga(request.getTotalHarga())
                 .deskripsi(request.getDeskripsi())
                 .memoType(request.getMemoType())
+                .badanUsaha(request.getBadanUsaha())
                 .build();
 
         memo = memoRepository.save(memo);

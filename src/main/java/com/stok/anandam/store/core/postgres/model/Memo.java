@@ -97,6 +97,7 @@ public class Memo {
     private String ekspedisi;
     private String platform;
     private String tempo;
+    private String badanUsaha;
     
     @Column(name = "bukti_foto")
     private String buktiFoto;

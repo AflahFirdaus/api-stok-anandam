@@ -108,6 +108,11 @@ public class CreateMemoRequest {
     @SerializedName("tempo")
     private String tempo;
 
+    @JsonProperty("badanUsaha")
+    @JsonAlias({"badan_usaha", "badanUsaha"})
+    @SerializedName("badanUsaha")
+    private String badanUsaha;
+
     // 3. Data Barang
     @JsonProperty("items")
     @JsonAlias("items")
