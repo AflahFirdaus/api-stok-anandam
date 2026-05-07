@@ -103,6 +103,10 @@ public class MemoController {
         return memoService.getMemoCounts(principal.getName());
     }
 
+    /**
+     * @deprecated Scheduling is now integrated into the memo creation flow or removed.
+     */
+    @Deprecated
     @PostMapping("/{memoId}/penjadwalan")
     public WebResponse<String> createPenjadwalan(
             @PathVariable("memoId") UUID memoId,

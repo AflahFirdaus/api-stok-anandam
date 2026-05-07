@@ -93,6 +93,11 @@ public class CreateMemoRequest {
     @SerializedName("ekspedisi")
     private String ekspedisi;
     
+    @JsonProperty("subEkspedisi")
+    @JsonAlias({"sub_ekspedisi", "subEkspedisi"})
+    @SerializedName("subEkspedisi")
+    private String subEkspedisi;
+    
     @JsonProperty("platform")
     @JsonAlias("platform")
     @SerializedName("platform")

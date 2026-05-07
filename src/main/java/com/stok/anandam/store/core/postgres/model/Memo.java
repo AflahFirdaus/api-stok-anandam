@@ -95,6 +95,7 @@ public class Memo {
 
     private String resi;
     private String ekspedisi;
+    private String subEkspedisi;
     private String platform;
     private String tempo;
     private String badanUsaha;

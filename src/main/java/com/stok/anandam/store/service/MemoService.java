@@ -95,6 +95,8 @@ public class MemoService {
         String userEmpCode = aktor.getEmployeeCode(); 
 
         if (roleName.startsWith("MARKETING_") || "MARKETING".equals(roleName)) {
+            // SPV roles see all memos — no filter applied (falls through like ADMIN)
+            if (!roleName.startsWith("SPV_")) {
             List<UUID> assignedMemoIds = penjadwalanRepo.findByPersonelIdAndDeletedAtIsNull(aktor.getId())
                     .stream()
                     .filter(t -> t.getMemo() != null)
@@ -114,6 +116,7 @@ public class MemoService {
                         return isOwner || isCreator || isSameRole || isAssigned;
                     })
                     .collect(Collectors.toList());
+            }
         } else if ("GUDANG".equals(roleName) || "SPV_GUDANG".equals(roleName)) {
             memos = memos.stream()
                     .filter(m -> 
@@ -181,6 +184,8 @@ public class MemoService {
         
         // Filter by role like in getListMemoByStatus
         if (roleName.startsWith("MARKETING_") || "MARKETING".equals(roleName)) {
+            // SPV roles see all memos — no filter applied
+            if (!roleName.startsWith("SPV_")) {
              allMemos = allMemos.stream()
                     .filter(m -> {
                         boolean isOwner = m.getMarketingEmpCode() != null && m.getMarketingEmpCode().equals(userEmpCode);
@@ -190,6 +195,7 @@ public class MemoService {
                         return isOwner || isCreator || isSameRole;
                     })
                     .collect(Collectors.toList());
+            }
         } else if ("DELIVERY".equals(roleName)) {
             List<UUID> assignedMemoIds = penjadwalanRepo.findByPersonelIdAndDeletedAtIsNull(aktor.getId())
                     .stream()
@@ -249,24 +255,9 @@ public class MemoService {
         String roleName = aktor.getRole() != null ? aktor.getRole().name() : "";
         String userEmpCode = aktor.getEmployeeCode();
         
-        if (roleName.startsWith("MARKETING_") || "MARKETING".equals(roleName) || "SPV_MARKETING".equals(roleName)) {
-            boolean isOwner = memo.getMarketingEmpCode() != null && memo.getMarketingEmpCode().equals(userEmpCode);
-            boolean isCreator = memo.getCreator() != null && memo.getCreator().getId().equals(aktor.getId());
-            boolean isSameRole = memo.getCreator() != null && memo.getCreator().getRole() == aktor.getRole();
-            
-            boolean isAssigned = penjadwalanRepo.findByMemo_IdAndDeletedAtIsNull(memoId).stream()
-                .anyMatch(t -> aktor.getId().equals(t.getPersonelId()));
-
-            if (memo.getStatusAkhir() == MemoStatus.DRAFT) {
-                if (!isCreator && !isSameRole) {
-                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Anda tidak memiliki akses ke draft orang lain");
-                }
-            } else {
-                if (!isOwner && !isCreator && !isSameRole && !isAssigned) {
-                     throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Anda tidak memiliki akses ke memo ini");
-                }
-            }
-        } else if ("DELIVERY".equals(roleName)) {
+        // MARKETING roles are allowed to access detail if they have the UUID (e.g. from QR scan)
+        // No restriction here for MARKETING.
+        if ("DELIVERY".equals(roleName)) {
             List<PenjadwalanKonfirmasi> assignedTasks = penjadwalanRepo.findByPersonelIdAndDeletedAtIsNullOrderByCreatedAtDesc(aktor.getId());
             boolean isAssigned = assignedTasks.stream()
                 .anyMatch(t -> t.getMemo() != null && t.getMemo().getId().equals(memoId));
@@ -337,6 +328,7 @@ public class MemoService {
                 .orderIdMarketplace(memo.getOrderIdMarketplace())
                 .resi(memo.getResi())
                 .ekspedisi(memo.getEkspedisi())
+                .subEkspedisi(memo.getSubEkspedisi())
                 .platform(memo.getPlatform())
                 .tempo(memo.getTempo())
                 .badanUsaha(memo.getBadanUsaha())
@@ -409,8 +401,17 @@ public class MemoService {
         return builder.build();
     }
 
+    private void validateEkspedisi(CreateMemoRequest request) {
+        if ("ONLINE".equalsIgnoreCase(request.getMemoType()) && "REGULER".equalsIgnoreCase(request.getEkspedisi())) {
+            if (request.getSubEkspedisi() == null || request.getSubEkspedisi().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sub Ekspedisi (JNE, JNT, dsb) wajib diisi jika memilih REGULER");
+            }
+        }
+    }
+
     @Transactional
     public WebResponse<String> createMemo(CreateMemoRequest request, String username) {
+        validateEkspedisi(request);
         User creator = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
 
@@ -451,6 +452,7 @@ public class MemoService {
                 .orderIdMarketplace(request.getOrderIdMarketplace())
                 .resi(request.getResi())
                 .ekspedisi(request.getEkspedisi())
+                .subEkspedisi(request.getSubEkspedisi())
                 .platform(request.getPlatform())
                 .kodePos(request.getKodePos())
                 .tempo(request.getTempo())
@@ -486,6 +488,7 @@ public class MemoService {
 
     @Transactional
     public WebResponse<String> updateMemo(UUID memoId, CreateMemoRequest request, String username) {
+        validateEkspedisi(request);
         Memo memo = memoRepository.findById(memoId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
 
@@ -500,13 +503,20 @@ public class MemoService {
         boolean isCreator = memo.getCreator() != null && memo.getCreator().getId().equals(aktor.getId());
         boolean isSameRole = memo.getCreator() != null && memo.getCreator().getRole() == aktor.getRole();
         
-        if (!isCreator && !isSameRole && !aktor.getRole().name().equals("ADMIN")) {
+        if (!isCreator && !isSameRole && !aktor.getRole().name().equals("ADMIN") && !aktor.getRole().name().startsWith("SPV_")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Anda tidak memiliki hak untuk mengubah memo ini");
         }
 
         Customer customer;
         if (request.getNoHpCustomer() != null && !request.getNoHpCustomer().isBlank()) {
             customer = customerRepository.findByNoHpAndDeletedAtIsNull(request.getNoHpCustomer())
+                    .map(existing -> {
+                        if (request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank()) {
+                            existing.setNamaPelanggan(request.getNamaCustomer());
+                            return customerRepository.save(existing);
+                        }
+                        return existing;
+                    })
                     .orElseGet(() -> {
                         Customer newCust = Customer.builder()
                                 .namaPelanggan(request.getNamaCustomer() != null ? request.getNamaCustomer() : "Pelanggan Baru")
@@ -535,6 +545,7 @@ public class MemoService {
         memo.setOrderIdMarketplace(request.getOrderIdMarketplace());
         memo.setResi(request.getResi());
         memo.setEkspedisi(request.getEkspedisi());
+        memo.setSubEkspedisi(request.getSubEkspedisi());
         memo.setPlatform(request.getPlatform());
         memo.setKodePos(request.getKodePos());
         memo.setTempo(request.getTempo());
@@ -1069,10 +1080,10 @@ public class MemoService {
         User aktor = userRepository.findByUsername(username).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
 
         String role = aktor.getRole().name();
-        boolean isOwner = memo.getMarketing() != null && memo.getMarketing().getUsername().equals(username);
+        boolean isMarketing = role.startsWith("MARKETING_") || "MARKETING".equals(role);
         boolean isAdminOrSpv = "ADMIN".equals(role) || "SPV_MARKETING".equals(role);
 
-        if (!isOwner && !isAdminOrSpv) {
+        if (!isMarketing && !isAdminOrSpv) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Anda tidak memiliki akses untuk konfirmasi selesai memo ini.");
         }
 

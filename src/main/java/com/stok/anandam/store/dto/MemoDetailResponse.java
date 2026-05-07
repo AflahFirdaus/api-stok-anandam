@@ -36,6 +36,7 @@ public class MemoDetailResponse {
     private String orderIdMarketplace;
     private String resi;
     private String ekspedisi;
+    private String subEkspedisi;
     private String platform;
     private String kodePos; // Added for display in list
     private String buktiFoto;
