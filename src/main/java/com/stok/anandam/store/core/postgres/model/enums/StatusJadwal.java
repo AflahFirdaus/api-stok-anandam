@@ -4,5 +4,6 @@ public enum StatusJadwal {
     MENUNGGU_KONFIRMASI,
     DIJADWALKAN,
     DALAM_PENGIRIMAN,
-    SELESAI
+    SELESAI,
+    DIBATALKAN
 }

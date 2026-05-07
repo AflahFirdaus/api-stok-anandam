@@ -617,6 +617,16 @@ public class MemoService {
         MemoStatus targetStatus = request.getTargetStatus();
         memo.setStatusAkhir(targetStatus);
 
+        // Jika dibatalkan, batalkan juga semua jadwal yang terkait
+        if (targetStatus == MemoStatus.DIBATALKAN) {
+            List<PenjadwalanKonfirmasi> relatedJadwal = penjadwalanRepo.findByMemo_IdAndDeletedAtIsNull(memoId);
+            for (PenjadwalanKonfirmasi jadwal : relatedJadwal) {
+                if (jadwal.getStatusJadwal() != StatusJadwal.SELESAI) {
+                    jadwal.setStatusJadwal(StatusJadwal.DIBATALKAN);
+                    penjadwalanRepo.save(jadwal);
+                }
+            }
+        }
 
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), targetStatus.name(), aktor.getId(), request.getKeteranganLog()));
