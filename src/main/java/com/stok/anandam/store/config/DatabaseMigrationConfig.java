@@ -12,7 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 public class DatabaseMigrationConfig {
 
     @Bean
-    public CommandLineRunner fixDatabaseConstraints(JdbcTemplate jdbcTemplate) {
+    public CommandLineRunner fixDatabaseConstraints(@org.springframework.beans.factory.annotation.Qualifier("pgJdbcTemplate") JdbcTemplate jdbcTemplate) {
         return args -> {
             try {
                 log.info("Checking database constraints for penjadwalan_konfirmasi...");
