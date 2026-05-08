@@ -617,7 +617,7 @@ public class MemoService {
         MemoStatus targetStatus = request.getTargetStatus();
         memo.setStatusAkhir(targetStatus);
 
-        // Jika dibatalkan, batalkan juga semua jadwal yang terkait
+        // Jika dibatalkan, hapus (soft-delete) juga semua jadwal yang terkait
         if (targetStatus == MemoStatus.DIBATALKAN) {
             List<PenjadwalanKonfirmasi> relatedJadwal = penjadwalanRepo.findByMemo_IdAndDeletedAtIsNull(memoId);
             for (PenjadwalanKonfirmasi jadwal : relatedJadwal) {
