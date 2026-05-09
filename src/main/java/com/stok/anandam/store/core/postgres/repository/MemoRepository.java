@@ -29,4 +29,8 @@ public interface MemoRepository extends JpaRepository<Memo, UUID> {
 
     // Untuk Dashboard Gudang / Marketing melihat list berdasarkan status
     java.util.List<com.stok.anandam.store.core.postgres.model.Memo> findByStatusAkhirOrderByCreatedAtDesc(com.stok.anandam.store.core.postgres.model.enums.MemoStatus statusAkhir);
+
+    boolean existsByOrderIdMarketplaceAndStatusAkhirNot(String orderIdMarketplace, com.stok.anandam.store.core.postgres.model.enums.MemoStatus statusAkhir);
+
+    boolean existsByOrderIdMarketplaceAndStatusAkhirNotAndIdNot(String orderIdMarketplace, com.stok.anandam.store.core.postgres.model.enums.MemoStatus statusAkhir, UUID id);
 }

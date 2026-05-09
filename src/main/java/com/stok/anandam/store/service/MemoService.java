@@ -412,6 +412,17 @@ public class MemoService {
     @Transactional
     public WebResponse<String> createMemo(CreateMemoRequest request, String username) {
         validateEkspedisi(request);
+
+        // Pengecekan Duplikat Order ID Marketplace
+        if (request.getOrderIdMarketplace() != null && !request.getOrderIdMarketplace().isBlank()) {
+            boolean exists = memoRepository.existsByOrderIdMarketplaceAndStatusAkhirNot(
+                    request.getOrderIdMarketplace(), MemoStatus.SELESAI);
+            if (exists) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                    "Gagal: Order ID Marketplace " + request.getOrderIdMarketplace() + " sudah ada dan statusnya belum SELESAI.");
+            }
+        }
+
         User creator = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
 
@@ -491,6 +502,16 @@ public class MemoService {
         validateEkspedisi(request);
         Memo memo = memoRepository.findById(memoId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
+
+        // Pengecekan Duplikat Order ID Marketplace (kecuali memo ini sendiri)
+        if (request.getOrderIdMarketplace() != null && !request.getOrderIdMarketplace().isBlank()) {
+            boolean exists = memoRepository.existsByOrderIdMarketplaceAndStatusAkhirNotAndIdNot(
+                    request.getOrderIdMarketplace(), MemoStatus.SELESAI, memoId);
+            if (exists) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                    "Gagal: Order ID Marketplace " + request.getOrderIdMarketplace() + " sudah ada dan statusnya belum SELESAI.");
+            }
+        }
 
         if (memo.getStatusAkhir() != MemoStatus.DRAFT) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Hanya memo status DRAFT yang dapat diubah");

@@ -90,7 +90,7 @@ public class Memo {
     @Column(name = "memo_type")
     private String memoType;
 
-    @Column(name = "order_id_marketplace", unique = true)
+    @Column(name = "order_id_marketplace")
     private String orderIdMarketplace;
 
     private String resi;
