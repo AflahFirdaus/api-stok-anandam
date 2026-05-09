@@ -126,7 +126,6 @@ public class MemoService {
                         m.getStatusAkhir() == MemoStatus.DITOLAK ||
                         m.getStatusAkhir() == MemoStatus.MENUNGGU_GUDANG ||
                         m.getStatusAkhir() == MemoStatus.MENUNGGU_NOTA ||
-                        m.getStatusAkhir() == MemoStatus.DIBUAT_NOTA ||
                         m.getStatusAkhir() == MemoStatus.KENDALA_BARANG ||
                         m.getStatusAkhir() == MemoStatus.MENUNGGU_TEKNISI ||
                         m.getStatusAkhir() == MemoStatus.PROSES_TEKNISI ||
@@ -146,7 +145,7 @@ public class MemoService {
                     .collect(Collectors.toList());
         } else if ("NOTA".equals(roleName)) {
             memos = memos.stream()
-                    .filter(m -> m.getStatusAkhir() == MemoStatus.MENUNGGU_NOTA || m.getStatusAkhir() == MemoStatus.DIBUAT_NOTA)
+                    .filter(m -> m.getStatusAkhir() == MemoStatus.MENUNGGU_NOTA)
                     .collect(Collectors.toList());
         } else if ("DELIVERY".equals(roleName)) {
             List<UUID> assignedMemoIds = penjadwalanRepo.findByPersonelIdAndDeletedAtIsNull(aktor.getId())
@@ -221,7 +220,6 @@ public class MemoService {
                         m.getStatusAkhir() == MemoStatus.DITOLAK ||
                         m.getStatusAkhir() == MemoStatus.MENUNGGU_GUDANG ||
                         m.getStatusAkhir() == MemoStatus.MENUNGGU_NOTA ||
-                        m.getStatusAkhir() == MemoStatus.DIBUAT_NOTA ||
                         m.getStatusAkhir() == MemoStatus.KENDALA_BARANG ||
                         m.getStatusAkhir() == MemoStatus.MENUNGGU_TEKNISI ||
                         m.getStatusAkhir() == MemoStatus.PROSES_TEKNISI ||
@@ -1009,13 +1007,17 @@ public class MemoService {
         Memo memo = memoRepository.findById(memoId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
         User aktor = userRepository.findByUsername(username).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
         memo.setNomorJl(request.getNomorJl());
-        memo.setStatusAkhir(MemoStatus.DIBUAT_NOTA);
+        // Langsung masuk BUFFER_ZONE setelah input JL (status DIBUAT_NOTA dihapus)
+        MemoStatus targetStatus = java.lang.Boolean.TRUE.equals(memo.getIsTeknisRequired())
+                ? MemoStatus.MENUNGGU_TEKNISI
+                : MemoStatus.BUFFER_ZONE;
+        memo.setStatusAkhir(targetStatus);
         memoRepository.save(memo);
-        memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.DIBUAT_NOTA.name(), aktor.getId(), "Invoice/Nota berhasil dibuat (JL: " + request.getNomorJl() + ") oleh " + username));
+        memoLogRepository.save(new MemoLog(memo.getId(), targetStatus.name(), aktor.getId(), "Nomor JL diinput (" + request.getNomorJl() + ") oleh " + username + ". Status langsung masuk " + targetStatus.name()));
         
         sendMemoRefreshSignal();
 
-        return WebResponse.<String>builder().data("OK").status(200).message("Invoice berhasil dibuat").build();
+        return WebResponse.<String>builder().data("OK").status(200).message("Nomor JL berhasil diinput, memo masuk " + targetStatus.name()).build();
     }
 
     @Transactional
