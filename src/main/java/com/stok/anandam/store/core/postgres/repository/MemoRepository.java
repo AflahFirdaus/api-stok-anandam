@@ -33,4 +33,8 @@ public interface MemoRepository extends JpaRepository<Memo, UUID> {
     boolean existsByOrderIdMarketplaceAndStatusAkhirNot(String orderIdMarketplace, com.stok.anandam.store.core.postgres.model.enums.MemoStatus statusAkhir);
 
     boolean existsByOrderIdMarketplaceAndStatusAkhirNotAndIdNot(String orderIdMarketplace, com.stok.anandam.store.core.postgres.model.enums.MemoStatus statusAkhir, UUID id);
+
+    boolean existsByOrderIdMarketplace(String orderIdMarketplace);
+
+    boolean existsByOrderIdMarketplaceAndIdNot(String orderIdMarketplace, UUID id);
 }

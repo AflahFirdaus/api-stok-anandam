@@ -407,19 +407,33 @@ public class MemoService {
         }
     }
 
+    private void validateOrderId(String orderId, UUID excludeId) {
+        if (orderId == null || orderId.isBlank()) return;
+
+        // 1. Cek spasi
+        if (orderId.contains(" ")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order ID Marketplace tidak boleh mengandung spasi untuk keamanan data");
+        }
+
+        // 2. Cek duplikat (Kecuali memo yang statusnya DIBATALKAN)
+        boolean exists;
+        if (excludeId == null) {
+            exists = memoRepository.existsByOrderIdMarketplaceAndStatusAkhirNot(orderId, MemoStatus.DIBATALKAN);
+        } else {
+            exists = memoRepository.existsByOrderIdMarketplaceAndStatusAkhirNotAndIdNot(orderId, MemoStatus.DIBATALKAN, excludeId);
+        }
+
+        if (exists) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                "Gagal: Order ID Marketplace " + orderId + " sudah digunakan di memo lain yang masih aktif/selesai.");
+        }
+    }
+
     @Transactional
     public WebResponse<String> createMemo(CreateMemoRequest request, String username) {
         validateEkspedisi(request);
 
-        // Pengecekan Duplikat Order ID Marketplace
-        if (request.getOrderIdMarketplace() != null && !request.getOrderIdMarketplace().isBlank()) {
-            boolean exists = memoRepository.existsByOrderIdMarketplaceAndStatusAkhirNot(
-                    request.getOrderIdMarketplace(), MemoStatus.SELESAI);
-            if (exists) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
-                    "Gagal: Order ID Marketplace " + request.getOrderIdMarketplace() + " sudah ada dan statusnya belum SELESAI.");
-            }
-        }
+        validateOrderId(request.getOrderIdMarketplace(), null);
 
         User creator = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
@@ -501,15 +515,7 @@ public class MemoService {
         Memo memo = memoRepository.findById(memoId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
 
-        // Pengecekan Duplikat Order ID Marketplace (kecuali memo ini sendiri)
-        if (request.getOrderIdMarketplace() != null && !request.getOrderIdMarketplace().isBlank()) {
-            boolean exists = memoRepository.existsByOrderIdMarketplaceAndStatusAkhirNotAndIdNot(
-                    request.getOrderIdMarketplace(), MemoStatus.SELESAI, memoId);
-            if (exists) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
-                    "Gagal: Order ID Marketplace " + request.getOrderIdMarketplace() + " sudah ada dan statusnya belum SELESAI.");
-            }
-        }
+        validateOrderId(request.getOrderIdMarketplace(), memoId);
 
         if (memo.getStatusAkhir() != MemoStatus.DRAFT) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Hanya memo status DRAFT yang dapat diubah");
@@ -822,6 +828,8 @@ public class MemoService {
 
     @Transactional
     public WebResponse<String> createPendingMemo(CreateMemoRequest request, String username) {
+        validateOrderId(request.getOrderIdMarketplace(), null);
+
         User creator = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
 
@@ -857,6 +865,13 @@ public class MemoService {
                 .totalHarga(request.getTotalHarga())
                 .deskripsi(request.getDeskripsi())
                 .memoType(request.getMemoType())
+                .orderIdMarketplace(request.getOrderIdMarketplace())
+                .resi(request.getResi())
+                .ekspedisi(request.getEkspedisi())
+                .subEkspedisi(request.getSubEkspedisi())
+                .platform(request.getPlatform())
+                .kodePos(request.getKodePos())
+                .tempo(request.getTempo())
                 .badanUsaha(request.getBadanUsaha())
                 .build();
 
@@ -953,7 +968,19 @@ public class MemoService {
     public WebResponse<String> continueToMemo(UUID id, UpdateMemoTypeRequest request, String username) {
         Memo memo = memoRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
         User aktor = userRepository.findByUsername(username).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
+
+        validateOrderId(request.getDetails().getOrderIdMarketplace(), id);
+
         memo.setMemoType(request.getDetails().getMemoType());
+        memo.setOrderIdMarketplace(request.getDetails().getOrderIdMarketplace());
+        memo.setResi(request.getDetails().getResi());
+        memo.setEkspedisi(request.getDetails().getEkspedisi());
+        memo.setSubEkspedisi(request.getDetails().getSubEkspedisi());
+        memo.setPlatform(request.getDetails().getPlatform());
+        memo.setKodePos(request.getDetails().getKodePos());
+        memo.setTempo(request.getDetails().getTempo());
+        memo.setBadanUsaha(request.getDetails().getBadanUsaha());
+
         memo.setStatusAkhir(MemoStatus.MENUNGGU_GUDANG);
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.MENUNGGU_GUDANG.name(), aktor.getId(), "Memo Pending dilanjutkan menjadi Memo " + request.getDetails().getMemoType() + " oleh " + username));
