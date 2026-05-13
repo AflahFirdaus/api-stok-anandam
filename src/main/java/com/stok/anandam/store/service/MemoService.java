@@ -407,6 +407,33 @@ public class MemoService {
         }
     }
 
+    private void validateOnlineMemoFields(CreateMemoRequest request) {
+        if (!"ONLINE".equalsIgnoreCase(request.getMemoType())) return;
+
+        if (request.getNamaCustomer() == null || request.getNamaCustomer().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Gagal: Nama pembeli (customer) wajib diisi untuk memo online");
+        }
+        if (request.getOrderIdMarketplace() == null || request.getOrderIdMarketplace().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Gagal: Order ID Marketplace wajib diisi untuk memo online");
+        }
+        if (request.getPlatform() == null || request.getPlatform().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Gagal: Platform wajib diisi untuk memo online");
+        }
+        if (request.getEkspedisi() == null || request.getEkspedisi().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Gagal: Ekspedisi wajib diisi untuk memo online");
+        }
+        
+        if (request.getItems() == null || request.getItems().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Gagal: Item barang tidak boleh kosong");
+        }
+        
+        for (MemoItemRequest item : request.getItems()) {
+            if (item.getQty() == null || item.getQty() <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Gagal: Jumlah barang (Qty) untuk " + item.getNamaBarang() + " tidak boleh 0 atau kosong");
+            }
+        }
+    }
+
     private void validateOrderId(String orderId, UUID excludeId) {
         if (orderId == null || orderId.isBlank()) return;
 
@@ -431,6 +458,7 @@ public class MemoService {
 
     @Transactional
     public WebResponse<String> createMemo(CreateMemoRequest request, String username) {
+        validateOnlineMemoFields(request);
         validateEkspedisi(request);
 
         validateOrderId(request.getOrderIdMarketplace(), null);
@@ -511,6 +539,7 @@ public class MemoService {
 
     @Transactional
     public WebResponse<String> updateMemo(UUID memoId, CreateMemoRequest request, String username) {
+        validateOnlineMemoFields(request);
         validateEkspedisi(request);
         Memo memo = memoRepository.findById(memoId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
@@ -828,6 +857,7 @@ public class MemoService {
 
     @Transactional
     public WebResponse<String> createPendingMemo(CreateMemoRequest request, String username) {
+        validateOnlineMemoFields(request);
         validateOrderId(request.getOrderIdMarketplace(), null);
 
         User creator = userRepository.findByUsername(username)
@@ -969,6 +999,7 @@ public class MemoService {
         Memo memo = memoRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
         User aktor = userRepository.findByUsername(username).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
 
+        validateOnlineMemoFields(request.getDetails());
         validateOrderId(request.getDetails().getOrderIdMarketplace(), id);
 
         memo.setMemoType(request.getDetails().getMemoType());
