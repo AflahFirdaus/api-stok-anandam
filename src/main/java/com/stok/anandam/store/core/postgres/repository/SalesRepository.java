@@ -26,48 +26,84 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
         // QUERY 1: Ambil Data List dengan Filter Lengkap
         @Query("SELECT s FROM Sales s WHERE " +
                         "(s.docDate BETWEEN :startDate AND :endDate) AND " +
-                        "(:empCode IS NULL OR :empCode = '' OR s.empCode = :empCode) AND " + // Filter Employee
+                        "(:empCode IS NULL OR :empCode = '' OR s.empCode = :empCode) AND " +
+                        "(:categories IS NULL OR s.depCode IN :categories) AND " +
                         "(:search IS NULL OR :search = '' OR " +
-                        "LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-                        "LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-                        "LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')))")
+                        "((:searchColumn IS NULL OR :searchColumn = 'ALL' OR :searchColumn = '') AND (LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%')))) OR " +
+                        "(:searchColumn = 'noNota' AND LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'distributor' AND LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'barang' AND LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'dept' AND LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+                        ")")
         Page<Sales> findByFilters(
                         @Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate,
                         @Param("empCode") String empCode,
+                        @Param("categories") List<String> categories,
                         @Param("search") String search,
+                        @Param("searchColumn") String searchColumn,
                         Pageable pageable);
 
         @Query("SELECT s FROM Sales s WHERE " +
                         "(s.docDate BETWEEN :startDate AND :endDate) AND " +
                         "(:empCode IS NULL OR :empCode = '' OR s.empCode = :empCode) AND " +
+                        "(:categories IS NULL OR s.depCode IN :categories) AND " +
                         "(:search IS NULL OR :search = '' OR " +
-                        "LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-                        "LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-                        "LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%'))) " +
-                        "ORDER BY s.docDate DESC")
+                        "((:searchColumn IS NULL OR :searchColumn = 'ALL' OR :searchColumn = '') AND (LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%')))) OR " +
+                        "(:searchColumn = 'noNota' AND LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'distributor' AND LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'barang' AND LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'dept' AND LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+                        ") ORDER BY s.docDate DESC")
         List<Sales> findAllByFilters(
                         @Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate,
                         @Param("empCode") String empCode,
-                        @Param("search") String search);
+                        @Param("categories") List<String> categories,
+                        @Param("search") String search,
+                        @Param("searchColumn") String searchColumn);
 
         // QUERY 2: Hitung Total Grand (SUM) dengan filter yang sama
         @Query("SELECT COALESCE(SUM(s.grandTotal), 0) FROM Sales s WHERE " +
                         "(s.docDate BETWEEN :startDate AND :endDate) AND " +
                         "(:empCode IS NULL OR :empCode = '' OR s.empCode = :empCode) AND " +
+                        "(:categories IS NULL OR s.depCode IN :categories) AND " +
                         "(:search IS NULL OR :search = '' OR " +
-                        "LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-                        "LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-                        "LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')))")
+                        "((:searchColumn IS NULL OR :searchColumn = 'ALL' OR :searchColumn = '') AND (LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%')))) OR " +
+                        "(:searchColumn = 'noNota' AND LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'distributor' AND LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'barang' AND LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'dept' AND LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+                        ")")
         BigDecimal sumGrandTotalByFilters(
                         @Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate,
                         @Param("empCode") String empCode,
-                        @Param("search") String search);
+                        @Param("categories") List<String> categories,
+                        @Param("search") String search,
+                        @Param("searchColumn") String searchColumn);
 
         @Query("SELECT COALESCE(SUM(s.grandTotal), 0) FROM Sales s WHERE s.docDate = :today")
         BigDecimal sumTotalByDate(@Param("today") LocalDate today);
+
+        @Query("SELECT COALESCE(SUM(s.qty), 0) FROM Sales s WHERE " +
+                        "(s.docDate BETWEEN :startDate AND :endDate) AND " +
+                        "(:empCode IS NULL OR :empCode = '' OR s.empCode = :empCode) AND " +
+                        "(:categories IS NULL OR s.depCode IN :categories) AND " +
+                        "(:search IS NULL OR :search = '' OR " +
+                        "((:searchColumn IS NULL OR :searchColumn = 'ALL' OR :searchColumn = '') AND (LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%')))) OR " +
+                        "(:searchColumn = 'noNota' AND LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'distributor' AND LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'barang' AND LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'dept' AND LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+                        ")")
+        Long sumQtyByFilters(
+                        @Param("startDate") LocalDate startDate,
+                        @Param("endDate") LocalDate endDate,
+                        @Param("empCode") String empCode,
+                        @Param("categories") List<String> categories,
+                        @Param("search") String search,
+                        @Param("searchColumn") String searchColumn);
 
         @Query("SELECT MAX(s.docDate) FROM Sales s WHERE s.itemName = :itemName")
         LocalDate findLatestDocDateByItemName(@Param("itemName") String itemName);
@@ -92,4 +128,7 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
 
         @Query("SELECT DISTINCT s.empCode FROM Sales s WHERE s.empCode IS NOT NULL AND TRIM(s.empCode) <> '' ORDER BY s.empCode")
         java.util.List<String> findDistinctEmpCodeOrderByEmpCode();
+
+        @Query("SELECT DISTINCT s.depCode FROM Sales s WHERE s.depCode IS NOT NULL AND TRIM(s.depCode) <> '' ORDER BY s.depCode")
+        java.util.List<String> findDistinctDepCodes();
 }

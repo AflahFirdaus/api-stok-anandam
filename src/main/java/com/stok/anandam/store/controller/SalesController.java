@@ -10,8 +10,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
-@RequestMapping({"/api/v1/sales", "/api/v1/sale"})
+@RequestMapping({ "/api/v1/sales", "/api/v1/sale" })
 public class SalesController {
 
         @Autowired
@@ -28,12 +30,14 @@ public class SalesController {
                         @RequestParam(name = "startDate", required = false) String startDate,
                         @RequestParam(name = "endDate", required = false) String endDate,
                         @RequestParam(name = "empCode", required = false) String empCode, // Filter Karyawan
-                        @RequestParam(name = "search", required = false) String search) {
+                        @RequestParam(name = "categories", required = false) List<String> categories,
+                        @RequestParam(name = "search", required = false) String search,
+                        @RequestParam(name = "searchColumn", required = false) String searchColumn) {
 
                 SalesSummaryResponse<Sales> data = salesService.getSales(
-                                page, size, sortBy, direction, startDate, endDate, empCode, search);
+                                page, size, sortBy, direction, startDate, endDate, empCode, categories, search, searchColumn);
                 if (data.getContent().isEmpty() && data.getTotalElements() > 0 && page > 0) {
-                        data = salesService.getSales(0, size, sortBy, direction, startDate, endDate, empCode, search);
+                        data = salesService.getSales(0, size, sortBy, direction, startDate, endDate, empCode, categories, search, searchColumn);
                         page = 0;
                 }
 
@@ -59,11 +63,22 @@ public class SalesController {
         @GetMapping("/employee-codes")
         public ResponseEntity<WebResponse<java.util.List<com.stok.anandam.store.dto.EmployeeOption>>> getEmployeeCodes() {
                 java.util.List<com.stok.anandam.store.dto.EmployeeOption> codes = salesService.getEmployeeCodes();
-                return ResponseEntity.ok(WebResponse.<java.util.List<com.stok.anandam.store.dto.EmployeeOption>>builder()
+                return ResponseEntity
+                                .ok(WebResponse.<java.util.List<com.stok.anandam.store.dto.EmployeeOption>>builder()
+                                                .status(200)
+                                                .message("Success fetch employee codes")
+                                                .data(codes)
+                                                .paging(null)
+                                                .build());
+        }
+
+        @GetMapping("/categories")
+        public ResponseEntity<WebResponse<java.util.List<String>>> getCategories() {
+                java.util.List<String> categories = salesService.getDeptCodes();
+                return ResponseEntity.ok(WebResponse.<java.util.List<String>>builder()
                                 .status(200)
-                                .message("Success fetch employee codes")
-                                .data(codes)
-                                .paging(null)
+                                .message("Success fetch categories")
+                                .data(categories)
                                 .build());
         }
 
@@ -76,9 +91,11 @@ public class SalesController {
                         @RequestParam(name = "startDate", required = false) String startDate,
                         @RequestParam(name = "endDate", required = false) String endDate,
                         @RequestParam(name = "empCode", required = false) String empCode,
-                        @RequestParam(name = "search", required = false) String search) throws java.io.IOException {
+                        @RequestParam(name = "categories", required = false) List<String> categories,
+                        @RequestParam(name = "search", required = false) String search,
+                        @RequestParam(name = "searchColumn", required = false) String searchColumn) throws java.io.IOException {
 
-                java.util.List<Sales> data = salesService.getAllSalesForExport(startDate, endDate, empCode, search);
+                java.util.List<Sales> data = salesService.getAllSalesForExport(startDate, endDate, empCode, categories, search, searchColumn);
                 byte[] bytes = excelExportService.exportSalesToExcel(data);
 
                 String filename = "sales_" + java.time.LocalDate.now() + ".xlsx";

@@ -28,7 +28,7 @@ public interface TkdnRepository extends JpaRepository<Tkdn, Integer> {
                         "(:isTkdn IS NULL OR " +
                         "  (:isTkdn = true AND t.sertifikatTkd IS NOT NULL AND t.sertifikatTkd <> '') OR " +
                         "  (:isTkdn = false AND (t.sertifikatTkd IS NULL OR t.sertifikatTkd = ''))) " +
-                        "AND (:kategori IS NULL OR :kategori = '' OR LOWER(t.kategori) = LOWER(:kategori)) " +
+                        "AND (:categories IS NULL OR t.kategori IN :categories) " +
                         "AND (:search IS NULL OR :search = '' OR " +
                         "  LOWER(t.nama) LIKE LOWER(:search) OR " +
                         "  LOWER(t.noMerek) LIKE LOWER(:search) OR " +
@@ -37,7 +37,7 @@ public interface TkdnRepository extends JpaRepository<Tkdn, Integer> {
                                         "  (:isTkdn = true AND t.sertifikatTkd IS NOT NULL AND t.sertifikatTkd <> '') OR "
                                         +
                                         "  (:isTkdn = false AND (t.sertifikatTkd IS NULL OR t.sertifikatTkd = ''))) " +
-                                        "AND (:kategori IS NULL OR :kategori = '' OR LOWER(t.kategori) = LOWER(:kategori)) "
+                                        "AND (:categories IS NULL OR t.kategori IN :categories) "
                                         +
                                         "AND (:search IS NULL OR :search = '' OR " +
                                         "  LOWER(t.nama) LIKE LOWER(:search) OR " +
@@ -45,7 +45,7 @@ public interface TkdnRepository extends JpaRepository<Tkdn, Integer> {
                                         "  LOWER(t.kategori) LIKE LOWER(:search))")
         Page<Tkdn> findByFilters(
                         @Param("isTkdn") Boolean isTkdn,
-                        @Param("kategori") String kategori,
+                        @Param("categories") java.util.List<String> categories,
                         @Param("search") String search,
                         Pageable pageable);
 
@@ -53,7 +53,7 @@ public interface TkdnRepository extends JpaRepository<Tkdn, Integer> {
                         "(:isTkdn IS NULL OR " +
                         "  (:isTkdn = true AND t.sertifikatTkd IS NOT NULL AND t.sertifikatTkd <> '') OR " +
                         "  (:isTkdn = false AND (t.sertifikatTkd IS NULL OR t.sertifikatTkd = ''))) " +
-                        "AND (:kategori IS NULL OR :kategori = '' OR LOWER(t.kategori) = LOWER(:kategori)) " +
+                        "AND (:categories IS NULL OR t.kategori IN :categories) " +
                         "AND (:search IS NULL OR :search = '' OR " +
                         "  LOWER(t.nama) LIKE LOWER(:search) OR " +
                         "  LOWER(t.noMerek) LIKE LOWER(:search) OR " +
@@ -70,7 +70,7 @@ public interface TkdnRepository extends JpaRepository<Tkdn, Integer> {
                                         "  (:isTkdn = true AND t.sertifikatTkd IS NOT NULL AND t.sertifikatTkd <> '') OR "
                                         +
                                         "  (:isTkdn = false AND (t.sertifikatTkd IS NULL OR t.sertifikatTkd = ''))) " +
-                                        "AND (:kategori IS NULL OR :kategori = '' OR LOWER(t.kategori) = LOWER(:kategori)) "
+                                        "AND (:categories IS NULL OR t.kategori IN :categories) "
                                         +
                                         "AND (:search IS NULL OR :search = '' OR " +
                                         "  LOWER(t.nama) LIKE LOWER(:search) OR " +
@@ -86,7 +86,7 @@ public interface TkdnRepository extends JpaRepository<Tkdn, Integer> {
                                         "AND (:os IS NULL OR :os = '' OR LOWER(t.os) LIKE LOWER(:os))")
         Page<Tkdn> findByFiltersWithSpec(
                         @Param("isTkdn") Boolean isTkdn,
-                        @Param("kategori") String kategori,
+                        @Param("categories") java.util.List<String> categories,
                         @Param("search") String search,
                         @Param("processor") String processor,
                         @Param("ram") String ram,

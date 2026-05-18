@@ -47,7 +47,7 @@ public class StockService {
         private UserRepository userRepository;
 
         public Page<StockGroupedResponse> getGroupedStocks(int page, int size, String sortBy, String direction,
-                        String search, String kategori, String username) {
+                        String search, List<String> categories, String username) {
                 User user = userRepository.findByUsername(username)
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
                 Role role = user.getRole();
@@ -82,9 +82,9 @@ public class StockService {
                 if (actualSortBy.startsWith("p.") || actualSortBy.startsWith("SUM") || actualSortBy.equals("s.itemName")) {
                         // Need special query for joined/agg sorting
                         itemCodePage = stockRepository.findDistinctItemCodesSortedByPricelist(
-                                        search, kategori, actualSortBy, direction, pageable);
+                                        search, categories, actualSortBy, direction, pageable);
                 } else {
-                        itemCodePage = stockRepository.findDistinctItemCodes(search, kategori,
+                        itemCodePage = stockRepository.findDistinctItemCodes(search, categories,
                                         PageRequest.of(page, size,
                                                         Sort.by(sortDirection, actualSortBy.replace("s.", ""))));
                 }
@@ -208,8 +208,8 @@ public class StockService {
                         return res;
                 }).filter(Objects::nonNull).collect(Collectors.toList());
 
-                // Fetch all Pending Items (Only Approved ones)
-                List<MemoItem> allPendingItems = memoItemRepository.findByMemo_StatusAkhir(com.stok.anandam.store.core.postgres.model.enums.MemoStatus.DISETUJUI);
+                // Fetch all Pending Items (Only Approved ones) with JOIN FETCH optimization (Fix connection pool exhaustion)
+                List<MemoItem> allPendingItems = memoItemRepository.findByMemo_StatusAkhirWithMemoAndMarketing(com.stok.anandam.store.core.postgres.model.enums.MemoStatus.DISETUJUI);
                 
                 // Group all pending items by normalized name
                 Map<String, List<MemoItem>> pendingByName = allPendingItems.stream()

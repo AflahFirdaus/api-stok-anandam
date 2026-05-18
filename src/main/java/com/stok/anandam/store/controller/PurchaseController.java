@@ -10,6 +10,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping({"/api/v1/purchases", "/api/v1/purchase"})
 public class PurchaseController {
@@ -27,12 +29,14 @@ public class PurchaseController {
                         @RequestParam(name = "dir", defaultValue = "desc") String dir,
                         @RequestParam(name = "startDate", required = false) String startDate,
                         @RequestParam(name = "endDate", required = false) String endDate,
-                        @RequestParam(name = "search", required = false) String search) {
+                        @RequestParam(name = "categories", required = false) List<String> categories,
+                        @RequestParam(name = "search", required = false) String search,
+                        @RequestParam(name = "searchColumn", required = false) String searchColumn) {
 
                 PurchaseSummaryResponse<Purchase> data = purchaseService.getPurchases(
-                                page, size, sortBy, dir, startDate, endDate, search);
+                                page, size, sortBy, dir, startDate, endDate, categories, search, searchColumn);
                 if (data.getContent().isEmpty() && data.getTotalElements() > 0 && page > 0) {
-                        data = purchaseService.getPurchases(0, size, sortBy, dir, startDate, endDate, search);
+                        data = purchaseService.getPurchases(0, size, sortBy, dir, startDate, endDate, categories, search, searchColumn);
                         page = 0;
                 }
 
@@ -51,6 +55,16 @@ public class PurchaseController {
                                 .build());
         }
 
+        @GetMapping("/categories")
+        public ResponseEntity<WebResponse<java.util.List<String>>> getCategories() {
+                java.util.List<String> categories = purchaseService.getDeptCodes();
+                return ResponseEntity.ok(WebResponse.<java.util.List<String>>builder()
+                                .status(200)
+                                .message("Success fetch categories")
+                                .data(categories)
+                                .build());
+        }
+
         @Autowired
         private ExcelExportService excelExportService;
 
@@ -59,9 +73,11 @@ public class PurchaseController {
         public ResponseEntity<org.springframework.core.io.Resource> exportToExcel(
                         @RequestParam(name = "startDate", required = false) String startDate,
                         @RequestParam(name = "endDate", required = false) String endDate,
-                        @RequestParam(name = "search", required = false) String search) throws java.io.IOException {
+                        @RequestParam(name = "categories", required = false) List<String> categories,
+                        @RequestParam(name = "search", required = false) String search,
+                        @RequestParam(name = "searchColumn", required = false) String searchColumn) throws java.io.IOException {
 
-                java.util.List<Purchase> data = purchaseService.getAllPurchasesForExport(startDate, endDate, search);
+                java.util.List<Purchase> data = purchaseService.getAllPurchasesForExport(startDate, endDate, categories, search, searchColumn);
                 byte[] bytes = excelExportService.exportPurchaseToExcel(data);
 
                 String filename = "purchases_" + java.time.LocalDate.now() + ".xlsx";

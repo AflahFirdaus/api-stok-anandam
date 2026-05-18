@@ -271,10 +271,11 @@ public class MigrationService {
 
     private static final String SQL_SALES = """
                 SELECT
-                    MAX(d.doc_date) as doc_date,
+                    MAX(d.doc_date) AS doc_date,
                     d.doc_no,
-                    MAX(p.code) as code,
-                    MAX(d.par_name) as par_name,
+                    MAX(p.code) AS code,
+                    MAX(dep.code) AS dep_code,
+                    MAX(d.par_name) AS par_name,
                     t.ite_name,
                     SUM(
                         CASE
@@ -282,7 +283,7 @@ public class MigrationService {
                             ELSE t.qty_def
                         END
                     ) AS qty_def,
-                    MAX(t.price) as price,
+                    MAX(t.price) AS price,
                     SUM(
                         (
                             CASE
@@ -297,8 +298,14 @@ public class MigrationService {
                 LEFT JOIN dbtsalestrans t ON d.id = t.doc_id
                 LEFT JOIN dbmemployee e ON d.emp_id = e.id
                 LEFT JOIN dbmpartner p ON d.par_id = p.id
-                GROUP BY d.doc_no, t.ite_name
-                ORDER BY doc_date DESC, MAX(d.id) DESC
+                LEFT JOIN dbmitem i ON t.ite_id = i.id
+                LEFT JOIN dbmdepartment dep ON i.dep_id = dep.id
+                GROUP BY 
+                    d.doc_no, 
+                    t.ite_name
+                ORDER BY 
+                    doc_date DESC, 
+                    MAX(d.id) DESC
             """;
 
     private String getSqlSales() {
@@ -340,6 +347,7 @@ public class MigrationService {
                         s.setDocNo(rs.getString("doc_no"));
                         s.setCode(rs.getString("code"));
                         s.setParName(rs.getString("par_name"));
+                        s.setDepCode(rs.getString("dep_code"));
                         s.setItemName(rs.getString("ite_name"));
                         s.setQty(rs.getInt("qty_def"));
                         s.setPrice(rs.getBigDecimal("price"));
@@ -391,12 +399,13 @@ public class MigrationService {
     @Transactional
     public void saveSalesBatch(List<Sales> salesList) {
         String sql = """
-                    INSERT INTO sales (id, doc_date, doc_no, code, par_name, item_name, qty, price, grand_total, emp_code, emp_name, last_synced)
-                    VALUES (nextval('sales_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO sales (id, doc_date, doc_no, code, par_name, dep_code, item_name, qty, price, grand_total, emp_code, emp_name, last_synced)
+                    VALUES (nextval('sales_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (doc_no, item_name) DO UPDATE SET
                         doc_date = EXCLUDED.doc_date,
                         code = EXCLUDED.code,
                         par_name = EXCLUDED.par_name,
+                        dep_code = EXCLUDED.dep_code,
                         qty = EXCLUDED.qty,
                         price = EXCLUDED.price,
                         grand_total = EXCLUDED.grand_total,
@@ -414,13 +423,14 @@ public class MigrationService {
                     ps.setString(2, s.getDocNo());
                     ps.setString(3, s.getCode());
                     ps.setString(4, s.getParName());
-                    ps.setString(5, s.getItemName());
-                    ps.setInt(6, s.getQty());
-                    ps.setBigDecimal(7, s.getPrice());
-                    ps.setBigDecimal(8, s.getGrandTotal());
-                    ps.setString(9, s.getEmpCode());
-                    ps.setString(10, s.getEmpName());
-                    ps.setTimestamp(11, java.sql.Timestamp.valueOf(s.getLastSynced()));
+                    ps.setString(5, s.getDepCode());
+                    ps.setString(6, s.getItemName());
+                    ps.setInt(7, s.getQty());
+                    ps.setBigDecimal(8, s.getPrice());
+                    ps.setBigDecimal(9, s.getGrandTotal());
+                    ps.setString(10, s.getEmpCode());
+                    ps.setString(11, s.getEmpName());
+                    ps.setTimestamp(12, java.sql.Timestamp.valueOf(s.getLastSynced()));
                 }
 
                 @Override
@@ -937,17 +947,19 @@ public class MigrationService {
         try {
             // 2. Query Gabungan (Masuk & Keluar) dari Legacy MySQL
             String sqlSource = """
-                        SELECT p.doc_date AS tanggal, p.doc_no AS doc_id, p.par_name AS user_name, m.name AS item_name, sn.sn, 'MASUK' as type
+                        SELECT MAX(p.doc_date) AS tanggal, p.doc_no AS doc_id, MAX(p.par_name) AS user_name, MAX(m.name) AS item_name, sn.sn, 'MASUK' as type
                         FROM dbtitemsn sn
                         LEFT JOIN dbmitem m ON sn.ite_id = m.id
                         LEFT JOIN dbtpurchasedoc p ON sn.doc_id = p.id AND sn.doc_type = p.doc_type
                         WHERE sn.doc_type IN (42,43,44) AND sn.sn IS NOT NULL AND TRIM(sn.sn) <> ''
+                        GROUP BY p.doc_no, sn.sn
                         UNION ALL
-                        SELECT s.doc_date AS tanggal, s.doc_no AS doc_id, s.par_name AS user_name, m.name AS item_name, sn.sn, 'KELUAR' as type
+                        SELECT MAX(s.doc_date) AS tanggal, s.doc_no AS doc_id, MAX(s.par_name) AS user_name, MAX(m.name) AS item_name, sn.sn, 'KELUAR' as type
                         FROM dbtitemsn sn
                         LEFT JOIN dbmitem m ON sn.ite_id = m.id
                         LEFT JOIN dbtsalesdoc s ON sn.doc_id = s.id AND sn.doc_type = s.doc_type
                         WHERE sn.doc_type IN (32,33) AND sn.sn IS NOT NULL AND TRIM(sn.sn) <> ''
+                        GROUP BY s.doc_no, sn.sn
                     """;
 
             final List<Object[]> buffer = new ArrayList<>();

@@ -37,18 +37,18 @@ public class StockController {
                         @RequestParam(name = "sortBy", defaultValue = "itemName") String sortBy,
                         @RequestParam(name = "direction", defaultValue = "asc") String direction,
                         @RequestParam(name = "search", required = false) String search,
-                        @RequestParam(name = "kategori", required = false) String kategori,
+                        @RequestParam(name = "categories", required = false) List<String> categories,
                         @RequestParam(name = "warehouse", required = false) String warehouse,
                         java.security.Principal principal) {
                 String safeSortBy = ALLOWED_SORT_FIELDS.contains(sortBy) ? sortBy : "itemName";
 
                 Page<StockGroupedResponse> stocks = stockService.getGroupedStocks(page, size, safeSortBy, direction,
-                                search, kategori, principal.getName());
+                                search, categories, principal.getName());
                 // Setelah search/filter, jika halaman yang diminta melebihi total halaman,
                 // kembalikan halaman 0 agar list tidak kosong
                 int totalPages = stocks.getTotalPages();
                 if (totalPages > 0 && page >= totalPages) {
-                        stocks = stockService.getGroupedStocks(0, size, safeSortBy, direction, search, kategori, principal.getName());
+                        stocks = stockService.getGroupedStocks(0, size, safeSortBy, direction, search, categories, principal.getName());
                         page = 0;
                 }
 

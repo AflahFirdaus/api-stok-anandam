@@ -16,7 +16,16 @@ public interface MemoItemRepository extends JpaRepository<MemoItem, Long> {
     
     List<MemoItem> findByMemoId(UUID memoId);
 
+    List<MemoItem> findByMemoIdIn(List<UUID> memoIds);
+
     List<MemoItem> findByMemo_StatusAkhir(com.stok.anandam.store.core.postgres.model.enums.MemoStatus status);
+
+    @Query("SELECT mi FROM MemoItem mi " +
+           "LEFT JOIN FETCH mi.memo m " +
+           "LEFT JOIN FETCH m.marketing mkt " +
+           "WHERE m.statusAkhir = :status " +
+           "AND mi.deletedAt IS NULL AND m.deletedAt IS NULL")
+    List<MemoItem> findByMemo_StatusAkhirWithMemoAndMarketing(@Param("status") com.stok.anandam.store.core.postgres.model.enums.MemoStatus status);
 
     @Query("SELECT mi FROM MemoItem mi JOIN mi.memo m WHERE m.statusAkhir NOT IN :terminalStatuses AND mi.deletedAt IS NULL AND m.deletedAt IS NULL")
     List<MemoItem> findPendingItemsExcluding(@Param("terminalStatuses") List<com.stok.anandam.store.core.postgres.model.enums.MemoStatus> terminalStatuses);

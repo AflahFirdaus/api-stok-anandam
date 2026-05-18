@@ -159,7 +159,7 @@ public class MemoService {
                     .collect(Collectors.toList());
         }
 
-        List<MemoDetailResponse> responses = memos.stream().map(this::mapToDetailResponse).collect(Collectors.toList());
+        List<MemoDetailResponse> responses = mapToDetailResponses(memos);
 
         return WebResponse.<List<MemoDetailResponse>>builder()
                 .status(200)
@@ -172,28 +172,26 @@ public class MemoService {
     public WebResponse<java.util.Map<String, Long>> getMemoCounts(String username) {
         User aktor = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
-        
-        // This is a naive implementation: fetching all and counting.
-        // For production with many records, a custom GROUP BY query in repository is better.
-        // But let's follow the existing pattern for now.
-        List<Memo> allMemos = memoRepository.findAll();
-        
+
         String roleName = aktor.getRole() != null ? aktor.getRole().name() : "";
         String userEmpCode = aktor.getEmployeeCode();
-        
-        // Filter by role like in getListMemoByStatus
+        List<Object[]> rawCounts = new java.util.ArrayList<>();
+
         if (roleName.startsWith("MARKETING_") || "MARKETING".equals(roleName)) {
-            // SPV roles see all memos — no filter applied
             if (!roleName.startsWith("SPV_")) {
-             allMemos = allMemos.stream()
-                    .filter(m -> {
-                        boolean isOwner = m.getMarketingEmpCode() != null && m.getMarketingEmpCode().equals(userEmpCode);
-                        boolean isCreator = m.getCreator() != null && m.getCreator().getId().equals(aktor.getId());
-                        boolean isSameRole = m.getCreator() != null && m.getCreator().getRole() == aktor.getRole();
-                        if (m.getStatusAkhir() == MemoStatus.DRAFT) return isCreator || isSameRole;
-                        return isOwner || isCreator || isSameRole;
-                    })
-                    .collect(Collectors.toList());
+                List<UUID> assignedMemoIds = penjadwalanRepo.findByPersonelIdAndDeletedAtIsNull(aktor.getId())
+                        .stream()
+                        .filter(t -> t.getMemo() != null)
+                        .map(t -> t.getMemo().getId())
+                        .collect(Collectors.toList());
+
+                if (assignedMemoIds.isEmpty()) {
+                    rawCounts = memoRepository.countStatusesForMarketingWithoutAssigned(userEmpCode, aktor.getId(), aktor.getRole());
+                } else {
+                    rawCounts = memoRepository.countStatusesForMarketingWithAssigned(userEmpCode, aktor.getId(), aktor.getRole(), assignedMemoIds);
+                }
+            } else {
+                rawCounts = memoRepository.countAllStatuses();
             }
         } else if ("DELIVERY".equals(roleName)) {
             List<UUID> assignedMemoIds = penjadwalanRepo.findByPersonelIdAndDeletedAtIsNull(aktor.getId())
@@ -202,39 +200,50 @@ public class MemoService {
                     .map(t -> t.getMemo().getId())
                     .collect(Collectors.toList());
 
-            allMemos = allMemos.stream()
-                    .filter(m -> assignedMemoIds.contains(m.getId()))
-                    .collect(Collectors.toList());
+            if (!assignedMemoIds.isEmpty()) {
+                rawCounts = memoRepository.countStatusesForDelivery(assignedMemoIds);
+            }
         } else if ("TEKNISI".equals(roleName) || "SPV_TEKNISI".equals(roleName)) {
-            // Technicians see all memos that need technician processing as a shared pool
-            allMemos = allMemos.stream()
-                    .filter(m -> m.getStatusAkhir() == MemoStatus.MENUNGGU_TEKNISI || 
-                                 m.getStatusAkhir() == MemoStatus.PROSES_TEKNISI)
-                    .collect(Collectors.toList());
+            rawCounts = memoRepository.countStatusesByStatusList(List.of(
+                    MemoStatus.MENUNGGU_TEKNISI,
+                    MemoStatus.PROSES_TEKNISI
+            ));
         } else if ("GUDANG".equals(roleName) || "SPV_GUDANG".equals(roleName)) {
-            allMemos = allMemos.stream()
-                    .filter(m -> 
-                        m.getStatusAkhir() == MemoStatus.PENDING ||
-                        m.getStatusAkhir() == MemoStatus.MENUNGGU_PERSETUJUAN ||
-                        m.getStatusAkhir() == MemoStatus.DISETUJUI ||
-                        m.getStatusAkhir() == MemoStatus.DITOLAK ||
-                        m.getStatusAkhir() == MemoStatus.MENUNGGU_GUDANG ||
-                        m.getStatusAkhir() == MemoStatus.MENUNGGU_NOTA ||
-                        m.getStatusAkhir() == MemoStatus.KENDALA_BARANG ||
-                        m.getStatusAkhir() == MemoStatus.MENUNGGU_TEKNISI ||
-                        m.getStatusAkhir() == MemoStatus.PROSES_TEKNISI ||
-                        m.getStatusAkhir() == MemoStatus.BUFFER_ZONE ||
-                        m.getStatusAkhir() == MemoStatus.MENUNGGU_PENGIRIMAN ||
-                        m.getStatusAkhir() == MemoStatus.DALAM_PENGIRIMAN ||
-                        m.getStatusAkhir() == MemoStatus.TERKIRIM_SEBAGIAN ||
-                        m.getStatusAkhir() == MemoStatus.SELESAI
-                    )
-                    .collect(Collectors.toList());
+            rawCounts = memoRepository.countStatusesByStatusList(List.of(
+                    MemoStatus.PENDING,
+                    MemoStatus.MENUNGGU_PERSETUJUAN,
+                    MemoStatus.DISETUJUI,
+                    MemoStatus.DITOLAK,
+                    MemoStatus.MENUNGGU_GUDANG,
+                    MemoStatus.MENUNGGU_NOTA,
+                    MemoStatus.KENDALA_BARANG,
+                    MemoStatus.MENUNGGU_TEKNISI,
+                    MemoStatus.PROSES_TEKNISI,
+                    MemoStatus.BUFFER_ZONE,
+                    MemoStatus.MENUNGGU_PENGIRIMAN,
+                    MemoStatus.DALAM_PENGIRIMAN,
+                    MemoStatus.TERKIRIM_SEBAGIAN,
+                    MemoStatus.SELESAI
+            ));
+        } else if ("NOTA".equals(roleName)) {
+            rawCounts = memoRepository.countStatusesByStatusList(List.of(MemoStatus.MENUNGGU_NOTA));
+        } else {
+            rawCounts = memoRepository.countAllStatuses();
         }
 
-        java.util.Map<String, Long> counts = allMemos.stream()
-                .collect(Collectors.groupingBy(m -> m.getStatusAkhir().name(), Collectors.counting()));
-        
+        java.util.Map<String, Long> counts = new java.util.HashMap<>();
+        for (MemoStatus status : MemoStatus.values()) {
+            counts.put(status.name(), 0L);
+        }
+
+        for (Object[] res : rawCounts) {
+            MemoStatus status = (MemoStatus) res[0];
+            Long count = (Long) res[1];
+            if (status != null) {
+                counts.put(status.name(), count);
+            }
+        }
+
         return WebResponse.<java.util.Map<String, Long>>builder()
                 .status(200)
                 .message("Success Fetch Status Counts")
@@ -275,7 +284,171 @@ public class MemoService {
                 .build();
     }
 
-    private MemoDetailResponse mapToDetailResponse(Memo memo) {
+        private List<MemoDetailResponse> mapToDetailResponses(List<Memo> memos) {
+        if (memos.isEmpty()) {
+            return new java.util.ArrayList<>();
+        }
+
+        List<UUID> memoIds = memos.stream().map(Memo::getId).collect(Collectors.toList());
+
+        // 1. Bulk fetch all items in exactly 1 query
+        List<MemoItem> allItems = memoItemRepository.findByMemoIdIn(memoIds);
+        java.util.Map<UUID, List<MemoItem>> itemsByMemoId = allItems.stream()
+                .collect(Collectors.groupingBy(item -> item.getMemo().getId()));
+
+        // 2. Bulk fetch all logs in exactly 1 query
+        List<MemoLog> allLogs = memoLogRepository.findByMemoIdInOrderByCreatedAtDesc(memoIds);
+        java.util.Map<UUID, List<MemoLog>> logsByMemoId = allLogs.stream()
+                .collect(Collectors.groupingBy(MemoLog::getMemoId));
+
+        // 3. Bulk fetch all penjadwalans in exactly 1 query
+        List<PenjadwalanKonfirmasi> allPenjadwalans = penjadwalanRepo.findByMemo_IdInAndDeletedAtIsNull(memoIds);
+        java.util.Map<UUID, List<PenjadwalanKonfirmasi>> penjadwalansByMemoId = allPenjadwalans.stream()
+                .collect(Collectors.groupingBy(p -> p.getMemo().getId()));
+
+        // Gather all personel IDs that need to be resolved to avoid N+1 query on UserRepository
+        List<Long> personelIds = allPenjadwalans.stream()
+                .map(PenjadwalanKonfirmasi::getPersonelId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+
+        java.util.Map<Long, User> personelMap = new java.util.HashMap<>();
+        if (!personelIds.isEmpty()) {
+            List<User> personels = userRepository.findAllById(personelIds);
+            for (User p : personels) {
+                personelMap.put(p.getId(), p);
+            }
+        }
+
+        List<MemoDetailResponse> responses = new java.util.ArrayList<>();
+
+        for (Memo memo : memos) {
+            List<MemoItem> items = itemsByMemoId.getOrDefault(memo.getId(), new java.util.ArrayList<>());
+            List<MemoItemResponse> itemResponses = items.stream()
+                    .map(item -> MemoItemResponse.builder()
+                            .id(item.getId())
+                            .namaBarang(item.getNamaBarang())
+                            .qty(item.getQty() != null ? item.getQty() : 0)
+                            .qtyShipped(item.getQtyShipped() != null ? item.getQtyShipped() : 0)
+                            .qtyRemaining((item.getQty() != null ? item.getQty() : 0) - (item.getQtyShipped() != null ? item.getQtyShipped() : 0))
+                            .hargaSatuan(item.getHargaSatuan())
+                            .subtotal(item.getSubtotal())
+                            .catatanGudang(item.getCatatanGudang())
+                            .status(item.getStatus())
+                            .build()
+                    ).collect(Collectors.toList());
+
+            List<MemoLog> logs = logsByMemoId.getOrDefault(memo.getId(), new java.util.ArrayList<>());
+            List<MemoLogResponse> logResponses = logs.stream()
+                    .map(log -> MemoLogResponse.builder()
+                            .status(log.getStatus())
+                            .aktorId(log.getAktorId())
+                            .keterangan(log.getKeterangan())
+                            .createdAt(log.getCreatedAt())
+                            .build()
+                    ).collect(Collectors.toList());
+
+            List<PenjadwalanKonfirmasi> penjadwalans = penjadwalansByMemoId.getOrDefault(memo.getId(), new java.util.ArrayList<>());
+            List<PenjadwalanResponse> penjadwalanResponses = penjadwalans.stream()
+                    .map(p -> {
+                        PenjadwalanResponse.PenjadwalanResponseBuilder pBuilder = PenjadwalanResponse.builder()
+                                .id(p.getId())
+                                .memoId(p.getMemo().getId())
+                                .nomorMemo(p.getMemo().getNomorMemo())
+                                .tipeTugas(p.getTipeTugas())
+                                .statusJadwal(p.getStatusJadwal())
+                                .alamatLengkap(p.getAlamatLengkap())
+                                .alamatMaps(p.getAlamatMaps())
+                                .idKodepos(p.getIdKodepos())
+                                .estimasiWaktu(p.getEstimasiWaktu())
+                                .catatan(p.getCatatan())
+                                .tanggalJadwal(p.getTanggalJadwal() != null ? p.getTanggalJadwal().format(DATE_FORMATTER) : null)
+                                .personelId(p.getPersonelId())
+                                .latitude(p.getLatitude())
+                                .longitude(p.getLongitude())
+                                .kecamatan(p.getKecamatan())
+                                .desaKelurahan(p.getDesaKelurahan())
+                                .kabupatenKota(p.getKabupatenKota());
+
+                        if (p.getKodepos() != null) {
+                            pBuilder.kecamatan(p.getKodepos().getKecamatan())
+                                   .desaKelurahan(p.getKodepos().getDesaKelurahan())
+                                   .kabupatenKota(p.getKodepos().getKabupatenKota())
+                                   .kodePos(p.getKodepos().getKodePos());
+                        }
+
+                        if (p.getPersonelId() != null) {
+                            User u = personelMap.get(p.getPersonelId());
+                            if (u != null) {
+                                pBuilder.personelName(u.getNama())
+                                       .personelRole(u.getRole() != null ? u.getRole().name() : "N/A");
+                            }
+                        }
+
+                        return pBuilder.build();
+                    }).collect(Collectors.toList());
+
+            MemoDetailResponse.MemoDetailResponseBuilder builder = MemoDetailResponse.builder()
+                    .id(memo.getId())
+                    .nomorMemo(memo.getNomorMemo())
+                    .tanggalMemo(memo.getTanggalMemo())
+                    .customerId(memo.getCustomer() != null ? memo.getCustomer().getId() : null)
+                    .customerName(memo.getCustomer() != null ? memo.getCustomer().getNamaPelanggan() : "Tanpa Nama")
+                    .customerPhone(memo.getCustomer() != null ? memo.getCustomer().getNoHp() : "-")
+                    .marketingId(memo.getMarketing() != null ? memo.getMarketing().getId() : null)
+                    .marketingName(memo.getMarketingName() != null ? memo.getMarketingName() : (memo.getMarketing() != null ? memo.getMarketing().getNama() : "System"))
+                    .marketingEmpCode(memo.getMarketingEmpCode())
+                    .marketingUsername(memo.getMarketing() != null ? memo.getMarketing().getUsername() : null)
+                    .creatorName(memo.getCreator() != null ? memo.getCreator().getNama() : "System")
+                    .statusAkhir(memo.getStatusAkhir())
+                    .totalHarga(memo.getTotalHarga() != null ? memo.getTotalHarga() : java.math.BigDecimal.ZERO)
+                    .deskripsi(memo.getDeskripsi())
+                    .nomorJl(memo.getNomorJl())
+                    .memoType(memo.getMemoType())
+                    .orderIdMarketplace(memo.getOrderIdMarketplace())
+                    .resi(memo.getResi())
+                    .ekspedisi(memo.getEkspedisi())
+                    .subEkspedisi(memo.getSubEkspedisi())
+                    .platform(memo.getPlatform())
+                    .tempo(memo.getTempo())
+                    .badanUsaha(memo.getBadanUsaha())
+                    .isTeknisRequired(java.lang.Boolean.TRUE.equals(memo.getIsTeknisRequired()))
+                    .isDeliveryRequired(java.lang.Boolean.TRUE.equals(memo.getIsDeliveryRequired()))
+                    .opsiPengiriman(memo.getOpsiPengiriman())
+                    .metodePembayaran(memo.getMetodePembayaran())
+                    .buktiFoto(memo.getBuktiFoto())
+                    .buktiFotoUrl(memo.getBuktiFoto() != null ? "/uploads/memos/" + memo.getBuktiFoto() : null)
+                    .kodePos(memo.getKodePos() != null ? memo.getKodePos() : 
+                        (penjadwalanResponses.stream()
+                            .filter(p -> p.getKodePos() != null)
+                            .map(PenjadwalanResponse::getKodePos)
+                            .findFirst()
+                            .orElse(null)))
+                    .items(itemResponses)
+                    .logs(logResponses)
+                    .penjadwalanHistory(penjadwalanResponses);
+
+            if (!penjadwalanResponses.isEmpty()) {
+                PenjadwalanResponse lastJadwal = penjadwalanResponses.get(penjadwalanResponses.size() - 1);
+                builder.desaKelurahan(lastJadwal.getDesaKelurahan())
+                       .kecamatan(lastJadwal.getKecamatan())
+                       .kabupatenKota(lastJadwal.getKabupatenKota());
+            } else if (memo.getKodePos() != null && !memo.getKodePos().isBlank()) {
+                kodeposRepository.findFirstByKodePos(memo.getKodePos()).ifPresent(kp -> {
+                    builder.desaKelurahan(kp.getDesaKelurahan())
+                           .kecamatan(kp.getKecamatan())
+                           .kabupatenKota(kp.getKabupatenKota());
+                });
+            }
+
+            responses.add(builder.build());
+        }
+
+        return responses;
+    }
+
+private MemoDetailResponse mapToDetailResponse(Memo memo) {
         List<MemoItemResponse> itemResponses = memoItemRepository.findByMemoId(memo.getId())
                 .stream()
                 .map(item -> MemoItemResponse.builder()
@@ -468,17 +641,22 @@ public class MemoService {
 
         Customer customer;
         if (request.getNoHpCustomer() != null && !request.getNoHpCustomer().isBlank()) {
-            customer = customerRepository.findByNoHpAndDeletedAtIsNull(request.getNoHpCustomer())
+            List<Customer> existingCustomers = customerRepository.findByNoHpAndDeletedAtIsNull(request.getNoHpCustomer());
+            String requestedName = request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru";
+            
+            customer = existingCustomers.stream()
+                    .filter(c -> c.getNamaPelanggan().equalsIgnoreCase(requestedName))
+                    .findFirst()
                     .orElseGet(() -> {
                         Customer newCust = Customer.builder()
-                                .namaPelanggan(request.getNamaCustomer() != null ? request.getNamaCustomer() : "Pelanggan Baru")
+                                .namaPelanggan(requestedName)
                                 .noHp(request.getNoHpCustomer())
                                 .build();
                         return customerRepository.save(newCust);
                     });
         } else {
             customer = Customer.builder()
-                    .namaPelanggan(request.getNamaCustomer() != null ? request.getNamaCustomer() : "Pelanggan Baru")
+                    .namaPelanggan(request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru")
                     .build();
             customer = customerRepository.save(customer);
         }
@@ -563,24 +741,22 @@ public class MemoService {
 
         Customer customer;
         if (request.getNoHpCustomer() != null && !request.getNoHpCustomer().isBlank()) {
-            customer = customerRepository.findByNoHpAndDeletedAtIsNull(request.getNoHpCustomer())
-                    .map(existing -> {
-                        if (request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank()) {
-                            existing.setNamaPelanggan(request.getNamaCustomer());
-                            return customerRepository.save(existing);
-                        }
-                        return existing;
-                    })
+            List<Customer> existingCustomers = customerRepository.findByNoHpAndDeletedAtIsNull(request.getNoHpCustomer());
+            String requestedName = request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru";
+            
+            customer = existingCustomers.stream()
+                    .filter(c -> c.getNamaPelanggan().equalsIgnoreCase(requestedName))
+                    .findFirst()
                     .orElseGet(() -> {
                         Customer newCust = Customer.builder()
-                                .namaPelanggan(request.getNamaCustomer() != null ? request.getNamaCustomer() : "Pelanggan Baru")
+                                .namaPelanggan(requestedName)
                                 .noHp(request.getNoHpCustomer())
                                 .build();
                         return customerRepository.save(newCust);
                     });
         } else {
             customer = Customer.builder()
-                    .namaPelanggan(request.getNamaCustomer() != null ? request.getNamaCustomer() : "Pelanggan Baru")
+                    .namaPelanggan(request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru")
                     .build();
             customer = customerRepository.save(customer);
         }
@@ -865,17 +1041,22 @@ public class MemoService {
 
         Customer customer;
         if (request.getNoHpCustomer() != null && !request.getNoHpCustomer().isBlank()) {
-            customer = customerRepository.findByNoHpAndDeletedAtIsNull(request.getNoHpCustomer())
+            List<Customer> existingCustomers = customerRepository.findByNoHpAndDeletedAtIsNull(request.getNoHpCustomer());
+            String requestedName = request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru";
+            
+            customer = existingCustomers.stream()
+                    .filter(c -> c.getNamaPelanggan().equalsIgnoreCase(requestedName))
+                    .findFirst()
                     .orElseGet(() -> {
                         Customer newCust = Customer.builder()
-                                .namaPelanggan(request.getNamaCustomer() != null ? request.getNamaCustomer() : "Pelanggan Baru")
+                                .namaPelanggan(requestedName)
                                 .noHp(request.getNoHpCustomer())
                                 .build();
                         return customerRepository.save(newCust);
                     });
         } else {
             customer = Customer.builder()
-                    .namaPelanggan(request.getNamaCustomer() != null ? request.getNamaCustomer() : "Pelanggan Baru")
+                    .namaPelanggan(request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru")
                     .build();
             customer = customerRepository.save(customer);
         }

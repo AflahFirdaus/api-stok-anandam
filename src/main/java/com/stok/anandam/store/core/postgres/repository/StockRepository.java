@@ -40,12 +40,12 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
         @Query("SELECT s FROM Stock s WHERE " +
                         "(:search IS NULL OR :search = '' OR LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.itemCode) LIKE LOWER(CONCAT('%', :search, '%'))) AND "
                         +
-                        "(:kategori IS NULL OR :kategori = '' OR LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) = LOWER(TRIM(:kategori))) AND "
+                        "(:categories IS NULL OR s.kategoriItemcode IN :categories) AND "
                         +
                         "(:warehouse IS NULL OR :warehouse = '' OR LOWER(COALESCE(s.warehouse, '')) LIKE LOWER(CONCAT('%', :warehouse, '%'))) AND "
                         +
                         "s.finalStok >= 1")
-        Page<Stock> findByFilters(@Param("search") String search, @Param("kategori") String kategori,
+        Page<Stock> findByFilters(@Param("search") String search, @Param("categories") List<String> categories,
                         @Param("warehouse") String warehouse, Pageable pageable);
 
         @Query(value = "SELECT s.itemCode FROM Stock s WHERE " +
@@ -55,10 +55,8 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                         "LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
                         "LOWER(TRIM(COALESCE(s.kategoriNama, ''))) LIKE LOWER(CONCAT('%', :search, '%'))) AND "
                         +
-                        "(:kategori IS NULL OR :kategori = '' OR " +
-                        "LOWER(TRIM(s.kategoriItemcode)) LIKE LOWER(CONCAT('%', :kategori, '%')) OR " +
-                        "LOWER(TRIM(s.kategoriNama)) LIKE LOWER(CONCAT('%', :kategori, '%')) OR " +
-                        "(LOWER(TRIM(:kategori)) = 'lcd' AND (LOWER(TRIM(s.itemCode)) LIKE 'lcd%' OR LOWER(TRIM(s.kategoriItemcode)) LIKE '%mon%' OR LOWER(TRIM(s.kategoriNama)) LIKE '%monitor%'))) AND "
+                        "(:categories IS NULL OR s.kategoriItemcode IN :categories OR s.kategoriNama IN :categories OR " +
+                        "('LCD' IN :categories AND (LOWER(TRIM(s.itemCode)) LIKE 'lcd%' OR LOWER(TRIM(s.kategoriItemcode)) LIKE '%mon%' OR LOWER(TRIM(s.kategoriNama)) LIKE '%monitor%'))) AND "
                         +
                         "s.finalStok >= 1 " +
                         "GROUP BY s.itemCode", countQuery = "SELECT count(DISTINCT s.itemCode) FROM Stock s WHERE " +
@@ -68,13 +66,11 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                                         "LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
                                         "LOWER(TRIM(COALESCE(s.kategoriNama, ''))) LIKE LOWER(CONCAT('%', :search, '%'))) AND "
                                         +
-                                        "(:kategori IS NULL OR :kategori = '' OR " +
-                                        "LOWER(TRIM(s.kategoriItemcode)) LIKE LOWER(CONCAT('%', :kategori, '%')) OR " +
-                                        "LOWER(TRIM(s.kategoriNama)) LIKE LOWER(CONCAT('%', :kategori, '%')) OR " +
-                                        "(LOWER(TRIM(:kategori)) = 'lcd' AND (LOWER(TRIM(s.itemCode)) LIKE 'lcd%' OR LOWER(TRIM(s.kategoriItemcode)) LIKE '%mon%' OR LOWER(TRIM(s.kategoriNama)) LIKE '%monitor%'))) AND "
+                                        "(:categories IS NULL OR s.kategoriItemcode IN :categories OR s.kategoriNama IN :categories OR " +
+                                        "('LCD' IN :categories AND (LOWER(TRIM(s.itemCode)) LIKE 'lcd%' OR LOWER(TRIM(s.kategoriItemcode)) LIKE '%mon%' OR LOWER(TRIM(s.kategoriNama)) LIKE '%monitor%'))) AND "
                                         +
                                         "s.finalStok >= 1")
-        Page<String> findDistinctItemCodes(@Param("search") String search, @Param("kategori") String kategori,
+        Page<String> findDistinctItemCodes(@Param("search") String search, @Param("categories") List<String> categories,
                         Pageable pageable);
 
         /** Fetch unique item codes with joined sorting. */
@@ -85,10 +81,8 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                         "LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
                         "LOWER(TRIM(COALESCE(s.kategoriNama, ''))) LIKE LOWER(CONCAT('%', :search, '%'))) AND "
                         +
-                        "(:kategori IS NULL OR :kategori = '' OR " +
-                        "LOWER(TRIM(s.kategoriItemcode)) LIKE LOWER(CONCAT('%', :kategori, '%')) OR " +
-                        "LOWER(TRIM(s.kategoriNama)) LIKE LOWER(CONCAT('%', :kategori, '%')) OR " +
-                        "(LOWER(TRIM(:kategori)) = 'lcd' AND (LOWER(TRIM(s.itemCode)) LIKE 'lcd%' OR LOWER(TRIM(s.kategoriItemcode)) LIKE '%mon%' OR LOWER(TRIM(s.kategoriNama)) LIKE '%monitor%'))) AND "
+                        "(:categories IS NULL OR s.kategoriItemcode IN :categories OR s.kategoriNama IN :categories OR " +
+                        "('LCD' IN :categories AND (LOWER(TRIM(s.itemCode)) LIKE 'lcd%' OR LOWER(TRIM(s.kategoriItemcode)) LIKE '%mon%' OR LOWER(TRIM(s.kategoriNama)) LIKE '%monitor%'))) AND "
                         +
                         "s.finalStok >= 1 " +
                         "GROUP BY s.itemCode, p.modal, p.finalPricelist, p.spesifikasi " +
@@ -113,14 +107,12 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                                         "LOWER(TRIM(COALESCE(s.kategoriItemcode, ''))) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
                                         "LOWER(TRIM(COALESCE(s.kategoriNama, ''))) LIKE LOWER(CONCAT('%', :search, '%'))) AND "
                                         +
-                                        "(:kategori IS NULL OR :kategori = '' OR " +
-                                        "LOWER(TRIM(s.kategoriItemcode)) LIKE LOWER(CONCAT('%', :kategori, '%')) OR " +
-                                        "LOWER(TRIM(s.kategoriNama)) LIKE LOWER(CONCAT('%', :kategori, '%')) OR " +
-                                        "(LOWER(TRIM(:kategori)) = 'lcd' AND (LOWER(TRIM(s.itemCode)) LIKE 'lcd%' OR LOWER(TRIM(s.kategoriItemcode)) LIKE '%mon%' OR LOWER(TRIM(s.kategoriNama)) LIKE '%monitor%'))) AND "
+                                        "(:categories IS NULL OR s.kategoriItemcode IN :categories OR s.kategoriNama IN :categories OR " +
+                                        "('LCD' IN :categories AND (LOWER(TRIM(s.itemCode)) LIKE 'lcd%' OR LOWER(TRIM(s.kategoriItemcode)) LIKE '%mon%' OR LOWER(TRIM(s.kategoriNama)) LIKE '%monitor%'))) AND "
                                         +
                                         "s.finalStok >= 1")
         Page<String> findDistinctItemCodesSortedByPricelist(@Param("search") String search,
-                        @Param("kategori") String kategori,
+                        @Param("categories") List<String> categories,
                         @Param("sortBy") String sortBy,
                         @Param("direction") String direction,
                         Pageable pageable);

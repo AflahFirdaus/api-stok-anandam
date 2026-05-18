@@ -9,5 +9,7 @@ public interface MemoLogRepository extends JpaRepository<MemoLog, Long> {
 
     // Mengambil riwayat log urut dari yang terbaru
     java.util.List<com.stok.anandam.store.core.postgres.model.MemoLog> findByMemoIdOrderByCreatedAtDesc(java.util.UUID memoId);
+
+    java.util.List<com.stok.anandam.store.core.postgres.model.MemoLog> findByMemoIdInOrderByCreatedAtDesc(java.util.List<java.util.UUID> memoIds);
     
 }

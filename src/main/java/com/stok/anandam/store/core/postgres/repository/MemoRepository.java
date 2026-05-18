@@ -37,4 +37,35 @@ public interface MemoRepository extends JpaRepository<Memo, UUID> {
     boolean existsByOrderIdMarketplace(String orderIdMarketplace);
 
     boolean existsByOrderIdMarketplaceAndIdNot(String orderIdMarketplace, UUID id);
+
+    @Query("SELECT m.statusAkhir, COUNT(m.id) FROM Memo m GROUP BY m.statusAkhir")
+    List<Object[]> countAllStatuses();
+
+    @Query("SELECT m.statusAkhir, COUNT(m.id) FROM Memo m WHERE " +
+           "m.marketingEmpCode = :empCode OR " +
+           "m.creator.id = :userId OR " +
+           "m.creator.role = :role OR " +
+           "m.id IN :assignedMemoIds " +
+           "GROUP BY m.statusAkhir")
+    List<Object[]> countStatusesForMarketingWithAssigned(
+            @Param("empCode") String empCode, 
+            @Param("userId") Long userId, 
+            @Param("role") com.stok.anandam.store.core.postgres.model.Role role,
+            @Param("assignedMemoIds") List<UUID> assignedMemoIds);
+
+    @Query("SELECT m.statusAkhir, COUNT(m.id) FROM Memo m WHERE " +
+           "m.marketingEmpCode = :empCode OR " +
+           "m.creator.id = :userId OR " +
+           "m.creator.role = :role " +
+           "GROUP BY m.statusAkhir")
+    List<Object[]> countStatusesForMarketingWithoutAssigned(
+            @Param("empCode") String empCode, 
+            @Param("userId") Long userId, 
+            @Param("role") com.stok.anandam.store.core.postgres.model.Role role);
+
+    @Query("SELECT m.statusAkhir, COUNT(m.id) FROM Memo m WHERE m.id IN :assignedMemoIds GROUP BY m.statusAkhir")
+    List<Object[]> countStatusesForDelivery(@Param("assignedMemoIds") List<UUID> assignedMemoIds);
+
+    @Query("SELECT m.statusAkhir, COUNT(m.id) FROM Memo m WHERE m.statusAkhir IN :statuses GROUP BY m.statusAkhir")
+    List<Object[]> countStatusesByStatusList(@Param("statuses") List<com.stok.anandam.store.core.postgres.model.enums.MemoStatus> statuses);
 }

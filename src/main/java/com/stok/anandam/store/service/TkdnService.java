@@ -18,7 +18,7 @@ public class TkdnService {
     private TkdnRepository tkdnRepository;
 
     public Page<Tkdn> getAllTkdn(int page, int size, String sortBy, String dir,
-            Boolean isTkdn, String kategori, String search,
+            Boolean isTkdn, java.util.List<String> categories, String search,
             String processor, String ram, String ssd, String hdd, String vga, String layar, String os) {
 
         Sort.Direction direction = dir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
@@ -38,10 +38,10 @@ public class TkdnService {
 
         if (hasSpecFilter) {
             return tkdnRepository.findByFiltersWithSpec(
-                    isTkdn, kategori, searchPattern, procPattern, ramPattern, ssdPattern, hddPattern, vgaPattern,
+                    isTkdn, categories, searchPattern, procPattern, ramPattern, ssdPattern, hddPattern, vgaPattern,
                     layarPattern, osPattern, pageable);
         }
-        return tkdnRepository.findByFilters(isTkdn, kategori, searchPattern, pageable);
+        return tkdnRepository.findByFilters(isTkdn, categories, searchPattern, pageable);
     }
 
     private String toPattern(String s) {

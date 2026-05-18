@@ -30,7 +30,7 @@ public class TkdnController {
                         @RequestParam(name = "sortBy", defaultValue = "nama") String sortBy,
                         @RequestParam(name = "direction", defaultValue = "asc") String direction,
                         @RequestParam(name = "isTkdn", required = false) Boolean isTkdn,
-                        @RequestParam(name = "kategori", required = false) String kategori,
+                        @RequestParam(name = "categories", required = false) List<String> categories,
                         @RequestParam(name = "search", required = false) String search,
                         @RequestParam(name = "processor", required = false) String processor,
                         @RequestParam(name = "ram", required = false) String ram,
@@ -39,10 +39,10 @@ public class TkdnController {
                         @RequestParam(name = "vga", required = false) String vga,
                         @RequestParam(name = "layar", required = false) String layar,
                         @RequestParam(name = "os", required = false) String os) {
-                Page<Tkdn> data = tkdnService.getAllTkdn(page, size, sortBy, direction, isTkdn, kategori, search,
+                Page<Tkdn> data = tkdnService.getAllTkdn(page, size, sortBy, direction, isTkdn, categories, search,
                                 processor, ram, ssd, hdd, vga, layar, os);
                 if (data.getTotalPages() > 0 && page >= data.getTotalPages()) {
-                        data = tkdnService.getAllTkdn(0, size, sortBy, direction, isTkdn, kategori, search,
+                        data = tkdnService.getAllTkdn(0, size, sortBy, direction, isTkdn, categories, search,
                                         processor, ram, ssd, hdd, vga, layar, os);
                 }
 

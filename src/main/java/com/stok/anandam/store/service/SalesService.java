@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Service
 public class SalesService {
@@ -20,9 +21,9 @@ public class SalesService {
         private SalesRepository salesRepository;
 
         public SalesSummaryResponse<Sales> getSales(
-
                         int page, int size, String sortBy, String dir,
-                        String startDateStr, String endDateStr, String empCode, String search) {
+                        String startDateStr, String endDateStr, String empCode, 
+                        List<String> categories, String search, String searchColumn) {
                 // 1. Parsing Tanggal
                 LocalDate start = (startDateStr != null && !startDateStr.isBlank())
                                 ? LocalDate.parse(startDateStr)
@@ -37,22 +38,24 @@ public class SalesService {
                 Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
 
                 // 3. Ambil Data
-                Page<Sales> pageResult = salesRepository.findByFilters(start, end, empCode, search, pageable);
+                Page<Sales> pageResult = salesRepository.findByFilters(start, end, empCode, categories, search, searchColumn, pageable);
 
                 // 4. Ambil Total Sum
-                BigDecimal totalSum = salesRepository.sumGrandTotalByFilters(start, end, empCode, search);
+                BigDecimal totalSum = salesRepository.sumGrandTotalByFilters(start, end, empCode, categories, search, searchColumn);
+                Long totalQty = salesRepository.sumQtyByFilters(start, end, empCode, categories, search, searchColumn);
 
                 // 5. Return Response
                 return SalesSummaryResponse.<Sales>builder()
                                 .content(pageResult.getContent())
                                 .totalGrandSum(totalSum)
+                                .totalQty(totalQty != null ? BigDecimal.valueOf(totalQty) : BigDecimal.ZERO)
                                 .totalPages(pageResult.getTotalPages())
                                 .totalElements(pageResult.getTotalElements())
                                 .build();
         }
 
         public java.util.List<Sales> getAllSalesForExport(String startDateStr, String endDateStr, String empCode,
-                        String search) {
+                        List<String> categories, String search, String searchColumn) {
                 LocalDate start = (startDateStr != null && !startDateStr.isBlank())
                                 ? LocalDate.parse(startDateStr)
                                 : LocalDate.of(2000, 1, 1);
@@ -61,7 +64,7 @@ public class SalesService {
                                 ? LocalDate.parse(endDateStr)
                                 : LocalDate.now();
 
-                return salesRepository.findAllByFilters(start, end, empCode, search);
+                return salesRepository.findAllByFilters(start, end, empCode, categories, search, searchColumn);
         }
 
         public java.util.List<com.stok.anandam.store.dto.EmployeeOption> getEmployeeCodes() {
@@ -71,5 +74,9 @@ public class SalesService {
                                                 .empName((String) obj[1])
                                                 .build())
                                 .collect(java.util.stream.Collectors.toList());
+        }
+
+        public java.util.List<String> getDeptCodes() {
+                return salesRepository.findDistinctDepCodes();
         }
 }

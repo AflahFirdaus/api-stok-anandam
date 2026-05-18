@@ -9,6 +9,7 @@ import java.util.List;
 @Builder
 public class PurchaseSummaryResponse<T> {
     private BigDecimal totalGrandSum; // Total belanja di periode ini
+    private BigDecimal totalQty;      // Total Quantity Item
     private List<T> content;          // List datanya
     private int totalPages;           // Info paging tambahan
     private long totalElements;

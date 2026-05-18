@@ -19,10 +19,10 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     List<Customer> findByNamaPelangganContainingIgnoreCaseAndDeletedAtIsNull(String nama);
 
     // Cari berdasarkan nomor HP untuk validasi data ganda
-    Optional<Customer> findByNoHpAndDeletedAtIsNull(String noHp);
+    List<Customer> findByNoHpAndDeletedAtIsNull(String noHp);
 
     // Tambahkan baris ini di dalam interface-nya
-    Optional<Customer> findByNoHp(String noHp);
+    List<Customer> findByNoHp(String noHp);
 
     
 }

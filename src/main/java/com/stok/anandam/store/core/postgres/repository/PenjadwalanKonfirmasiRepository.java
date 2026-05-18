@@ -17,6 +17,8 @@ public interface PenjadwalanKonfirmasiRepository extends JpaRepository<Penjadwal
     
     List<PenjadwalanKonfirmasi> findByMemo_IdAndDeletedAtIsNull(UUID memoId);
 
+    List<PenjadwalanKonfirmasi> findByMemo_IdInAndDeletedAtIsNull(List<UUID> memoIds);
+
     // Cari jadwal spesifik tipe tertentu
     Optional<PenjadwalanKonfirmasi> findByMemo_IdAndTipeTugasAndDeletedAtIsNull(UUID memoId, com.stok.anandam.store.core.postgres.model.enums.TipeTugas tipeTugas);
 
