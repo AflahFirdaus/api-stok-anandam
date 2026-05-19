@@ -1,6 +1,8 @@
 package com.stok.anandam.store.service;
 
 import com.stok.anandam.store.dto.ItemSerialNumberResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -13,10 +15,12 @@ import java.util.Set;
 @Service
 public class ItemSnService {
 
+    private static final Logger log = LoggerFactory.getLogger(ItemSnService.class);
+
     /** Field yang boleh dipakai untuk sortBy (aman dari SQL injection). */
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("tanggal", "docId", "user", "itemName", "sn");
 
-    @Autowired
+    @Autowired(required = false)
     @Qualifier("mysqlJdbcTemplate")
     private JdbcTemplate jdbcTemplate;
 
@@ -37,6 +41,10 @@ public class ItemSnService {
     public List<ItemSerialNumberResponse> getSnData(String type, String search, String docId, String user,
             String itemName, String sn, String startDate, String endDate,
             String sortBy, String direction, int size, int offset) {
+        if (jdbcTemplate == null) {
+            log.warn("Koneksi ke MyBiz (MySQL) tidak aktif/offline. Mengembalikan data SN kosong.");
+            return new ArrayList<>();
+        }
         StringBuilder sql = new StringBuilder();
         List<Object> params = new ArrayList<>();
 
@@ -105,6 +113,9 @@ public class ItemSnService {
 
     public long countSnData(String type, String search, String docId, String user,
             String itemName, String sn, String startDate, String endDate) {
+        if (jdbcTemplate == null) {
+            return 0L;
+        }
         StringBuilder sql = new StringBuilder();
         List<Object> params = new ArrayList<>();
 

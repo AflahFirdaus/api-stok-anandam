@@ -1,6 +1,7 @@
 package com.stok.anandam.store.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -10,6 +11,7 @@ import java.time.LocalTime;
 @Configuration
 @EnableScheduling
 @Component
+@ConditionalOnProperty(name = "app.mysql.enabled", havingValue = "true")
 public class MigrationScheduler {
 
     @Autowired

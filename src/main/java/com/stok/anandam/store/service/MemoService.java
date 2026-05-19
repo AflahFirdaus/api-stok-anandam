@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -71,7 +72,9 @@ public class MemoService {
     private final MemoItemRepository memoItemRepository;
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
+    private final PelangganMybizRepository pelangganMybizRepository;
     private final KodeposRepository kodeposRepository;
+
     private final FileService fileService;
     private final ObjectMapper objectMapper;
     private final ActivityLogService activityLogService;
@@ -394,8 +397,11 @@ public class MemoService {
                     .nomorMemo(memo.getNomorMemo())
                     .tanggalMemo(memo.getTanggalMemo())
                     .customerId(memo.getCustomer() != null ? memo.getCustomer().getId() : null)
-                    .customerName(memo.getCustomer() != null ? memo.getCustomer().getNamaPelanggan() : "Tanpa Nama")
-                    .customerPhone(memo.getCustomer() != null ? memo.getCustomer().getNoHp() : "-")
+                    .pelangganMybizId(memo.getPelangganMybiz() != null ? memo.getPelangganMybiz().getId() : null)
+                    .customerName(memo.getPelangganMybiz() != null ? memo.getPelangganMybiz().getNamaPartner() : 
+                                 (memo.getCustomer() != null ? memo.getCustomer().getNamaPelanggan() : "Tanpa Nama"))
+                    .customerPhone(memo.getPelangganMybiz() != null ? memo.getPelangganMybiz().getNoTelepon() : 
+                                  (memo.getCustomer() != null ? memo.getCustomer().getNoHp() : "-"))
                     .marketingId(memo.getMarketing() != null ? memo.getMarketing().getId() : null)
                     .marketingName(memo.getMarketingName() != null ? memo.getMarketingName() : (memo.getMarketing() != null ? memo.getMarketing().getNama() : "System"))
                     .marketingEmpCode(memo.getMarketingEmpCode())
@@ -413,6 +419,12 @@ public class MemoService {
                     .platform(memo.getPlatform())
                     .tempo(memo.getTempo())
                     .badanUsaha(memo.getBadanUsaha())
+                    .revisedFromId(memo.getRevisedFromId())
+                    .revisionToId(memo.getRevisionToId())
+                    .revisedFromNomorMemo(memo.getRevisedFromId() != null ? 
+                        memoRepository.findById(memo.getRevisedFromId())
+                            .map(Memo::getNomorMemo)
+                            .orElse(null) : null)
                     .isTeknisRequired(java.lang.Boolean.TRUE.equals(memo.getIsTeknisRequired()))
                     .isDeliveryRequired(java.lang.Boolean.TRUE.equals(memo.getIsDeliveryRequired()))
                     .opsiPengiriman(memo.getOpsiPengiriman())
@@ -484,8 +496,11 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                 .nomorMemo(memo.getNomorMemo())
                 .tanggalMemo(memo.getTanggalMemo())
                 .customerId(memo.getCustomer() != null ? memo.getCustomer().getId() : null)
-                .customerName(memo.getCustomer() != null ? memo.getCustomer().getNamaPelanggan() : "Tanpa Nama")
-                .customerPhone(memo.getCustomer() != null ? memo.getCustomer().getNoHp() : "-")
+                .pelangganMybizId(memo.getPelangganMybiz() != null ? memo.getPelangganMybiz().getId() : null)
+                .customerName(memo.getPelangganMybiz() != null ? memo.getPelangganMybiz().getNamaPartner() : 
+                             (memo.getCustomer() != null ? memo.getCustomer().getNamaPelanggan() : "Tanpa Nama"))
+                .customerPhone(memo.getPelangganMybiz() != null ? memo.getPelangganMybiz().getNoTelepon() : 
+                              (memo.getCustomer() != null ? memo.getCustomer().getNoHp() : "-"))
                 .marketingId(memo.getMarketing() != null ? memo.getMarketing().getId() : null)
                 .marketingName(memo.getMarketingName() != null ? memo.getMarketingName() : (memo.getMarketing() != null ? memo.getMarketing().getNama() : "System"))
                 .marketingEmpCode(memo.getMarketingEmpCode())
@@ -503,6 +518,12 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                 .platform(memo.getPlatform())
                 .tempo(memo.getTempo())
                 .badanUsaha(memo.getBadanUsaha())
+                .revisedFromId(memo.getRevisedFromId())
+                .revisionToId(memo.getRevisionToId())
+                .revisedFromNomorMemo(memo.getRevisedFromId() != null ? 
+                    memoRepository.findById(memo.getRevisedFromId())
+                        .map(Memo::getNomorMemo)
+                        .orElse(null) : null)
                 .isTeknisRequired(java.lang.Boolean.TRUE.equals(memo.getIsTeknisRequired()))
                 .isDeliveryRequired(java.lang.Boolean.TRUE.equals(memo.getIsDeliveryRequired()))
                 .opsiPengiriman(memo.getOpsiPengiriman())
@@ -639,26 +660,36 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
         User creator = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
 
-        Customer customer;
-        if (request.getNoHpCustomer() != null && !request.getNoHpCustomer().isBlank()) {
-            List<Customer> existingCustomers = customerRepository.findByNoHpAndDeletedAtIsNull(request.getNoHpCustomer());
-            String requestedName = request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru";
-            
-            customer = existingCustomers.stream()
-                    .filter(c -> c.getNamaPelanggan().equalsIgnoreCase(requestedName))
-                    .findFirst()
-                    .orElseGet(() -> {
-                        Customer newCust = Customer.builder()
-                                .namaPelanggan(requestedName)
-                                .noHp(request.getNoHpCustomer())
-                                .build();
-                        return customerRepository.save(newCust);
-                    });
+        Customer customer = null;
+        PelangganMybiz pelangganMybiz = null;
+
+        if (request.getPelangganMybizId() != null) {
+            pelangganMybiz = pelangganMybizRepository.findById(request.getPelangganMybizId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pelanggan MyBiz tidak ditemukan"));
+        } else if (request.getCustomerId() != null) {
+            customer = customerRepository.findById(request.getCustomerId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer tidak ditemukan"));
         } else {
-            customer = Customer.builder()
-                    .namaPelanggan(request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru")
-                    .build();
-            customer = customerRepository.save(customer);
+            if (request.getNoHpCustomer() != null && !request.getNoHpCustomer().isBlank()) {
+                List<Customer> existingCustomers = customerRepository.findByNoHpAndDeletedAtIsNull(request.getNoHpCustomer());
+                String requestedName = request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru";
+                
+                customer = existingCustomers.stream()
+                        .filter(c -> c.getNamaPelanggan().equalsIgnoreCase(requestedName))
+                        .findFirst()
+                        .orElseGet(() -> {
+                            Customer newCust = Customer.builder()
+                                    .namaPelanggan(requestedName)
+                                    .noHp(request.getNoHpCustomer())
+                                    .build();
+                            return customerRepository.save(newCust);
+                        });
+            } else {
+                customer = Customer.builder()
+                        .namaPelanggan(request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru")
+                        .build();
+                customer = customerRepository.save(customer);
+            }
         }
 
         String nomorMemo = "MEMO-" + request.getMemoType().toUpperCase() + "-" + System.currentTimeMillis();
@@ -666,8 +697,9 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
         Memo memo = Memo.builder()
                 .nomorMemo(nomorMemo)
                 .customer(customer)
-                .marketingName(request.getNamaMarketing())
-                .marketingEmpCode(request.getMarketingEmpCode())
+                .pelangganMybiz(pelangganMybiz)
+                .marketingName(pelangganMybiz != null ? pelangganMybiz.getNamaMarketing() : request.getNamaMarketing())
+                .marketingEmpCode(pelangganMybiz != null ? pelangganMybiz.getKodeMarketing() : request.getMarketingEmpCode())
                 .creator(creator)
                 .tanggalMemo(request.getTanggal() != null ? LocalDate.parse(request.getTanggal(), DATE_FORMATTER).atStartOfDay() : LocalDateTime.now())
                 .isTeknisRequired(request.getIsTeknisi())
@@ -686,6 +718,7 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                 .kodePos(request.getKodePos())
                 .tempo(request.getTempo())
                 .badanUsaha(request.getBadanUsaha())
+                .revisedFromId(request.getRevisedFromId())
                 .build();
 
         memo = memoRepository.save(memo);
@@ -707,6 +740,10 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
         }
 
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.DRAFT.name(), creator.getId(), "Memo Draft baru dibuat oleh " + username));
+
+        if (request.getRevisedFromId() != null) {
+            checkAndApplyRevisionCancellation(memo, creator);
+        }
 
         return WebResponse.<String>builder()
                 .data(memo.getId().toString())
@@ -739,31 +776,42 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Anda tidak memiliki hak untuk mengubah memo ini");
         }
 
-        Customer customer;
-        if (request.getNoHpCustomer() != null && !request.getNoHpCustomer().isBlank()) {
-            List<Customer> existingCustomers = customerRepository.findByNoHpAndDeletedAtIsNull(request.getNoHpCustomer());
-            String requestedName = request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru";
-            
-            customer = existingCustomers.stream()
-                    .filter(c -> c.getNamaPelanggan().equalsIgnoreCase(requestedName))
-                    .findFirst()
-                    .orElseGet(() -> {
-                        Customer newCust = Customer.builder()
-                                .namaPelanggan(requestedName)
-                                .noHp(request.getNoHpCustomer())
-                                .build();
-                        return customerRepository.save(newCust);
-                    });
+        Customer customer = null;
+        PelangganMybiz pelangganMybiz = null;
+
+        if (request.getPelangganMybizId() != null) {
+            pelangganMybiz = pelangganMybizRepository.findById(request.getPelangganMybizId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pelanggan MyBiz tidak ditemukan"));
+        } else if (request.getCustomerId() != null) {
+            customer = customerRepository.findById(request.getCustomerId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer tidak ditemukan"));
         } else {
-            customer = Customer.builder()
-                    .namaPelanggan(request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru")
-                    .build();
-            customer = customerRepository.save(customer);
+            if (request.getNoHpCustomer() != null && !request.getNoHpCustomer().isBlank()) {
+                List<Customer> existingCustomers = customerRepository.findByNoHpAndDeletedAtIsNull(request.getNoHpCustomer());
+                String requestedName = request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru";
+                
+                customer = existingCustomers.stream()
+                        .filter(c -> c.getNamaPelanggan().equalsIgnoreCase(requestedName))
+                        .findFirst()
+                        .orElseGet(() -> {
+                            Customer newCust = Customer.builder()
+                                    .namaPelanggan(requestedName)
+                                    .noHp(request.getNoHpCustomer())
+                                    .build();
+                            return customerRepository.save(newCust);
+                        });
+            } else {
+                customer = Customer.builder()
+                        .namaPelanggan(request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru")
+                        .build();
+                customer = customerRepository.save(customer);
+            }
         }
 
         memo.setCustomer(customer);
-        memo.setMarketingName(request.getNamaMarketing());
-        memo.setMarketingEmpCode(request.getMarketingEmpCode());
+        memo.setPelangganMybiz(pelangganMybiz);
+        memo.setMarketingName(pelangganMybiz != null ? pelangganMybiz.getNamaMarketing() : request.getNamaMarketing());
+        memo.setMarketingEmpCode(pelangganMybiz != null ? pelangganMybiz.getKodeMarketing() : request.getMarketingEmpCode());
         memo.setTanggalMemo(request.getTanggal() != null ? LocalDate.parse(request.getTanggal(), DATE_FORMATTER).atStartOfDay() : LocalDateTime.now());
         memo.setIsTeknisRequired(request.getIsTeknisi());
         memo.setIsDeliveryRequired(request.getMemoType().equalsIgnoreCase("ONLINE") || request.getIsKirim());
@@ -802,6 +850,8 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
         }
 
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.DRAFT.name(), aktor.getId(), "Memo Draft diperbarui oleh " + username));
+
+        checkAndApplyRevisionCancellation(memo, aktor);
 
         sendMemoRefreshSignal();
 
@@ -1221,6 +1271,9 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
         User aktor = userRepository.findByUsername(username).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
         memo.setStatusAkhir(MemoStatus.MENUNGGU_GUDANG);
         memoRepository.save(memo);
+        
+        checkAndApplyRevisionCancellation(memo, aktor);
+        
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.MENUNGGU_GUDANG.name(), aktor.getId(), "Memo difinalisasi ke Gudang oleh " + username));
         
         sendMemoRefreshSignal();
@@ -1478,6 +1531,219 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                 .data("OK")
                 .status(200)
                 .message("Tasks sync successfully")
+                .build();
+    }
+
+    @Transactional
+    public WebResponse<MemoDetailResponse> duplicateRevision(UUID memoId, String username) {
+        Memo oldMemo = memoRepository.findById(memoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
+
+        // Validasi Status: hanya boleh jika status memo lama sebelum pengiriman (DALAM_PENGIRIMAN atau setelahnya dilarang)
+        if (oldMemo.getStatusAkhir() == MemoStatus.DALAM_PENGIRIMAN || 
+            oldMemo.getStatusAkhir() == MemoStatus.DITERIMA_USER || 
+            oldMemo.getStatusAkhir() == MemoStatus.TERKIRIM_SEBAGIAN || 
+            oldMemo.getStatusAkhir() == MemoStatus.SELESAI || 
+            oldMemo.getStatusAkhir() == MemoStatus.DIBATALKAN) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Memo yang sudah dalam pengiriman tidak dapat direvisi");
+        }
+
+        User aktor = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
+
+        // Buat nomor memo baru
+        String newNomorMemo = "MEMO-" + oldMemo.getMemoType().toUpperCase() + "-" + System.currentTimeMillis();
+
+        // Salin data header
+        Memo newMemo = Memo.builder()
+                .nomorMemo(newNomorMemo)
+                .customer(oldMemo.getCustomer())
+                .marketing(oldMemo.getMarketing())
+                .marketingName(oldMemo.getMarketingName())
+                .marketingEmpCode(oldMemo.getMarketingEmpCode())
+                .creator(aktor)
+                .tanggalMemo(LocalDateTime.now())
+                .isTeknisRequired(oldMemo.getIsTeknisRequired())
+                .isDeliveryRequired(oldMemo.getIsDeliveryRequired())
+                .opsiPengiriman(oldMemo.getOpsiPengiriman())
+                .metodePembayaran(oldMemo.getMetodePembayaran())
+                .statusAkhir(MemoStatus.DRAFT) // Mulai sebagai DRAFT
+                .totalHarga(oldMemo.getTotalHarga())
+                .deskripsi(oldMemo.getDeskripsi())
+                .memoType(oldMemo.getMemoType())
+                .orderIdMarketplace(oldMemo.getOrderIdMarketplace() != null && !oldMemo.getOrderIdMarketplace().isEmpty() ? oldMemo.getOrderIdMarketplace() + "-REV-" + System.currentTimeMillis() : null)
+                .resi(oldMemo.getResi())
+                .ekspedisi(oldMemo.getEkspedisi())
+                .subEkspedisi(oldMemo.getSubEkspedisi())
+                .platform(oldMemo.getPlatform())
+                .kodePos(oldMemo.getKodePos())
+                .tempo(oldMemo.getTempo())
+                .badanUsaha(oldMemo.getBadanUsaha())
+                .revisedFromId(oldMemo.getId()) // Hubungkan ke memo lama
+                .build();
+
+        newMemo = memoRepository.save(newMemo);
+
+        // Salin data detail (daftar barang)
+        List<MemoItem> oldItems = memoItemRepository.findByMemoId(oldMemo.getId());
+        for (MemoItem oldItem : oldItems) {
+            MemoItem newItem = MemoItem.builder()
+                    .memo(newMemo)
+                    .namaBarang(oldItem.getNamaBarang())
+                    .qty(oldItem.getQty())
+                    .hargaSatuan(oldItem.getHargaSatuan())
+                    .subtotal(oldItem.getSubtotal())
+                    .status(oldItem.getStatus())
+                    .catatanGudang(oldItem.getCatatanGudang())
+                    .qtyShipped(0) // Default 0
+                    .build();
+            memoItemRepository.save(newItem);
+        }
+
+        // Pencatatan Log System pada Memo Baru
+        memoLogRepository.save(new MemoLog(
+                newMemo.getId(), 
+                MemoStatus.DRAFT.name(), 
+                aktor.getId(), 
+                "Memo ini merupakan revisi dari Memo ID: " + oldMemo.getNomorMemo()
+        ));
+
+        // Audit Log Global
+        activityLogService.log(username, "MEMO_DUPLICATE_REVISION", 
+                "Melakukan duplikat dan revisi Memo " + oldMemo.getNomorMemo() + " ke Memo baru " + newMemo.getNomorMemo());
+
+        sendMemoRefreshSignal();
+
+        return WebResponse.<MemoDetailResponse>builder()
+                .data(mapToDetailResponse(newMemo))
+                .status(HttpStatus.OK.value())
+                .message("Memo berhasil diduplikat untuk direvisi")
+                .build();
+    }
+
+    @Transactional
+    public WebResponse<MemoDetailResponse> duplicateHeader(UUID memoId, String username) {
+        Memo oldMemo = memoRepository.findById(memoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
+
+        User aktor = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
+
+        // Buat nomor memo baru
+        String newNomorMemo = "MEMO-" + oldMemo.getMemoType().toUpperCase() + "-" + System.currentTimeMillis();
+
+        // Salin data header saja (tanpa barang/detail kosong)
+        Memo newMemo = Memo.builder()
+                .nomorMemo(newNomorMemo)
+                .customer(oldMemo.getCustomer())
+                .marketing(oldMemo.getMarketing())
+                .marketingName(oldMemo.getMarketingName())
+                .marketingEmpCode(oldMemo.getMarketingEmpCode())
+                .creator(aktor)
+                .tanggalMemo(LocalDateTime.now())
+                .isTeknisRequired(oldMemo.getIsTeknisRequired())
+                .isDeliveryRequired(oldMemo.getIsDeliveryRequired())
+                .opsiPengiriman(oldMemo.getOpsiPengiriman())
+                .metodePembayaran(oldMemo.getMetodePembayaran())
+                .statusAkhir(MemoStatus.DRAFT) // Mulai sebagai DRAFT
+                .totalHarga(java.math.BigDecimal.ZERO) // Total harga 0 karena kosong
+                .deskripsi(oldMemo.getDeskripsi())
+                .memoType(oldMemo.getMemoType())
+                .orderIdMarketplace(oldMemo.getOrderIdMarketplace() != null && !oldMemo.getOrderIdMarketplace().isEmpty() ? oldMemo.getOrderIdMarketplace() + "-DUP-" + System.currentTimeMillis() : null)
+                .resi(oldMemo.getResi())
+                .ekspedisi(oldMemo.getEkspedisi())
+                .subEkspedisi(oldMemo.getSubEkspedisi())
+                .platform(oldMemo.getPlatform())
+                .kodePos(oldMemo.getKodePos())
+                .tempo(oldMemo.getTempo())
+                .badanUsaha(oldMemo.getBadanUsaha())
+                .build();
+
+        newMemo = memoRepository.save(newMemo);
+
+        // Pencatatan Log System pada Memo Baru
+        memoLogRepository.save(new MemoLog(
+                newMemo.getId(), 
+                MemoStatus.DRAFT.name(), 
+                aktor.getId(), 
+                "Memo dibuat menggunakan duplikat header dari Memo ID: " + oldMemo.getNomorMemo()
+        ));
+
+        // Audit Log Global
+        activityLogService.log(username, "MEMO_DUPLICATE_HEADER", 
+                "Melakukan duplikat header Memo " + oldMemo.getNomorMemo() + " ke Memo baru " + newMemo.getNomorMemo());
+
+        sendMemoRefreshSignal();
+
+        return WebResponse.<MemoDetailResponse>builder()
+                .data(mapToDetailResponse(newMemo))
+                .status(HttpStatus.OK.value())
+                .message("Memo header berhasil diduplikat")
+                .build();
+    }
+
+    private void checkAndApplyRevisionCancellation(Memo newMemo, User aktor) {
+        if (newMemo.getRevisedFromId() != null) {
+            Optional<Memo> oldMemoOpt = memoRepository.findById(newMemo.getRevisedFromId());
+            if (oldMemoOpt.isPresent()) {
+                Memo oldMemo = oldMemoOpt.get();
+                if (oldMemo.getStatusAkhir() != MemoStatus.DIBATALKAN) {
+                    oldMemo.setStatusAkhir(MemoStatus.DIBATALKAN);
+                    oldMemo.setRevisionToId(newMemo.getId());
+                    memoRepository.save(oldMemo);
+
+                    // Pencatatan Log System pada Memo Lama
+                    memoLogRepository.save(new MemoLog(
+                            oldMemo.getId(), 
+                            MemoStatus.DIBATALKAN.name(),
+                            aktor.getId(), 
+                            "Memo dibatalkan dan diganti dengan Memo baru ID: " + newMemo.getNomorMemo() + " via fitur Duplikat Revisi"
+                    ));
+
+                    // Pencatatan Log System pada Memo Baru
+                    memoLogRepository.save(new MemoLog(
+                            newMemo.getId(), 
+                            newMemo.getStatusAkhir().name(),
+                            aktor.getId(), 
+                            "Memo dibuat sebagai duplikat revisi dari Memo lama: " + oldMemo.getNomorMemo()
+                    ));
+
+                    // Jika dibatalkan, hapus (soft-delete) juga semua jadwal yang terkait
+                    List<PenjadwalanKonfirmasi> relatedJadwal = penjadwalanRepo.findByMemo_IdAndDeletedAtIsNull(oldMemo.getId());
+                    for (PenjadwalanKonfirmasi jadwal : relatedJadwal) {
+                        if (jadwal.getStatusJadwal() != StatusJadwal.SELESAI) {
+                            jadwal.setStatusJadwal(StatusJadwal.DIBATALKAN);
+                            penjadwalanRepo.save(jadwal);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Transactional
+    public WebResponse<String> deleteMemo(UUID memoId, String username) {
+        Memo memo = memoRepository.findById(memoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
+
+        if (memo.getStatusAkhir() != MemoStatus.DRAFT) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Hanya memo DRAFT yang bisa dihapus");
+        }
+
+        // Delete items first
+        List<MemoItem> items = memoItemRepository.findByMemoId(memoId);
+        memoItemRepository.deleteAll(items);
+        
+        // Delete logs
+        List<MemoLog> logs = memoLogRepository.findByMemoIdOrderByCreatedAtDesc(memoId);
+        memoLogRepository.deleteAll(logs);
+
+        // Delete memo
+        memoRepository.delete(memo);
+
+        return WebResponse.<String>builder()
+                .status(HttpStatus.OK.value())
+                .message("Draf memo berhasil dihapus karena dibatalkan")
                 .build();
     }
 }

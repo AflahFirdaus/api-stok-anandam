@@ -20,6 +20,17 @@ public class CreateMemoRequest {
     @JsonAlias({"nama_customer", "namaCustomer"})
     @SerializedName("namaCustomer")
     private String namaCustomer;
+
+    @JsonProperty("customerId")
+    @JsonAlias({"customer_id", "customerId"})
+    @SerializedName("customerId")
+    private Long customerId;
+
+    @JsonProperty("pelangganMybizId")
+    @JsonAlias({"pelanggan_mybiz_id", "pelangganMybizId"})
+    @SerializedName("pelangganMybizId")
+    private Long pelangganMybizId;
+
     
     @JsonProperty("tanggal")
     @JsonAlias({"tanggal", "tanggal_memo"})
@@ -123,4 +134,9 @@ public class CreateMemoRequest {
     @JsonAlias("items")
     @SerializedName("items")
     private List<MemoItemRequest> items;
+
+    @JsonProperty("revisedFromId")
+    @JsonAlias({"revised_from_id", "revisedFromId"})
+    @SerializedName("revisedFromId")
+    private java.util.UUID revisedFromId;
 }

@@ -112,6 +112,21 @@ public class MigrationController {
                 .build());
     }
 
+    @PostMapping({"/pelanggan-mybiz", "/pelanggan"})
+    @LogActivity("MELAKUKAN MIGRASI DATA PELANGGAN (DISTRI / MYBIZ)")
+    public ResponseEntity<WebResponse<String>> startPelangganMybizMigration() {
+        if (migrationService == null)
+            return migrationDisabled();
+        migrationService.migratePelangganMybizData();
+        return ResponseEntity.ok(WebResponse.<String>builder()
+                .status(200)
+                .message("Migrasi Pelanggan MyBiz berjalan di background...")
+                .data("Processing...")
+                .paging(null)
+                .build());
+    }
+
+
     @PostMapping("/pricelist")
     @LogActivity("MELAKUKAN MIGRASI DATA PRICELIST DARI SPREADSHEET")
     public ResponseEntity<WebResponse<String>> startPricelistMigration() {

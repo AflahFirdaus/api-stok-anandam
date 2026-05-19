@@ -18,7 +18,9 @@ public class MemoDetailResponse {
     private UUID id;
     private String nomorMemo;
     private Long customerId;
+    private Long pelangganMybizId;
     private String customerName; // Added for convenience
+
     private String customerPhone;
     private Long marketingId;
     private String marketingName;
@@ -53,6 +55,10 @@ public class MemoDetailResponse {
     private String desaKelurahan;
     private String kecamatan;
     private String kabupatenKota;
+
+    private UUID revisedFromId;
+    private UUID revisionToId;
+    private String revisedFromNomorMemo;
 
     private List<MemoItemResponse> items; 
     private List<MemoLogResponse> logs;   

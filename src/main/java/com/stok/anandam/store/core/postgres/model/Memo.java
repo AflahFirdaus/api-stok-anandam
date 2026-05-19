@@ -43,6 +43,11 @@ public class Memo {
     private Customer customer;
 
     @ManyToOne
+    @JoinColumn(name = "pelanggan_mybiz_id")
+    private PelangganMybiz pelangganMybiz;
+
+
+    @ManyToOne
     @JoinColumn(name = "marketing_id")
     private User marketing;
 
@@ -102,6 +107,12 @@ public class Memo {
     
     @Column(name = "bukti_foto")
     private String buktiFoto;
+
+    @Column(name = "revised_from_id")
+    private UUID revisedFromId;
+
+    @Column(name = "revision_to_id")
+    private UUID revisionToId;
 
     // --- AUDIT FIELDS ---
 

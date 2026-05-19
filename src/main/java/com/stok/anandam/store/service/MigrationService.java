@@ -17,8 +17,6 @@ import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import jakarta.annotation.PostConstruct;
-
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.sheets.v4.Sheets;
@@ -58,6 +56,9 @@ public class MigrationService {
     @Autowired
     private PurchaseRepository purchaseRepository;
 
+    @Autowired
+    private PelangganMybizRepository pelangganMybizRepository;
+
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -89,9 +90,6 @@ public class MigrationService {
 
         log.info("=== START MIGRASI PURCHASE (UPSERT) ===");
         
-        // Fix: Update users_role_check constraint before processing
-        fixUserRoleConstraint();
-
         try {
             // 0. HITUNG ESTIMASI DATA
             String countSql = "SELECT COUNT(*) FROM (" + getSqlPurchase() + ") as total";
@@ -167,51 +165,7 @@ public class MigrationService {
         }
     }
 
-    @PostConstruct
-    public void fixUserRoleConstraint() {
-        log.info("Checking and fixing users_role_check constraint...");
-        try {
-            String sqlDrop = "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check";
-            String sqlAdd = "ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('ADMIN', 'SPV_MARKETING', 'SPV_GUDANG', 'SPV_TEKNISI', 'MARKETING', 'MARKETING_TOKO', 'MARKETING_PROJECT', 'MARKETING_DISTRIBUSI', 'MARKETING_ONLINE', 'GUDANG', 'NOTA', 'DELIVERY', 'TEKNISI'))";
-            
-            pgJdbcTemplate.execute(sqlDrop);
-            pgJdbcTemplate.execute(sqlAdd);
-            log.info("Successfully updated users_role_check constraint.");
-        } catch (Exception e) {
-            log.error("Failed to update users_role_check constraint: {}", e.getMessage());
-        }
-    }
 
-    @PostConstruct
-    public void fixMemoStatuses() {
-        log.info("Starting legacy MemoStatus migration in database...");
-        try {
-            // Mappings for 'memos' table
-            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'MENUNGGU_PERSETUJUAN' WHERE status_akhir = 'PENDING_MENUNGGU'");
-            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'DISETUJUI' WHERE status_akhir = 'PENDING_DISETUJUI'");
-            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'DITOLAK' WHERE status_akhir = 'PENDING_DITOLAK'");
-            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'SIAP_PENUGASAN' WHERE status_akhir = 'READY_DI_GUDANG'");
-            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'PROSES_GUDANG' WHERE status_akhir = 'PERSIAPAN_GUDANG'");
-            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'SIAP_PENUGASAN' WHERE status_akhir = 'VERIFIKASI_AKHIR_GUDANG'");
-            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'DITERIMA_USER' WHERE status_akhir = 'SUDAH_DIKIRIM'");
-            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'TERKIRIM_SEBAGIAN' WHERE status_akhir = 'PARTIAL_DELIVERED'");
-            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'TERKIRIM_SEBAGIAN' WHERE status_akhir = 'DIKIRIM_SEBAGIAN'");
-            pgJdbcTemplate.execute("UPDATE memos SET status_akhir = 'DALAM_PENGIRIMAN' WHERE status_akhir = 'PROSES_PENGIRIMAN'");
-            
-            // Mappings for 'memo_logs' table (optional but good for consistency)
-            pgJdbcTemplate.execute("UPDATE memo_logs SET status = 'MENUNGGU_PERSETUJUAN' WHERE status = 'PENDING_MENUNGGU'");
-            pgJdbcTemplate.execute("UPDATE memo_logs SET status = 'DISETUJUI' WHERE status = 'PENDING_DISETUJUI'");
-            pgJdbcTemplate.execute("UPDATE memo_logs SET status = 'DITOLAK' WHERE status = 'PENDING_DITOLAK'");
-            pgJdbcTemplate.execute("UPDATE memo_logs SET status = 'SIAP_PENUGASAN' WHERE status = 'READY_DI_GUDANG'");
-            pgJdbcTemplate.execute("UPDATE memo_logs SET status = 'PROSES_GUDANG' WHERE status = 'PERSIAPAN_GUDANG'");
-            pgJdbcTemplate.execute("UPDATE memo_logs SET status = 'DITERIMA_USER' WHERE status = 'SUDAH_DIKIRIM'");
-            pgJdbcTemplate.execute("UPDATE memo_logs SET status = 'TERKIRIM_SEBAGIAN' WHERE status = 'PARTIAL_DELIVERED'");
-
-            log.info("Successfully migrated legacy memo statuses in database.");
-        } catch (Exception e) {
-            log.error("Failed to migrate legacy memo statuses: {}", e.getMessage());
-        }
-    }
 
     // Helper: Reset Table (Dipisah biar Transaction-nya jelas)
     // Tidak perlu @Transactional di sini karena sudah ada di Repository
@@ -490,6 +444,7 @@ public class MigrationService {
                 migrateSalesData().get();
                 migratePurchaseData().get();
                 migrateSnData().get();
+                migratePelangganMybizData().get();
 
                 SyncSettings settings = opt
                         .orElse(SyncSettings.builder().syncKey("last_max_id").syncValue("0").build());
@@ -1385,6 +1340,370 @@ public class MigrationService {
             return new BigDecimal(s);
         } catch (Exception e) {
             return BigDecimal.ZERO;
+        }
+    }
+
+    private static final String SQL_PELANGGAN_MYBIZ = """
+                SELECT 
+                    p.code AS kode_partner,
+                    p.name AS nama_partner,
+                    p.emp_id AS mybiz_emp_id,       
+                    e.code AS kode_marketing,             
+                    e.name AS nama_marketing,             
+                    p.ar_limit AS limit_piutang,
+                    p.ar_term AS termin_piutang,
+                    p.ap_limit AS limit_hutang,
+                    p.ap_term AS termin_hutang,
+                    p.npwp,
+                    p.address AS alamat,
+                    TRIM(SUBSTRING_INDEX(p.phone1, ' /', 1)) AS no_telepon
+                FROM dbmpartner p
+                INNER JOIN dbmemployee e ON p.emp_id = e.id
+                WHERE UPPER(e.name) IN ('RYAN', 'AHMAD', 'ACHMAD', 'TEGAR', 'BACHTIAR')
+                ORDER BY e.name ASC, p.code ASC
+            """;
+
+    private String getSqlPelangganMybiz() {
+        return SQL_PELANGGAN_MYBIZ;
+    }
+
+    @Async
+    public CompletableFuture<String> migratePelangganMybizData() {
+        LocalDateTime syncTime = LocalDateTime.now();
+        long startTime = System.currentTimeMillis();
+
+        log.info("=== START MIGRASI PELANGGAN MYBIZ DARI GOOGLE SHEETS (UPSERT) ===");
+        
+        try {
+            /* COMMENTED MYBIZ SOURCE FOR FUTURE USE:
+            // 0. HITUNG ESTIMASI DATA
+            String countSql = "SELECT COUNT(*) FROM (" + getSqlPelangganMybiz() + ") as total";
+            try {
+                Integer totalRows = legacyJdbcTemplate.queryForObject(countSql, Integer.class);
+                log.info("ESTIMASI TOTAL DATA PELANGGAN MYBIZ DARI SOURCE: {}", totalRows);
+            } catch (Exception e) {
+                log.warn("Gagal menghitung total data source: {}", e.getMessage());
+            }
+
+            final List<PelangganMybiz> buffer = new ArrayList<>();
+            final int[] totalProcessed = { 0 };
+
+            // 1. Streaming Data
+            legacyJdbcTemplate.query(getSqlPelangganMybiz(), new RowCallbackHandler() {
+                @Override
+                public void processRow(ResultSet rs) throws SQLException {
+                    try {
+                        PelangganMybiz pm = new PelangganMybiz();
+
+                        pm.setKodePartner(rs.getString("kode_partner"));
+                        pm.setNamaPartner(rs.getString("nama_partner"));
+                        
+                        long empIdVal = rs.getLong("mybiz_emp_id");
+                        if (!rs.wasNull()) {
+                            pm.setMybizEmpId(empIdVal);
+                        }
+                        
+                        pm.setKodeMarketing(rs.getString("kode_marketing"));
+                        pm.setNamaMarketing(rs.getString("nama_marketing"));
+                        pm.setLimitPiutang(rs.getBigDecimal("limit_piutang"));
+                        
+                        int arTermVal = rs.getInt("termin_piutang");
+                        if (!rs.wasNull()) {
+                            pm.setTerminPiutang(arTermVal);
+                        }
+                        
+                        pm.setLimitHutang(rs.getBigDecimal("limit_hutang"));
+                        
+                        int apTermVal = rs.getInt("termin_hutang");
+                        if (!rs.wasNull()) {
+                            pm.setTerminHutang(apTermVal);
+                        }
+                        
+                        pm.setNpwp(rs.getString("npwp"));
+                        pm.setAlamat(rs.getString("alamat"));
+                        pm.setNoTelepon(rs.getString("no_telepon"));
+                        pm.setLastSynced(syncTime);
+
+                        buffer.add(pm);
+
+                        if (buffer.size() >= BATCH_SIZE) {
+                            totalProcessed[0] += buffer.size();
+                            self.savePelangganMybizBatch(buffer);
+
+                            log.info("PelangganMybiz Migrated: {}...", totalProcessed[0]);
+                        }
+                    } catch (BadSqlGrammarException e) {
+                        throw e;
+                    } catch (Exception e) {
+                        log.warn("Error processing PelangganMybiz row: {}", e.getMessage());
+                    }
+                }
+            });
+
+            // Sisa Data
+            if (!buffer.isEmpty()) {
+                totalProcessed[0] += buffer.size();
+                self.savePelangganMybizBatch(buffer);
+            }
+            */
+
+            // === BARU: AMBIL DARI GOOGLE SPREADSHEET (SHEET: DISTRI DATA) ===
+            InputStream in = MigrationService.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
+            if (in == null)
+                return CompletableFuture.completedFuture("ERROR: service_account.json tidak ditemukan");
+
+            GoogleCredentials credentials = GoogleCredentials.fromStream(in)
+                    .createScoped(Collections.singleton(SheetsScopes.SPREADSHEETS_READONLY));
+            Sheets service = new Sheets.Builder(
+                    GoogleNetHttpTransport.newTrustedTransport(),
+                    GsonFactory.getDefaultInstance(),
+                    new HttpCredentialsAdapter(credentials))
+                    .setApplicationName("Anandam Store")
+                    .build();
+
+            ValueRange response = service.spreadsheets().values().get(STOCK_SPREADSHEET_ID, "'DISTRI DATA'!A:H")
+                    .execute();
+            List<List<Object>> values = response.getValues();
+            if (values == null || values.size() < 2)
+                return CompletableFuture.completedFuture("Sheet DISTRI DATA kosong atau hanya header");
+
+            // Header scanning
+            int headerRowIndex = -1;
+            Map<String, Integer> headerMap = new HashMap<>();
+            for (int r = 0; r < values.size(); r++) {
+                List<Object> possibleHeader = values.get(r);
+                Map<String, Integer> probe = new HashMap<>();
+                for (int c = 0; c < possibleHeader.size(); c++) {
+                    probe.put(possibleHeader.get(c).toString().trim().toUpperCase(), c);
+                }
+                Integer probeCode = getHeaderIndexFirst(probe, "CODE PELANGGAN", "KODE PELANGGAN", "CODE", "KODE PARTNER", "KODE");
+                Integer probeName = getHeaderIndexFirst(probe, "NAMA PELANGGAN", "NAMA PARTNER", "NAMA");
+                if (probeCode != null && probeName != null) {
+                    headerRowIndex = r;
+                    headerMap = probe;
+                    break;
+                }
+            }
+
+            Integer idxCode = headerRowIndex >= 0 ? getHeaderIndexFirst(headerMap, "CODE PELANGGAN", "KODE PELANGGAN", "CODE", "KODE PARTNER", "KODE") : 0;
+            Integer idxName = headerRowIndex >= 0 ? getHeaderIndexFirst(headerMap, "NAMA PELANGGAN", "NAMA PARTNER", "NAMA") : 1;
+            Integer idxSales = headerRowIndex >= 0 ? getHeaderIndexFirst(headerMap, "SALES", "MARKETING") : 2;
+            Integer idxLimit = headerRowIndex >= 0 ? getHeaderIndexFirst(headerMap, "LIMIT PIUTANG", "LIMIT") : 3;
+            Integer idxTermin = headerRowIndex >= 0 ? getHeaderIndexFirst(headerMap, "TERMIN PIUTA", "TERMIN PIUTANG", "TERMIN") : 4;
+            Integer idxAlamat = headerRowIndex >= 0 ? getHeaderIndexFirst(headerMap, "ALAMAT") : 5;
+            Integer idxTelp = headerRowIndex >= 0 ? getHeaderIndexFirst(headerMap, "TELP", "TELEPON", "NO TELEPON", "NO HP") : 6;
+            Integer idxNpwp = headerRowIndex >= 0 ? getHeaderIndexFirst(headerMap, "NPWP") : 7;
+
+            // Menggunakan LinkedHashMap untuk men-deduplikasi/mengamankan kode_partner ganda dari Google Sheet
+            Map<String, PelangganMybiz> uniquePartners = new LinkedHashMap<>();
+            List<String> duplicatesLog = new ArrayList<>();
+            List<Integer> emptyRowsLog = new ArrayList<>();
+            List<String> exactDupsLog = new ArrayList<>();
+
+            int startRow = headerRowIndex >= 0 ? headerRowIndex + 1 : 1;
+            for (int r = startRow; r < values.size(); r++) {
+                List<Object> row = values.get(r);
+                if (row.isEmpty() || row.size() <= (idxCode != null ? idxCode : 0)) {
+                    emptyRowsLog.add(r + 1);
+                    continue;
+                }
+
+                String kodePartner = getValByIndex(row, idxCode);
+                if (kodePartner == null || kodePartner.trim().isEmpty()) {
+                    emptyRowsLog.add(r + 1);
+                    continue;
+                }
+
+                String namaPartner = getValByIndex(row, idxName);
+                String sales = getValByIndex(row, idxSales);
+                String limitStr = getValByIndex(row, idxLimit);
+                String terminStr = getValByIndex(row, idxTermin);
+                String alamat = getValByIndex(row, idxAlamat);
+                String telp = getValByIndex(row, idxTelp);
+                String npwp = getValByIndex(row, idxNpwp);
+
+                // Parse limit piutang
+                BigDecimal limitPiutang = BigDecimal.ZERO;
+                if (limitStr != null && !limitStr.trim().isEmpty()) {
+                    BigDecimal cleaned = cleanBigDecimal(limitStr);
+                    if (cleaned != null) {
+                        limitPiutang = cleaned;
+                    }
+                }
+
+                // Parse termin piutang
+                Integer terminPiutang = 1;
+                if (terminStr != null && !terminStr.trim().isEmpty()) {
+                    try {
+                        terminPiutang = Integer.parseInt(terminStr.trim());
+                    } catch (Exception e) {
+                        log.warn("Gagal parsing termin piutang '{}' pada baris {}: {}", terminStr, r, e.getMessage());
+                    }
+                }
+
+                // === PENANGANAN KODE PARTNER GANDA ===
+                // Jika kode_partner sudah terpakai oleh pelanggan dengan nama berbeda,
+                // tambahkan suffix unik secara otomatis agar kedua data tetap masuk
+                String finalKode = kodePartner;
+                if (uniquePartners.containsKey(finalKode)) {
+                    PelangganMybiz existing = uniquePartners.get(finalKode);
+                    if (!existing.getNamaPartner().equalsIgnoreCase(namaPartner)) {
+                        int suffix = 2;
+                        while (uniquePartners.containsKey(kodePartner + "_" + suffix)) {
+                            suffix++;
+                        }
+                        finalKode = kodePartner + "_" + suffix;
+                        duplicatesLog.add(String.format("Baris %d: Kode '%s' ganda. Diubah menjadi '%s' agar pelanggan '%s' dan '%s' tetap masuk bersamaan.", 
+                            r + 1, kodePartner, finalKode, existing.getNamaPartner(), namaPartner));
+                    } else {
+                        // Duplikat persis (Kode & Nama sama), gabungkan/timpa saja
+                        exactDupsLog.add(String.format("Baris %d: Duplikat Persis dari pelanggan '%s' (Kode: '%s')", 
+                            r + 1, namaPartner, kodePartner));
+                    }
+                }
+
+                PelangganMybiz pm = PelangganMybiz.builder()
+                        .kodePartner(finalKode)
+                        .namaPartner(namaPartner != null ? namaPartner : "Pelanggan Tanpa Nama")
+                        .kodeMarketing(sales != null ? sales.toUpperCase() : "SYSTEM")
+                        .namaMarketing(sales != null ? sales : "System")
+                        .limitPiutang(limitPiutang)
+                        .terminPiutang(terminPiutang)
+                        .limitHutang(BigDecimal.ZERO)
+                        .terminHutang(1)
+                        .npwp(npwp)
+                        .alamat(alamat)
+                        .noTelepon(telp)
+                        .lastSynced(syncTime)
+                        .build();
+
+                uniquePartners.put(finalKode, pm);
+            }
+
+            if (!duplicatesLog.isEmpty()) {
+                log.warn("=== DETEKSI KODE PARTNER GANDA DI SPREADSHEET (TOTAL {} TEMUAN) ===", duplicatesLog.size());
+                for (String dup : duplicatesLog.subList(0, Math.min(duplicatesLog.size(), 30))) {
+                    log.warn("  {}", dup);
+                }
+            }
+
+            if (!exactDupsLog.isEmpty()) {
+                log.info("=== DETEKSI DUPLIKAT PERSIS DI SPREADSHEET (TOTAL {} DATA DIGABUNGKAN) ===", exactDupsLog.size());
+                for (String dup : exactDupsLog.subList(0, Math.min(exactDupsLog.size(), 30))) {
+                    log.info("  {}", dup);
+                }
+            }
+
+            if (!emptyRowsLog.isEmpty()) {
+                log.info("=== BARIS KOSONG DI SPREADSHEET (TOTAL {} BARIS DILEWATI) ===", emptyRowsLog.size());
+                log.info("  Baris: {}", emptyRowsLog);
+            }
+
+            final List<PelangganMybiz> buffer = new ArrayList<>();
+            int totalProcessed = 0;
+
+            for (PelangganMybiz pm : uniquePartners.values()) {
+                buffer.add(pm);
+
+                if (buffer.size() >= BATCH_SIZE) {
+                    totalProcessed += buffer.size();
+                    self.savePelangganMybizBatch(buffer);
+                    buffer.clear();
+                    log.info("PelangganMybiz Google Sheets Migrated: {}...", totalProcessed);
+                }
+            }
+
+            if (!buffer.isEmpty()) {
+                totalProcessed += buffer.size();
+                self.savePelangganMybizBatch(buffer);
+                buffer.clear();
+            }
+
+            // 2. CLEANUP DATA LAMA
+            log.info("Cleaning up old PelangganMybiz data...");
+            int deleted = pgJdbcTemplate.update("DELETE FROM pelanggan_mybiz WHERE last_synced < ?", syncTime);
+            log.info("Cleaned up {} stale PelangganMybiz records.", deleted);
+
+            long duration = System.currentTimeMillis() - startTime;
+            String result = "=== PELANGGAN GOOGLE SHEETS SELESAI === Total: " + totalProcessed + ". Waktu: " + (duration / 1000) + " detik.";
+            log.info("{}", result);
+            return CompletableFuture.completedFuture(result);
+
+        } catch (Exception e) {
+            log.error("CRITICAL ERROR during PelangganMybiz Data Migration: {}", e.getMessage(), e);
+            logConnectionCause(e);
+            return CompletableFuture.completedFuture("ERROR: " + e.getMessage());
+        }
+    }
+
+    @Transactional
+    public void savePelangganMybizBatch(List<PelangganMybiz> list) {
+        String sql = """
+                    INSERT INTO pelanggan_mybiz (id, kode_partner, nama_partner, mybiz_emp_id, kode_marketing, nama_marketing, limit_piutang, termin_piutang, limit_hutang, termin_hutang, npwp, alamat, no_telepon, last_synced)
+                    VALUES (nextval('pelanggan_mybiz_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (kode_partner) DO UPDATE SET
+                        nama_partner = EXCLUDED.nama_partner,
+                        mybiz_emp_id = EXCLUDED.mybiz_emp_id,
+                        kode_marketing = EXCLUDED.kode_marketing,
+                        nama_marketing = EXCLUDED.nama_marketing,
+                        limit_piutang = EXCLUDED.limit_piutang,
+                        termin_piutang = EXCLUDED.termin_piutang,
+                        limit_hutang = EXCLUDED.limit_hutang,
+                        termin_hutang = EXCLUDED.termin_hutang,
+                        npwp = EXCLUDED.npwp,
+                        alamat = EXCLUDED.alamat,
+                        no_telepon = EXCLUDED.no_telepon,
+                        last_synced = EXCLUDED.last_synced
+                """;
+
+        try {
+            pgJdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+                @Override
+                public void setValues(java.sql.PreparedStatement ps, int i) throws SQLException {
+                    PelangganMybiz pm = list.get(i);
+                    ps.setString(1, pm.getKodePartner());
+                    ps.setString(2, pm.getNamaPartner());
+                    
+                    if (pm.getMybizEmpId() != null) {
+                        ps.setLong(3, pm.getMybizEmpId());
+                    } else {
+                        ps.setNull(3, java.sql.Types.BIGINT);
+                    }
+                    
+                    ps.setString(4, pm.getKodeMarketing());
+                    ps.setString(5, pm.getNamaMarketing());
+                    ps.setBigDecimal(6, pm.getLimitPiutang());
+                    
+                    if (pm.getTerminPiutang() != null) {
+                        ps.setInt(7, pm.getTerminPiutang());
+                    } else {
+                        ps.setNull(7, java.sql.Types.INTEGER);
+                    }
+                    
+                    ps.setBigDecimal(8, pm.getLimitHutang());
+                    
+                    if (pm.getTerminHutang() != null) {
+                        ps.setInt(9, pm.getTerminHutang());
+                    } else {
+                        ps.setNull(9, java.sql.Types.INTEGER);
+                    }
+                    
+                    ps.setString(10, pm.getNpwp());
+                    ps.setString(11, pm.getAlamat());
+                    ps.setString(12, pm.getNoTelepon());
+                    ps.setTimestamp(13, java.sql.Timestamp.valueOf(pm.getLastSynced()));
+                }
+
+                @Override
+                public int getBatchSize() {
+                    return list.size();
+                }
+            });
+        } catch (BadSqlGrammarException e) {
+            log.error("CRITICAL SQL ERROR in PelangganMybiz Migration (Schema Mismatch): {}", e.getSQLException().getMessage());
+            throw e;
+        } finally {
+            list.clear();
         }
     }
 }

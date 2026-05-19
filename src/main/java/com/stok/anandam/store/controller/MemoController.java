@@ -285,4 +285,28 @@ public class MemoController {
             java.security.Principal principal) {
         return memoService.finishDeliveryProcess(memoId, photo, catatan, principal.getName());
     }
+
+    @LogActivity("Melakukan duplikat dan revisi memo")
+    @PostMapping(path = "/{memoId}/duplicate-revision", produces = MediaType.APPLICATION_JSON_VALUE)
+    public WebResponse<com.stok.anandam.store.dto.MemoDetailResponse> duplicateRevision(
+            @PathVariable("memoId") UUID memoId,
+            java.security.Principal principal) {
+        return memoService.duplicateRevision(memoId, principal.getName());
+    }
+
+    @LogActivity("Melakukan duplikat header memo")
+    @PostMapping(path = "/{memoId}/duplicate-header", produces = MediaType.APPLICATION_JSON_VALUE)
+    public WebResponse<com.stok.anandam.store.dto.MemoDetailResponse> duplicateHeader(
+            @PathVariable("memoId") UUID memoId,
+            java.security.Principal principal) {
+        return memoService.duplicateHeader(memoId, principal.getName());
+    }
+
+    @LogActivity("Membatalkan draft memo hasil duplikasi/revisi")
+    @DeleteMapping(path = "/{memoId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public WebResponse<String> deleteMemo(
+            @PathVariable("memoId") UUID memoId,
+            java.security.Principal principal) {
+        return memoService.deleteMemo(memoId, principal.getName());
+    }
 }
