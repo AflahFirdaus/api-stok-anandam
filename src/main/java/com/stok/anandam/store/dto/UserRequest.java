@@ -19,4 +19,6 @@ public class UserRequest {
 
     @NotNull(message = "Role wajib dipilih")
     private Role role;
+
+    private String noHp;
 }

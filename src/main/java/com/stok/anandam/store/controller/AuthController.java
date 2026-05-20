@@ -136,4 +136,19 @@ public class AuthController {
                                 .paging(null)
                                 .build());
         }
+
+        @PutMapping("/profile/phone")
+        @LogActivity("USER UPDATE PROFILE PHONE")
+        public ResponseEntity<WebResponse<UserResponse>> updatePhone(@Valid @RequestBody UpdatePhoneRequest request) {
+                UserResponse userResponse = userService.updatePhone(request);
+
+                WebResponse<UserResponse> response = WebResponse.<UserResponse>builder()
+                                .status(HttpStatus.OK.value())
+                                .message("Nomor HP berhasil diubah")
+                                .data(userResponse)
+                                .paging(null)
+                                .build();
+
+                return ResponseEntity.ok(response);
+        }
 }

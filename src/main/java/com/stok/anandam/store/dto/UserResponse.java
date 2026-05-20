@@ -20,4 +20,5 @@ public class UserResponse {
     private boolean active;
     private Boolean isOnline;
     private Integer deviceCount;
+    private String noHp;
 }

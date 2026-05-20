@@ -7,6 +7,7 @@ import com.stok.anandam.store.core.postgres.repository.UserRepository;
 import com.stok.anandam.store.dto.ChangePasswordRequest;
 import com.stok.anandam.store.dto.UserRequest;
 import com.stok.anandam.store.dto.UserResponse;
+import com.stok.anandam.store.dto.UpdatePhoneRequest;
 import com.stok.anandam.store.exception.ResourceNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -74,6 +75,7 @@ public class UserService {
         user.setUsername(request.getUsername());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setRole(request.getRole());
+        user.setNoHp(request.getNoHp());
         User savedUser = userRepository.save(user);
         return toUserResponse(savedUser);
     }
@@ -92,6 +94,7 @@ public class UserService {
         user.setNama(request.getNama());
         user.setUsername(request.getUsername());
         user.setRole(request.getRole());
+        user.setNoHp(request.getNoHp());
 
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
             user.setPassword(passwordEncoder.encode(request.getPassword()));
@@ -190,6 +193,22 @@ public class UserService {
         return toUserResponse(user);
     }
 
+    @org.springframework.transaction.annotation.Transactional
+    public UserResponse updatePhone(UpdatePhoneRequest request) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User tidak ditemukan"));
+
+        user.setNoHp(request.getNoHp());
+        userRepository.save(user);
+
+        // Log activity
+        activityLogService.log(username, "UPDATE_PROFILE_PHONE", "User mengubah nomor HP menjadi: " + request.getNoHp());
+
+        return toUserResponse(user);
+    }
+
     private UserResponse toUserResponse(User user) {
         UserResponse response = new UserResponse();
         response.setId(user.getId());
@@ -201,6 +220,7 @@ public class UserService {
         response.setActive(Boolean.TRUE.equals(user.getActive()));
         response.setIsOnline(user.getIsOnline());
         response.setDeviceCount(user.getDeviceCount());
+        response.setNoHp(user.getNoHp());
         return response;
     }
 }
