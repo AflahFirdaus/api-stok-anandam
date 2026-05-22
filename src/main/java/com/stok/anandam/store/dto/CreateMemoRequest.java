@@ -74,6 +74,11 @@ public class CreateMemoRequest {
     @SerializedName("opsiPengiriman")
     private String opsiPengiriman; 
     
+    @JsonProperty("tipeOngkir")
+    @JsonAlias({"tipe_ongkir", "tipeOngkir"})
+    @SerializedName("tipeOngkir")
+    private String tipeOngkir; 
+    
     @JsonProperty("metodePembayaran")
     @JsonAlias({"metode_pembayaran", "metodePembayaran"})
     @SerializedName("metodePembayaran")

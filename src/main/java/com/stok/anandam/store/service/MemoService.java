@@ -428,6 +428,7 @@ public class MemoService {
                     .isTeknisRequired(java.lang.Boolean.TRUE.equals(memo.getIsTeknisRequired()))
                     .isDeliveryRequired(java.lang.Boolean.TRUE.equals(memo.getIsDeliveryRequired()))
                     .opsiPengiriman(memo.getOpsiPengiriman())
+                    .tipeOngkir(memo.getTipeOngkir())
                     .metodePembayaran(memo.getMetodePembayaran())
                     .buktiFoto(memo.getBuktiFoto())
                     .buktiFotoUrl(memo.getBuktiFoto() != null ? "/uploads/memos/" + memo.getBuktiFoto() : null)
@@ -527,6 +528,7 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                 .isTeknisRequired(java.lang.Boolean.TRUE.equals(memo.getIsTeknisRequired()))
                 .isDeliveryRequired(java.lang.Boolean.TRUE.equals(memo.getIsDeliveryRequired()))
                 .opsiPengiriman(memo.getOpsiPengiriman())
+                .tipeOngkir(memo.getTipeOngkir())
                 .metodePembayaran(memo.getMetodePembayaran())
                 .buktiFoto(memo.getBuktiFoto())
                 .buktiFotoUrl(memo.getBuktiFoto() != null ? "/uploads/memos/" + memo.getBuktiFoto() : null)
@@ -705,6 +707,7 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                 .isTeknisRequired(request.getIsTeknisi())
                 .isDeliveryRequired(request.getMemoType().equalsIgnoreCase("ONLINE") || request.getIsKirim())
                 .opsiPengiriman(request.getOpsiPengiriman())
+                .tipeOngkir(request.getTipeOngkir())
                 .metodePembayaran(request.getMetodePembayaran())
                 .statusAkhir(MemoStatus.DRAFT)
                 .totalHarga(request.getTotalHarga())
@@ -816,6 +819,7 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
         memo.setIsTeknisRequired(request.getIsTeknisi());
         memo.setIsDeliveryRequired(request.getMemoType().equalsIgnoreCase("ONLINE") || request.getIsKirim());
         memo.setOpsiPengiriman(request.getOpsiPengiriman());
+        memo.setTipeOngkir(request.getTipeOngkir());
         memo.setMetodePembayaran(request.getMetodePembayaran());
         memo.setTotalHarga(request.getTotalHarga());
         memo.setDeskripsi(request.getDeskripsi());
@@ -1067,7 +1071,7 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
         User aktor = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
 
-        if (!aktor.getRole().name().equals("GUDANG") && !aktor.getRole().name().equals("ADMIN")) {
+        if (!aktor.getRole().name().equals("GUDANG") && !aktor.getRole().name().equals("SPV_GUDANG") && !aktor.getRole().name().equals("ADMIN")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Akses ditolak: Hanya bagian gudang yang bisa mengisi catatan item");
         }
 
@@ -1089,26 +1093,36 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
         User creator = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
 
-        Customer customer;
-        if (request.getNoHpCustomer() != null && !request.getNoHpCustomer().isBlank()) {
-            List<Customer> existingCustomers = customerRepository.findByNoHpAndDeletedAtIsNull(request.getNoHpCustomer());
-            String requestedName = request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru";
-            
-            customer = existingCustomers.stream()
-                    .filter(c -> c.getNamaPelanggan().equalsIgnoreCase(requestedName))
-                    .findFirst()
-                    .orElseGet(() -> {
-                        Customer newCust = Customer.builder()
-                                .namaPelanggan(requestedName)
-                                .noHp(request.getNoHpCustomer())
-                                .build();
-                        return customerRepository.save(newCust);
-                    });
+        Customer customer = null;
+        PelangganMybiz pelangganMybiz = null;
+
+        if (request.getPelangganMybizId() != null) {
+            pelangganMybiz = pelangganMybizRepository.findById(request.getPelangganMybizId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pelanggan MyBiz tidak ditemukan"));
+        } else if (request.getCustomerId() != null) {
+            customer = customerRepository.findById(request.getCustomerId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer tidak ditemukan"));
         } else {
-            customer = Customer.builder()
-                    .namaPelanggan(request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru")
-                    .build();
-            customer = customerRepository.save(customer);
+            if (request.getNoHpCustomer() != null && !request.getNoHpCustomer().isBlank()) {
+                List<Customer> existingCustomers = customerRepository.findByNoHpAndDeletedAtIsNull(request.getNoHpCustomer());
+                String requestedName = request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru";
+                
+                customer = existingCustomers.stream()
+                        .filter(c -> c.getNamaPelanggan().equalsIgnoreCase(requestedName))
+                        .findFirst()
+                        .orElseGet(() -> {
+                            Customer newCust = Customer.builder()
+                                    .namaPelanggan(requestedName)
+                                    .noHp(request.getNoHpCustomer())
+                                    .build();
+                            return customerRepository.save(newCust);
+                        });
+            } else {
+                customer = Customer.builder()
+                        .namaPelanggan(request.getNamaCustomer() != null && !request.getNamaCustomer().isBlank() ? request.getNamaCustomer() : "Pelanggan Baru")
+                        .build();
+                customer = customerRepository.save(customer);
+            }
         }
 
         String nomorMemo = "MEMO-PENDING-" + request.getMemoType().toUpperCase() + "-" + System.currentTimeMillis();
@@ -1116,12 +1130,16 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
         Memo memo = Memo.builder()
                 .nomorMemo(nomorMemo)
                 .customer(customer)
-                .marketingName(request.getNamaMarketing())
-                .marketingEmpCode(request.getMarketingEmpCode())
+                .pelangganMybiz(pelangganMybiz)
+                .marketingName(pelangganMybiz != null ? pelangganMybiz.getNamaMarketing() : request.getNamaMarketing())
+                .marketingEmpCode(pelangganMybiz != null ? pelangganMybiz.getKodeMarketing() : request.getMarketingEmpCode())
                 .creator(creator)
-                .tanggalMemo(LocalDateTime.now())
-                .isTeknisRequired(false)
-                .isDeliveryRequired(false)
+                .tanggalMemo(request.getTanggal() != null ? LocalDate.parse(request.getTanggal(), DATE_FORMATTER).atStartOfDay() : LocalDateTime.now())
+                .isTeknisRequired(request.getIsTeknisi())
+                .isDeliveryRequired(request.getMemoType().equalsIgnoreCase("ONLINE") || request.getIsKirim())
+                .opsiPengiriman(request.getOpsiPengiriman())
+                .tipeOngkir(request.getTipeOngkir())
+                .metodePembayaran(request.getMetodePembayaran())
                 .statusAkhir(MemoStatus.MENUNGGU_PERSETUJUAN)
                 .totalHarga(request.getTotalHarga())
                 .deskripsi(request.getDeskripsi())
@@ -1242,6 +1260,12 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
         memo.setKodePos(request.getDetails().getKodePos());
         memo.setTempo(request.getDetails().getTempo());
         memo.setBadanUsaha(request.getDetails().getBadanUsaha());
+
+        memo.setIsTeknisRequired(request.getDetails().getIsTeknisi());
+        memo.setIsDeliveryRequired(request.getDetails().getMemoType().equalsIgnoreCase("ONLINE") || request.getDetails().getIsKirim());
+        memo.setOpsiPengiriman(request.getDetails().getOpsiPengiriman());
+        memo.setTipeOngkir(request.getDetails().getTipeOngkir());
+        memo.setMetodePembayaran(request.getDetails().getMetodePembayaran());
 
         memo.setStatusAkhir(MemoStatus.MENUNGGU_GUDANG);
         memoRepository.save(memo);
@@ -1566,6 +1590,7 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                 .isTeknisRequired(oldMemo.getIsTeknisRequired())
                 .isDeliveryRequired(oldMemo.getIsDeliveryRequired())
                 .opsiPengiriman(oldMemo.getOpsiPengiriman())
+                .tipeOngkir(oldMemo.getTipeOngkir())
                 .metodePembayaran(oldMemo.getMetodePembayaran())
                 .statusAkhir(MemoStatus.DRAFT) // Mulai sebagai DRAFT
                 .totalHarga(oldMemo.getTotalHarga())
@@ -1644,6 +1669,7 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                 .isTeknisRequired(oldMemo.getIsTeknisRequired())
                 .isDeliveryRequired(oldMemo.getIsDeliveryRequired())
                 .opsiPengiriman(oldMemo.getOpsiPengiriman())
+                .tipeOngkir(oldMemo.getTipeOngkir())
                 .metodePembayaran(oldMemo.getMetodePembayaran())
                 .statusAkhir(MemoStatus.DRAFT) // Mulai sebagai DRAFT
                 .totalHarga(java.math.BigDecimal.ZERO) // Total harga 0 karena kosong
