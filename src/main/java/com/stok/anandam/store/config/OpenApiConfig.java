@@ -21,7 +21,7 @@ public class OpenApiConfig {
         
         // 1. Tambahkan Local Server
         Server localServer = new Server()
-                .url("http://localhost:8080") // Pastikan port-nya sesuai dengan aplikasi lokalmu
+                .url("http://localhost:9090")
                 .description("Local Server (HTTP)");
 
         // 2. Server Production kamu

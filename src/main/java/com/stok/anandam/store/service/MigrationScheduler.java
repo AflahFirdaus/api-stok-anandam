@@ -21,11 +21,9 @@ public class MigrationScheduler {
     @Scheduled(fixedDelay = 30000)
     public void scheduleMigration() {
         LocalTime now = LocalTime.now();
-        System.out.println("Scheduler mengecek waktu: " + now); // Tambahkan ini sementara
 
         // Istirahat malam hari (21:15 s/d 07:55 pagi)
         if (now.isAfter(LocalTime.of(21, 15)) || now.isBefore(LocalTime.of(7, 55))) {
-            System.out.println("Masih dalam jam istirahat malam, skip...");
             return;
         }
 
