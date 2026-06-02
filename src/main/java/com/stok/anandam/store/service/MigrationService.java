@@ -35,7 +35,6 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 @Service
-@ConditionalOnProperty(name = "app.mysql.enabled", havingValue = "true")
 public class MigrationService {
 
     private static final Logger log = LoggerFactory.getLogger(MigrationService.class);
