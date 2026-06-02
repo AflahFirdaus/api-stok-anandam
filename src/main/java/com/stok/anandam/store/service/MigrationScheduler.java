@@ -11,14 +11,13 @@ import java.time.LocalTime;
 @Configuration
 @EnableScheduling
 @Component
-@ConditionalOnProperty(name = "app.mysql.enabled", havingValue = "true")
 public class MigrationScheduler {
 
     @Autowired
     private MigrationService migrationService;
 
-    // Tetap jalan setiap 30 detik
-    @Scheduled(fixedDelay = 30000)
+    // Tetap jalan setiap 60 detik (1 Menit)
+    @Scheduled(fixedDelay = 60000)
     public void scheduleMigration() {
         LocalTime now = LocalTime.now();
 

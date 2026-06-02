@@ -48,9 +48,7 @@ public class MigrationService {
     @Qualifier("pgJdbcTemplate")
     private JdbcTemplate pgJdbcTemplate;
 
-    @Autowired
-    @Qualifier("legacyJdbcTemplate")
-    private JdbcTemplate legacyJdbcTemplate;
+
 
     @Autowired
     private PurchaseRepository purchaseRepository;
@@ -84,84 +82,7 @@ public class MigrationService {
 
     @Async
     public CompletableFuture<String> migratePurchaseData() {
-        LocalDateTime syncTime = LocalDateTime.now();
-        long startTime = System.currentTimeMillis();
-
-        log.info("=== START MIGRASI PURCHASE (UPSERT) ===");
-        
-        try {
-            // 0. HITUNG ESTIMASI DATA
-            String countSql = "SELECT COUNT(*) FROM (" + getSqlPurchase() + ") as total";
-            try {
-                Integer totalRows = legacyJdbcTemplate.queryForObject(countSql, Integer.class);
-                log.info("ESTIMASI TOTAL DATA PURCHASE DARI SOURCE: {}", totalRows);
-            } catch (Exception e) {
-                log.warn("Gagal menghitung total data source: {}", e.getMessage());
-            }
-
-            final List<Purchase> buffer = new ArrayList<>();
-            final int[] totalProcessed = { 0 };
-
-            // 1. MULAI STREAMING DATA BARU
-            legacyJdbcTemplate.query(getSqlPurchase(), new RowCallbackHandler() {
-                @Override
-                public void processRow(ResultSet rs) throws SQLException {
-                    try {
-                        Purchase p = new Purchase();
-
-                        // Mapping
-                        java.sql.Date sqlDate = rs.getDate("doc_date");
-                        if (sqlDate != null)
-                            p.setDocDate(sqlDate.toLocalDate());
-                        p.setDocNoP(rs.getString("doc_no"));
-                        p.setParName(rs.getString("par_name"));
-                        p.setDepCode(rs.getString("dep_code"));
-                        p.setItemCode(rs.getString("item_code"));
-                        p.setItemName(rs.getString("item_name"));
-                        p.setQty(rs.getInt("qty_def"));
-                        p.setPrice(rs.getBigDecimal("price"));
-                        p.setGrandTotal(rs.getBigDecimal("grand_total"));
-                        p.setLastSynced(syncTime);
-
-                        buffer.add(p);
-
-                        if (buffer.size() >= BATCH_SIZE) {
-                            totalProcessed[0] += buffer.size();
-                            self.saveBatch(buffer);
-
-                            log.info("Migrated: {} data...", totalProcessed[0]);
-                        }
-                    } catch (BadSqlGrammarException e) {
-                        throw e; // Rethrow fatal SQL errors to stop migration
-                    } catch (Exception e) {
-                        log.warn("Error processing row: {}", e.getMessage());
-                    }
-                }
-            });
-
-            // Di luar looping (sisa data < 1000)
-            if (!buffer.isEmpty()) {
-                totalProcessed[0] += buffer.size();
-                self.saveBatch(buffer);
-            }
-
-            // 2. CLEANUP DATA LAMA (Logical Delete)
-            log.info("Cleaning up old Purchase data...");
-            int deleted = pgJdbcTemplate.update("DELETE FROM purchases WHERE last_synced < ?", syncTime);
-            log.info("Cleaned up {} stale Purchase records.", deleted);
-
-            long duration = System.currentTimeMillis() - startTime;
-            String result = "=== SELESAI === Total Data: " + totalProcessed[0] + ". Waktu: " + (duration / 1000)
-                    + " detik.";
-            log.info("{}", result);
-
-            return CompletableFuture.completedFuture(result);
-
-        } catch (Exception e) {
-            log.error("CRITICAL ERROR during Purchase Data Migration: {}", e.getMessage(), e);
-            logConnectionCause(e);
-            return CompletableFuture.completedFuture("ERROR: " + e.getMessage());
-        }
+        return CompletableFuture.completedFuture("Migrasi Purchase telah dipindah ke project api-migration.");
     }
 
 
@@ -265,86 +186,7 @@ public class MigrationService {
 
     @Async
     public CompletableFuture<String> migrateSalesData() {
-        LocalDateTime syncTime = LocalDateTime.now();
-        long startTime = System.currentTimeMillis();
-
-        log.info("=== START MIGRASI SALES (UPSERT) ===");
-
-        try {
-            // 0. HITUNG ESTIMASI DATA
-            String countSql = "SELECT COUNT(*) FROM (" + getSqlSales() + ") as total";
-            try {
-                Integer totalRows = legacyJdbcTemplate.queryForObject(countSql, Integer.class);
-                log.info("ESTIMASI TOTAL DATA SALES DARI SOURCE: {}", totalRows);
-            } catch (Exception e) {
-                log.warn("Gagal menghitung total data source: {}", e.getMessage());
-            }
-
-            final List<Sales> buffer = new ArrayList<>();
-            final int[] totalProcessed = { 0 };
-
-            // 1. Streaming Data
-            legacyJdbcTemplate.query(getSqlSales(), new RowCallbackHandler() {
-                @Override
-                public void processRow(ResultSet rs) throws SQLException {
-                    try {
-                        Sales s = new Sales();
-
-                        // Mapping Data
-                        java.sql.Date sqlDate = rs.getDate("doc_date");
-                        if (sqlDate != null)
-                            s.setDocDate(sqlDate.toLocalDate());
-
-                        s.setDocNo(rs.getString("doc_no"));
-                        s.setCode(rs.getString("code"));
-                        s.setParName(rs.getString("par_name"));
-                        s.setDepCode(rs.getString("dep_code"));
-                        s.setItemName(rs.getString("ite_name"));
-                        s.setQty(rs.getInt("qty_def"));
-                        s.setPrice(rs.getBigDecimal("price"));
-                        s.setGrandTotal(rs.getBigDecimal("grand_total"));
-                        s.setEmpCode(rs.getString("emp_code"));
-                        s.setEmpName(rs.getString("emp_name"));
-                        s.setLastSynced(syncTime);
-
-                        buffer.add(s);
-
-                        // Batch Save
-                        if (buffer.size() >= BATCH_SIZE) {
-                            totalProcessed[0] += buffer.size();
-                            self.saveSalesBatch(buffer);
-                            log.info("Sales Migrated: {}...", totalProcessed[0]);
-                        }
-                    } catch (BadSqlGrammarException e) {
-                        throw e;
-                    } catch (Exception e) {
-                        log.warn("Error processing Sales row: {}", e.getMessage());
-                    }
-                }
-            });
-
-            // Sisa Data
-            if (!buffer.isEmpty()) {
-                totalProcessed[0] += buffer.size();
-                self.saveSalesBatch(buffer);
-            }
-
-            // 2. CLEANUP DATA LAMA
-            log.info("Cleaning up old Sales data...");
-            int deleted = pgJdbcTemplate.update("DELETE FROM sales WHERE last_synced < ?", syncTime);
-            log.info("Cleaned up {} stale Sales records.", deleted);
-
-            long duration = System.currentTimeMillis() - startTime;
-            String result = "=== SALES SELESAI === Total: " + totalProcessed[0] + ". Waktu: " + (duration / 1000)
-                    + " detik.";
-            log.info("{}", result);
-            return CompletableFuture.completedFuture(result);
-
-        } catch (Exception e) {
-            log.error("CRITICAL ERROR during Sales Data Migration: {}", e.getMessage(), e);
-            logConnectionCause(e);
-            return CompletableFuture.completedFuture("ERROR: " + e.getMessage());
-        }
+        return CompletableFuture.completedFuture("Migrasi Sales telah dipindah ke project api-migration.");
     }
 
     @Transactional
@@ -416,42 +258,10 @@ public class MigrationService {
     private static final String TKDN_RANGE = "TKDN!A1:AE";
 
     public void checkAndTriggerMigration() {
-        log.info("Checking for database changes in dbslog...");
+        log.info("Triggering Google Sheets migration...");
         try {
-            String sql = "SELECT MAX(id) FROM dbslog";
-            Long currentMaxId = legacyJdbcTemplate.queryForObject(sql, Long.class);
-
-            if (currentMaxId == null || currentMaxId == 0)
-                return;
-
-            Optional<SyncSettings> opt = syncSettingsRepository.findBySyncKey("last_max_id");
-            Long lastMaxId = opt.map(s -> {
-                try {
-                    return Long.parseLong(s.getSyncValue());
-                } catch (NumberFormatException e) {
-                    return 0L;
-                }
-            }).orElse(0L);
-
-            if (currentMaxId > lastMaxId) {
-                log.info("Changes detected in dbtjurnal (current: {}, last: {}). Triggering migration...", currentMaxId,
-                        lastMaxId);
-
-                // migrateStockData().get();
-                // migrateSalesData().get();
-                // migratePurchaseData().get();
-                // migrateSnData().get();
-                migratePelangganMybizData().get();
-
-                SyncSettings settings = opt
-                        .orElse(SyncSettings.builder().syncKey("last_max_id").syncValue("0").build());
-                settings.setSyncValue(String.valueOf(currentMaxId));
-                syncSettingsRepository.save(settings);
-
-                log.info("Auto-sync migration completed. last_max_id updated to {}", currentMaxId);
-            } else {
-                log.info("No changes in dbtjurnal (max_id: {}).", currentMaxId);
-            }
+            syncStockPricelistFromSheet().get();
+            log.info("Auto-sync Google Sheets migration completed.");
         } catch (Exception e) {
             log.error("Error trigger check: {}", e.getMessage());
         }
@@ -567,82 +377,7 @@ public class MigrationService {
 
     @Async
     public CompletableFuture<String> migrateStockData() {
-        LocalDateTime syncTime = LocalDateTime.now();
-        long startTime = System.currentTimeMillis();
-        log.info("=== START MIGRASI STOK (UPSERT) ===");
-
-        try {
-            final List<Stock> buffer = new ArrayList<>();
-            final int[] totalProcessed = { 0 };
-
-            legacyJdbcTemplate.query(getSqlStock(), new RowCallbackHandler() {
-                @Override
-                public void processRow(ResultSet rs) throws SQLException {
-                    try {
-                        Stock s = new Stock();
-
-                        String code = rs.getString("item_code");
-                        String name = rs.getString("item_name");
-
-                        s.setItemCode(code);
-                        s.setItemName(name);
-                        s.setNormalizedItemName(com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(name));
-
-                        // === LOGIC UPDATE KATEGORI ===
-                        if (code != null && !code.isEmpty()) {
-                            if (code.contains("-")) {
-                                s.setKategoriItemcode(code.split("-")[0]);
-                            } else {
-                                s.setKategoriItemcode(code.split(" ")[0]);
-                            }
-                        }
-
-                        if (name != null && !name.isEmpty()) {
-                            s.setKategoriNama(name.split(" ")[0]);
-                        }
-
-                        s.setFinalStok(rs.getInt("final_stock"));
-                        s.setHargaHpp(rs.getBigDecimal("harga_hpp"));
-                        s.setGrandTotal(rs.getBigDecimal("grand_total"));
-                        s.setWarehouse(rs.getString("warehouse_name"));
-                        s.setLastSynced(syncTime);
-
-                        buffer.add(s);
-
-                        if (buffer.size() >= BATCH_SIZE) {
-                            totalProcessed[0] += buffer.size();
-                            self.saveStockBatch(buffer);
-                            log.info("Stock Migrated: {}...", totalProcessed[0]);
-                        }
-                    } catch (BadSqlGrammarException e) {
-                        throw e;
-                    } catch (Exception e) {
-                        log.warn("Error processing Stock row: {}", e.getMessage());
-                    }
-                }
-            });
-
-            if (!buffer.isEmpty()) {
-                totalProcessed[0] += buffer.size();
-                self.saveStockBatch(buffer);
-            }
-
-            // CLEANUP DATA LAMA
-            log.info("Cleaning up old Stock data...");
-            int deleted = pgJdbcTemplate.update("DELETE FROM stok WHERE last_synced < ?", syncTime);
-            log.info("Cleaned up {} stale Stock records.", deleted);
-
-            long duration = System.currentTimeMillis() - startTime;
-            String result = "=== STOK SELESAI === Total: " + totalProcessed[0] + ". Waktu: "
-                    + (duration / 1000) + " detik.";
-            log.info("{}", result);
-            return CompletableFuture.completedFuture(result);
-
-        } catch (Exception e) {
-            log.error("CRITICAL ERROR during Stock Data Migration: {}", e.getMessage(), e);
-            logConnectionCause(e);
-            return CompletableFuture.completedFuture("ERROR: " + e.getMessage());
-        }
+        return CompletableFuture.completedFuture("Migrasi Stok telah dipindah ke project api-migration.");
     }
 
     /**
@@ -894,58 +629,7 @@ public class MigrationService {
 
     @Async
     public CompletableFuture<String> migrateSnData() {
-        LocalDateTime syncTime = LocalDateTime.now();
-        log.info("=== START MIGRASI SERIAL NUMBER (UPSERT) ===");
-        try {
-            // 2. Query Gabungan (Masuk & Keluar) dari Legacy MySQL
-            String sqlSource = """
-                        SELECT MAX(p.doc_date) AS tanggal, p.doc_no AS doc_id, MAX(p.par_name) AS user_name, MAX(m.name) AS item_name, sn.sn, 'MASUK' as type
-                        FROM dbtitemsn sn
-                        LEFT JOIN dbmitem m ON sn.ite_id = m.id
-                        LEFT JOIN dbtpurchasedoc p ON sn.doc_id = p.id AND sn.doc_type = p.doc_type
-                        WHERE sn.doc_type IN (42,43,44) AND sn.sn IS NOT NULL AND TRIM(sn.sn) <> ''
-                        GROUP BY p.doc_no, sn.sn
-                        UNION ALL
-                        SELECT MAX(s.doc_date) AS tanggal, s.doc_no AS doc_id, MAX(s.par_name) AS user_name, MAX(m.name) AS item_name, sn.sn, 'KELUAR' as type
-                        FROM dbtitemsn sn
-                        LEFT JOIN dbmitem m ON sn.ite_id = m.id
-                        LEFT JOIN dbtsalesdoc s ON sn.doc_id = s.id AND sn.doc_type = s.doc_type
-                        WHERE sn.doc_type IN (32,33) AND sn.sn IS NOT NULL AND TRIM(sn.sn) <> ''
-                        GROUP BY s.doc_no, sn.sn
-                    """;
-
-            final List<Object[]> buffer = new ArrayList<>();
-            legacyJdbcTemplate.query(sqlSource, rs -> {
-                Object[] row = new Object[] {
-                        rs.getTimestamp("tanggal"),
-                        rs.getString("doc_id"),
-                        rs.getString("user_name"),
-                        rs.getString("item_name"),
-                        rs.getString("sn"),
-                        rs.getString("type"),
-                        java.sql.Timestamp.valueOf(syncTime)
-                };
-                buffer.add(row);
-                if (buffer.size() >= BATCH_SIZE) {
-                    saveSnBatch(new ArrayList<>(buffer));
-                    buffer.clear();
-                }
-            });
-
-            if (!buffer.isEmpty())
-                saveSnBatch(buffer);
-
-            // CLEANUP DATA LAMA
-            log.info("Cleaning up old SN data...");
-            int deleted = pgJdbcTemplate.update("DELETE FROM item_serial_numbers WHERE last_synced < ?", syncTime);
-            log.info("Cleaned up {} stale SN records.", deleted);
-
-            return CompletableFuture.completedFuture("Migrasi SN Selesai.");
-        } catch (Exception e) {
-            log.error("Error SN Migration: {}", e.getMessage());
-            logConnectionCause(e);
-            return CompletableFuture.completedFuture("Error: " + e.getMessage());
-        }
+        return CompletableFuture.completedFuture("Migrasi Item SN telah dipindah ke project api-migration.");
     }
 
     /** Log penyebab koneksi JDBC (root cause) agar mudah debug MySQL/Postgres. */
