@@ -112,11 +112,14 @@ public class MemoService {
                         boolean isCreator = m.getCreator() != null && m.getCreator().getId().equals(aktor.getId());
                         boolean isSameRole = m.getCreator() != null && m.getCreator().getRole() == aktor.getRole();
                         boolean isAssigned = assignedMemoIds.contains(m.getId());
-                        
+                        boolean isCreatedBySpvMarketing = "MARKETING_TOKO".equals(roleName)
+                                && m.getCreator() != null
+                                && "SPV_MARKETING".equals(m.getCreator().getRole().name());
+
                         if (m.getStatusAkhir() == MemoStatus.DRAFT) {
-                            return isCreator || isSameRole;
+                            return isCreator || isSameRole || isCreatedBySpvMarketing;
                         }
-                        return isOwner || isCreator || isSameRole || isAssigned;
+                        return isOwner || isCreator || isSameRole || isAssigned || isCreatedBySpvMarketing;
                     })
                     .collect(Collectors.toList());
             }

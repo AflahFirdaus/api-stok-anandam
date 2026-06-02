@@ -33,11 +33,11 @@ public class MigrationController {
     public ResponseEntity<WebResponse<String>> startPurchaseMigration() {
         if (migrationService == null)
             return migrationDisabled();
-        migrationService.migratePurchaseData();
+        // migrationService.migratePurchaseData();
         return ResponseEntity.ok(WebResponse.<String>builder()
                 .status(200)
-                .message("Proses migrasi Purchase berjalan di background. Cek log server.")
-                .data("Processing...")
+                .message("Proses migrasi Purchase telah dipindah ke project api-migration.")
+                .data("Moved")
                 .paging(null)
                 .build());
     }
@@ -47,11 +47,11 @@ public class MigrationController {
     public ResponseEntity<WebResponse<String>> startSalesMigration() {
         if (migrationService == null)
             return migrationDisabled();
-        migrationService.migrateSalesData();
+        // migrationService.migrateSalesData();
         return ResponseEntity.ok(WebResponse.<String>builder()
                 .status(200)
-                .message("Migrasi Sales berjalan di background...")
-                .data("Processing...")
+                .message("Migrasi Sales telah dipindah ke project api-migration.")
+                .data("Moved")
                 .paging(null)
                 .build());
     }
@@ -61,11 +61,11 @@ public class MigrationController {
     public ResponseEntity<WebResponse<String>> startStockMigration() {
         if (migrationService == null)
             return migrationDisabled();
-        migrationService.migrateStockData();
+        // migrationService.migrateStockData();
         return ResponseEntity.ok(WebResponse.<String>builder()
                 .status(200)
-                .message("Migrasi Stok berjalan di background...")
-                .data("Processing...")
+                .message("Migrasi Stok telah dipindah ke project api-migration.")
+                .data("Moved")
                 .paging(null)
                 .build());
     }
@@ -103,11 +103,11 @@ public class MigrationController {
     public ResponseEntity<WebResponse<String>> startSnMigration() {
         if (migrationService == null)
             return migrationDisabled();
-        migrationService.migrateSnData(); // Pastikan method ini sudah dibuat di MigrationService
+        // migrationService.migrateSnData(); // Pastikan method ini sudah dibuat di MigrationService
         return ResponseEntity.ok(WebResponse.<String>builder()
                 .status(200)
-                .message("Migrasi Serial Number berjalan di background...")
-                .data("Processing...")
+                .message("Migrasi Serial Number telah dipindah ke project api-migration.")
+                .data("Moved")
                 .paging(null)
                 .build());
     }
@@ -140,19 +140,5 @@ public class MigrationController {
                 .paging(null)
                 .build());
     }
-
-    // @PostMapping("/all")
-    // public ResponseEntity<WebResponse<String>> migrateAll() {
-    // if (migrationService == null) return migrationDisabled();
-
-    // // Menjalankan semua migrasi sekaligus di background
-    // migrationService.migrateAll();
-
-    // return ResponseEntity.ok(WebResponse.<String>builder()
-    // .status(200)
-    // .message("Seluruh sinkronisasi data dari MyBiz sedang berjalan...")
-    // .data("Total Processing...")
-    // .build());
-    // }
 }
 // Re-trigger compilation

@@ -1,5 +1,4 @@
 package com.stok.anandam.store.service;
-
 import com.stok.anandam.store.core.postgres.model.*;
 import com.stok.anandam.store.core.postgres.repository.*;
 import jakarta.persistence.EntityManager;
@@ -166,9 +165,7 @@ public class MigrationService {
     }
 
 
-
     // Helper: Reset Table (Dipisah biar Transaction-nya jelas)
-    // Tidak perlu @Transactional di sini karena sudah ada di Repository
     public void resetTable() {
         purchaseRepository.truncateTable();
     }
@@ -440,10 +437,10 @@ public class MigrationService {
                 log.info("Changes detected in dbtjurnal (current: {}, last: {}). Triggering migration...", currentMaxId,
                         lastMaxId);
 
-                migrateStockData().get();
-                migrateSalesData().get();
-                migratePurchaseData().get();
-                migrateSnData().get();
+                // migrateStockData().get();
+                // migrateSalesData().get();
+                // migratePurchaseData().get();
+                // migrateSnData().get();
                 migratePelangganMybizData().get();
 
                 SyncSettings settings = opt
