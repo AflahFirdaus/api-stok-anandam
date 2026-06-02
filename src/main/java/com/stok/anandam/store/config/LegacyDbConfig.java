@@ -1,7 +1,7 @@
 package com.stok.anandam.store.config;
 
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -9,8 +9,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
 
-@Configuration
-@ConditionalOnProperty(name = "app.mysql.enabled", havingValue = "true")
+// DINONAKTIFKAN PERMANEN: Migrasi MyBiz telah dipindah ke project api-migration.
+@Profile("mysql-disabled")
 public class LegacyDbConfig {
 
     @Bean(name = "legacyJdbcTemplate")

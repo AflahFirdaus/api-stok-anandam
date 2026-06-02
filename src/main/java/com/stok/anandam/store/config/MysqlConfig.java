@@ -5,7 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.boot.jpa.EntityManagerFactoryBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,8 +22,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-@Configuration
-@ConditionalOnProperty(name = "app.mysql.enabled", havingValue = "true")
+// DINONAKTIFKAN PERMANEN: Migrasi MyBiz telah dipindah ke project api-migration.
+// MysqlConfig tidak akan pernah dimuat karena profile 'mysql-disabled' tidak pernah aktif.
+// Mengganti @ConditionalOnProperty agar tidak bisa di-override oleh env variable APP_MYSQL_ENABLED.
+@Profile("mysql-disabled")
 @EnableTransactionManagement
 @EnableJpaRepositories(basePackages = "com.stok.anandam.store.core.mysql.repository", entityManagerFactoryRef = "mysqlEntityManagerFactory", transactionManagerRef = "mysqlTransactionManager")
 public class MysqlConfig {
