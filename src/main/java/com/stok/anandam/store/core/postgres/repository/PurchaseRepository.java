@@ -98,7 +98,7 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
                         @Param("search") String search,
                         @Param("searchColumn") String searchColumn);
 
-        @Query("SELECT p.itemName, p.docDate, p.parName FROM Purchase p WHERE p.itemName IN :itemNames AND p.docDate = (SELECT MAX(p2.docDate) FROM Purchase p2 WHERE p2.itemName = p.itemName)")
+        @Query("SELECT p.itemName, p.docDate, p.parName, p.price FROM Purchase p WHERE p.itemName IN :itemNames AND p.docDate = (SELECT MAX(p2.docDate) FROM Purchase p2 WHERE p2.itemName = p.itemName)")
         List<Object[]> findLatestPurchaseDetailsByItemNames(@Param("itemNames") List<String> itemNames);
 
         @Query(value = "SELECT * FROM purchases WHERE item_name = :itemName ORDER BY doc_date DESC LIMIT 1", nativeQuery = true)
