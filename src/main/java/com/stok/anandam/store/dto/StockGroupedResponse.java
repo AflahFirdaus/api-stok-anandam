@@ -27,6 +27,7 @@ public class StockGroupedResponse {
     private BigDecimal finalPricelist;
     private LocalDate lastSalesDate;
     private LocalDate lastPurchaseDate;
+    private BigDecimal lastPurchasePrice;
     private String parName;
     private List<WarehouseStockDTO> warehouses;
     private Integer totalPending;

@@ -12,9 +12,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import com.stok.anandam.store.core.postgres.model.Role;
-import com.stok.anandam.store.core.postgres.model.User;
-import com.stok.anandam.store.core.postgres.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.stereotype.Service;
@@ -118,17 +115,20 @@ public class StockService {
                 // Fetch Last Purchase Details (Date and Partner Name)
                 Map<String, LocalDate> lastPurchaseDates = new HashMap<>();
                 Map<String, String> lastPurchasePartners = new HashMap<>();
+                Map<String, BigDecimal> lastPurchasePrice = new HashMap<>();
                 if (!itemNames.isEmpty()) {
                         List<Object[]> results = purchaseRepository.findLatestPurchaseDetailsByItemNames(itemNames);
                         for (Object[] res : results) {
                                 String name = (String) res[0];
                                 LocalDate date = (LocalDate) res[1];
                                 String partner = (String) res[2];
+                                BigDecimal price = (BigDecimal) res[3];
 
                                 if (name != null) {
                                         String trimmedName = name.trim();
                                         lastPurchaseDates.put(trimmedName, date);
                                         lastPurchasePartners.put(trimmedName, partner);
+                                        lastPurchasePrice.put(trimmedName, price);
                                 }
                         }
                 }
@@ -196,6 +196,7 @@ public class StockService {
                                         .finalPricelist(priceInfo != null ? priceInfo.getFinalPricelist() : null)
                                         .lastSalesDate(lastSalesDates.get(trimmedName))
                                         .lastPurchaseDate(lastPurchaseDates.get(trimmedName))
+                                         .lastPurchasePrice(lastPurchasePrice.get(trimmedName))
                                          .parName(lastPurchasePartners.get(trimmedName))
                                          .warehouses(warehouses)
                                          .totalPending(0) // Default
@@ -405,6 +406,7 @@ public class StockService {
 
                 purchaseRepository.findLatestPurchaseByItemName(stock.getItemName()).ifPresent(p -> {
                         stock.setLastPurchaseDate(p.getDocDate());
+                        stock.setLastPurchasePrice(p.getPrice());
                         stock.setParName(p.getParName());
                 });
 

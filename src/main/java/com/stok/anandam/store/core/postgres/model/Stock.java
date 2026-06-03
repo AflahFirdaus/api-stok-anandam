@@ -75,4 +75,7 @@ public class Stock {
 
     @Transient
     private String parName;
+
+    @Transient
+    private BigDecimal lastPurchasePrice;
 }
