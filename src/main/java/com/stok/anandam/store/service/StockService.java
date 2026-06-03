@@ -122,7 +122,14 @@ public class StockService {
                                 String name = (String) res[0];
                                 LocalDate date = (LocalDate) res[1];
                                 String partner = (String) res[2];
-                                BigDecimal price = (BigDecimal) res[3];
+                                BigDecimal price = null;
+                                if (res[3] != null) {
+                                    if (res[3] instanceof BigDecimal) {
+                                        price = (BigDecimal) res[3];
+                                    } else {
+                                        price = new BigDecimal(res[3].toString());
+                                    }
+                                }
 
                                 if (name != null) {
                                         String trimmedName = name.trim();
