@@ -24,4 +24,17 @@ public class DatabaseMigrationConfig {
             }
         };
     }
+
+    @Bean
+    public CommandLineRunner addModelSeriLamaColumn(@org.springframework.beans.factory.annotation.Qualifier("pgJdbcTemplate") JdbcTemplate jdbcTemplate) {
+        return args -> {
+            try {
+                log.info("Checking if model_seri_lama column exists in transaksi_servis...");
+                jdbcTemplate.execute("ALTER TABLE transaksi_servis ADD COLUMN IF NOT EXISTS model_seri_lama VARCHAR(100)");
+                log.info("Column 'model_seri_lama' has been added (or already exists) in transaksi_servis table.");
+            } catch (Exception e) {
+                log.warn("Could not add column model_seri_lama: {}", e.getMessage());
+            }
+        };
+    }
 }

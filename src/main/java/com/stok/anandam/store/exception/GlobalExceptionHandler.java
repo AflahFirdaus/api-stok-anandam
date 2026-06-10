@@ -2,6 +2,7 @@ package com.stok.anandam.store.exception;
 
 import com.stok.anandam.store.dto.ApiErrorResponse;
 import com.stok.anandam.store.dto.WebResponse;
+
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.format.DateTimeParseException;
 import java.util.Map;
@@ -46,7 +48,6 @@ public class GlobalExceptionHandler {
         @ExceptionHandler(DataIntegrityViolationException.class)
         public ResponseEntity<WebResponse<ApiErrorResponse>> handleDataIntegrity(DataIntegrityViolationException ex,
                         HttpServletRequest request) {
-                // Ambil pesan root cause biar lebih jelas (tapi tetap aman)
                 String message = "Terjadi konflik data database. Cek constraint atau panjang karakter.";
                 if (ex.getRootCause() != null) {
                         message = ex.getRootCause().getMessage();
@@ -184,8 +185,7 @@ public class GlobalExceptionHandler {
                 Map<String, String> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
                                 .collect(Collectors.toMap(
                                                 err -> err.getField(),
-                                                err -> err.getDefaultMessage() != null ? err.getDefaultMessage()
-                                                                : "Invalid",
+                                                err -> err.getDefaultMessage() != null ? err.getDefaultMessage() : "Invalid",
                                                 (a, b) -> a));
                 String message = fieldErrors.isEmpty() ? "Validasi gagal" : fieldErrors.values().iterator().next();
                 ApiErrorResponse error = new ApiErrorResponse(
@@ -223,7 +223,42 @@ public class GlobalExceptionHandler {
                                 .build());
         }
 
-        // 7. Handle Semua Error Lain yang Tidak Terduga (500)
+        // 7. Handle Akses Ditolak (403)
+        @ExceptionHandler(AccessDeniedException.class)
+        public ResponseEntity<WebResponse<ApiErrorResponse>> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+                String message = "Akses ditolak: Anda tidak berhak melihat dokumen ini.";
+                ApiErrorResponse error = new ApiErrorResponse(
+                                HttpStatus.FORBIDDEN.value(),
+                                "Forbidden",
+                                message,
+                                request.getRequestURI());
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                .body(WebResponse.<ApiErrorResponse>builder()
+                                                .status(HttpStatus.FORBIDDEN.value())
+                                                .message(message)
+                                                .data(error)
+                                                .paging(null)
+                                                .build());
+        }
+
+        // 8. Handle Biometric Authentication Failed (401)
+        @ExceptionHandler(BiometricAuthenticationException.class)
+        public ResponseEntity<WebResponse<ApiErrorResponse>> handleBiometricException(BiometricAuthenticationException ex, HttpServletRequest request) {
+                ApiErrorResponse error = new ApiErrorResponse(
+                                HttpStatus.UNAUTHORIZED.value(),
+                                "Biometric Authentication Failed",
+                                ex.getMessage(),
+                                request.getRequestURI());
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                                .body(WebResponse.<ApiErrorResponse>builder()
+                                                .status(HttpStatus.UNAUTHORIZED.value())
+                                                .message(ex.getMessage())
+                                                .data(error)
+                                                .paging(null)
+                                                .build());
+        }
+
+        // 9. Handle Semua Error Lain yang Tidak Terduga (500)
         @ExceptionHandler(Exception.class)
         public ResponseEntity<WebResponse<ApiErrorResponse>> handleGlobalException(Exception ex,
                         HttpServletRequest request) {
@@ -242,5 +277,13 @@ public class GlobalExceptionHandler {
                                                 .data(error)
                                                 .paging(null)
                                                 .build());
+        }
+
+        // --- Custom Exception Classes ---
+        
+        public static class BiometricAuthenticationException extends RuntimeException {
+                public BiometricAuthenticationException(String message) {
+                        super(message);
+                }
         }
 }
