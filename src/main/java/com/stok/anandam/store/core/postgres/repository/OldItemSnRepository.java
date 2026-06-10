@@ -16,11 +16,11 @@ public interface OldItemSnRepository extends JpaRepository<OldItemSerialNumber, 
         @Query("SELECT sn FROM OldItemSerialNumber sn WHERE " +
                         "(sn.tanggal BETWEEN :startDate AND :endDate) AND " +
                         "(:type IS NULL OR :type = '' OR sn.type = :type) AND " +
-                        "(:search IS NULL OR :search = '' OR " +
+                        "(:search IS NULL OR :search = '' OR (" +
                         "LOWER(sn.docId) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
                         "LOWER(sn.userName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
                         "LOWER(sn.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-                        "LOWER(sn.sn) LIKE LOWER(CONCAT('%', :search, '%')))")
+                        "LOWER(sn.sn) LIKE LOWER(CONCAT('%', :search, '%'))))")
         Page<OldItemSerialNumber> findByFilters(
                         @Param("startDate") LocalDateTime startDate,
                         @Param("endDate") LocalDateTime endDate,

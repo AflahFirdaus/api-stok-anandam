@@ -117,10 +117,28 @@ public class StockService {
                 Map<String, String> lastPurchasePartners = new HashMap<>();
                 Map<String, BigDecimal> lastPurchasePrice = new HashMap<>();
                 if (!itemNames.isEmpty()) {
-                        List<Object[]> results = purchaseRepository.findLatestPurchaseDetailsByItemNames(itemNames);
+                        // Pre-process: TRIM + lowercase agar cocok dengan kondisi WHERE TRIM(LOWER(item_name)) IN (:itemNames)
+                        List<String> normalizedItemNames = itemNames.stream()
+                                .map(n -> n.trim().toLowerCase())
+                                .distinct()
+                                .collect(Collectors.toList());
+
+                        List<Object[]> results = purchaseRepository.findLatestPurchaseDetailsByItemNames(normalizedItemNames);
                         for (Object[] res : results) {
                                 String name = (String) res[0];
-                                LocalDate date = (LocalDate) res[1];
+
+                                // Native query returns java.sql.Date, not LocalDate — perlu konversi
+                                LocalDate date = null;
+                                if (res[1] != null) {
+                                        if (res[1] instanceof LocalDate) {
+                                                date = (LocalDate) res[1];
+                                        } else if (res[1] instanceof java.sql.Date) {
+                                                date = ((java.sql.Date) res[1]).toLocalDate();
+                                        } else {
+                                                date = java.sql.Date.valueOf(res[1].toString()).toLocalDate();
+                                        }
+                                }
+
                                 String partner = (String) res[2];
                                 BigDecimal price = null;
                                 if (res[3] != null) {
@@ -132,6 +150,7 @@ public class StockService {
                                 }
 
                                 if (name != null) {
+                                        // key map pakai trimmedName (asli) agar cocok dengan lookup di bawah
                                         String trimmedName = name.trim();
                                         lastPurchaseDates.put(trimmedName, date);
                                         lastPurchasePartners.put(trimmedName, partner);

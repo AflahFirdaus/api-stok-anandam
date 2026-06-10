@@ -9,6 +9,7 @@ import java.util.List;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.google.gson.annotations.SerializedName;
+import com.stok.anandam.store.core.postgres.model.enums.JenisPrinter;
 
 @Data
 @Builder
@@ -133,6 +134,11 @@ public class CreateMemoRequest {
     @JsonAlias({"badan_usaha", "badanUsaha"})
     @SerializedName("badanUsaha")
     private String badanUsaha;
+
+    @JsonProperty("jenisPrinter")
+    @JsonAlias({"jenis_printer", "jenisPrinter"})
+    @SerializedName("jenisPrinter")
+    private JenisPrinter jenisPrinter;
 
     // 3. Data Barang
     @JsonProperty("items")

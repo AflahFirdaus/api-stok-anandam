@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.time.LocalDateTime;
 
 @Service
 public class ItemSnService {
@@ -20,17 +21,18 @@ public class ItemSnService {
     /** Field yang boleh dipakai untuk sortBy (aman dari SQL injection). */
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("tanggal", "docId", "user", "itemName", "sn");
 
-    @Autowired(required = false)
-    @Qualifier("mysqlJdbcTemplate")
+    @Autowired
+    @Qualifier("pgJdbcTemplate")
     private JdbcTemplate jdbcTemplate;
 
     /**
      * Ambil data SN (Masuk/Keluar) dengan filter lengkap.
-     * 
+     * Data diambil dari tabel item_serial_numbers di PostgreSQL.
+     *
      * @param type      MASUK atau KELUAR
-     * @param search    Pencarian global (sn, doc_id, user, item_name)
+     * @param search    Pencarian global (sn, doc_id, user_name, item_name)
      * @param docId     Filter nomor dokumen (partial)
-     * @param user      Filter nama user/par_name (partial)
+     * @param user      Filter nama user/user_name (partial)
      * @param itemName  Filter nama barang (partial)
      * @param sn        Filter serial number (partial)
      * @param startDate Filter tanggal mulai (yyyy-MM-dd)
@@ -41,123 +43,94 @@ public class ItemSnService {
     public List<ItemSerialNumberResponse> getSnData(String type, String search, String docId, String user,
             String itemName, String sn, String startDate, String endDate,
             String sortBy, String direction, int size, int offset) {
-        if (jdbcTemplate == null) {
-            log.warn("Koneksi ke MyBiz (MySQL) tidak aktif/offline. Mengembalikan data SN kosong.");
-            return new ArrayList<>();
-        }
+
         StringBuilder sql = new StringBuilder();
         List<Object> params = new ArrayList<>();
 
-        String dateColumn;
-        String docCol;
-        String userCol;
-        if ("MASUK".equalsIgnoreCase(type)) {
-            dateColumn = "p.doc_date";
-            docCol = "p.doc_no";
-            userCol = "p.par_name";
-            sql.append(
-                    "SELECT p.doc_date AS tanggal, p.doc_no AS doc_id, p.par_name AS user, m.name AS item_name, sn.sn ")
-                    .append("FROM dbtitemsn sn ")
-                    .append("LEFT JOIN dbmitem m ON sn.ite_id = m.id ")
-                    .append("LEFT JOIN dbtpurchasedoc p ON sn.doc_id = p.id AND sn.doc_type = p.doc_type ")
-                    .append("WHERE sn.doc_type IN (42,43,44) ");
-        } else {
-            dateColumn = "s.doc_date";
-            docCol = "s.doc_no";
-            userCol = "s.par_name";
-            sql.append(
-                    "SELECT s.doc_date AS tanggal, s.doc_no AS doc_id, s.par_name AS user, m.name AS item_name, sn.sn ")
-                    .append("FROM dbtitemsn sn ")
-                    .append("LEFT JOIN dbmitem m ON sn.ite_id = m.id ")
-                    .append("LEFT JOIN dbtsalesdoc s ON sn.doc_id = s.id AND sn.doc_type = s.doc_type ")
-                    .append("WHERE sn.doc_type IN (32,33) ");
+        sql.append("SELECT tanggal, doc_id, user_name, item_name, sn ")
+           .append("FROM item_serial_numbers ")
+           .append("WHERE sn IS NOT NULL AND TRIM(sn) <> '' ");
+
+        // Filter: type (MASUK / KELUAR)
+        if (type != null && !type.isBlank()) {
+            sql.append("AND UPPER(type) = ? ");
+            params.add(type.toUpperCase());
         }
 
-        applyFilters(sql, params, search, docId, user, itemName, sn, startDate, endDate, docCol, userCol, dateColumn);
+        applyFilters(sql, params, search, docId, user, itemName, sn, startDate, endDate);
 
         // Sort: whitelist field -> kolom asli (aman dari SQL injection)
-        String orderColumn = dateColumn;
+        String orderColumn = "tanggal";
         if (sortBy != null && ALLOWED_SORT_FIELDS.contains(sortBy)) {
             switch (sortBy) {
                 case "docId":
-                    orderColumn = docCol;
+                    orderColumn = "doc_id";
                     break;
                 case "user":
-                    orderColumn = userCol;
+                    orderColumn = "user_name";
                     break;
                 case "itemName":
-                    orderColumn = "m.name";
+                    orderColumn = "item_name";
                     break;
                 case "sn":
-                    orderColumn = "sn.sn";
+                    orderColumn = "sn";
                     break;
                 case "tanggal":
                 default:
-                    orderColumn = dateColumn;
+                    orderColumn = "tanggal";
                     break;
             }
         }
+
         String dir = "desc".equalsIgnoreCase(direction) ? "DESC" : "ASC";
-        sql.append("ORDER BY ").append(orderColumn).append(" ").append(dir).append(" LIMIT ? OFFSET ?");
+        sql.append("ORDER BY ").append(orderColumn).append(" ").append(dir)
+           .append(" NULLS LAST LIMIT ? OFFSET ?");
         params.add(size);
         params.add(offset);
 
-        return jdbcTemplate.query(sql.toString(), params.toArray(), (rs, rowNum) -> ItemSerialNumberResponse.builder()
-                .tanggal(rs.getTimestamp("tanggal") != null ? rs.getTimestamp("tanggal").toLocalDateTime() : null)
-                .docId(rs.getString("doc_id"))
-                .user(rs.getString("user"))
-                .itemName(rs.getString("item_name"))
-                .sn(rs.getString("sn"))
-                .build());
+        log.debug("getSnData SQL: {}", sql);
+
+        return jdbcTemplate.query(sql.toString(),
+                (rs, rowNum) -> ItemSerialNumberResponse.builder()
+                        .tanggal(rs.getObject("tanggal", LocalDateTime.class))
+                        .docId(rs.getString("doc_id"))
+                        .user(rs.getString("user_name"))
+                        .itemName(rs.getString("item_name"))
+                        .sn(rs.getString("sn"))
+                        .build(),
+                params.toArray());
     }
 
     public long countSnData(String type, String search, String docId, String user,
             String itemName, String sn, String startDate, String endDate) {
-        if (jdbcTemplate == null) {
-            return 0L;
-        }
+
         StringBuilder sql = new StringBuilder();
         List<Object> params = new ArrayList<>();
 
-        String dateColumn;
-        String docCol;
-        String userCol;
-        if ("MASUK".equalsIgnoreCase(type)) {
-            dateColumn = "p.doc_date";
-            docCol = "p.doc_no";
-            userCol = "p.par_name";
-            sql.append("SELECT COUNT(*) ")
-                    .append("FROM dbtitemsn sn ")
-                    .append("LEFT JOIN dbmitem m ON sn.ite_id = m.id ")
-                    .append("LEFT JOIN dbtpurchasedoc p ON sn.doc_id = p.id AND sn.doc_type = p.doc_type ")
-                    .append("WHERE sn.doc_type IN (42,43,44) ");
-        } else {
-            dateColumn = "s.doc_date";
-            docCol = "s.doc_no";
-            userCol = "s.par_name";
-            sql.append("SELECT COUNT(*) ")
-                    .append("FROM dbtitemsn sn ")
-                    .append("LEFT JOIN dbmitem m ON sn.ite_id = m.id ")
-                    .append("LEFT JOIN dbtsalesdoc s ON sn.doc_id = s.id AND sn.doc_type = s.doc_type ")
-                    .append("WHERE sn.doc_type IN (32,33) ");
+        sql.append("SELECT COUNT(*) FROM item_serial_numbers ")
+           .append("WHERE sn IS NOT NULL AND TRIM(sn) <> '' ");
+
+        // Filter: type (MASUK / KELUAR)
+        if (type != null && !type.isBlank()) {
+            sql.append("AND UPPER(type) = ? ");
+            params.add(type.toUpperCase());
         }
 
-        applyFilters(sql, params, search, docId, user, itemName, sn, startDate, endDate, docCol, userCol, dateColumn);
+        applyFilters(sql, params, search, docId, user, itemName, sn, startDate, endDate);
 
-        Long count = jdbcTemplate.queryForObject(sql.toString(), params.toArray(), Long.class);
+        log.debug("countSnData SQL: {}", sql);
+
+        Long count = jdbcTemplate.queryForObject(sql.toString(), Long.class, params.toArray());
         return count != null ? count : 0L;
     }
 
     private void applyFilters(StringBuilder sql, List<Object> params, String search, String docId, String user,
-            String itemName, String sn, String startDate, String endDate, String docCol, String userCol,
-            String dateColumn) {
-        sql.append("AND sn.sn IS NOT NULL AND TRIM(sn.sn) <> '' ");
+            String itemName, String sn, String startDate, String endDate) {
 
         // Filter: search global (semua field)
         if (search != null && !search.isBlank()) {
-            String term = "%" + search.trim() + "%";
-            sql.append("AND (sn.sn LIKE ? OR ").append(docCol).append(" LIKE ? OR ").append(userCol)
-                    .append(" LIKE ? OR m.name LIKE ?) ");
+            String term = "%" + search.trim().toLowerCase() + "%";
+            sql.append("AND (LOWER(sn) LIKE ? OR LOWER(doc_id) LIKE ? OR LOWER(user_name) LIKE ? OR LOWER(item_name) LIKE ?) ");
             params.add(term);
             params.add(term);
             params.add(term);
@@ -166,33 +139,33 @@ public class ItemSnService {
 
         // Filter: docId (nomor dokumen)
         if (docId != null && !docId.isBlank()) {
-            sql.append("AND ").append(docCol).append(" LIKE ? ");
-            params.add("%" + docId.trim() + "%");
+            sql.append("AND LOWER(doc_id) LIKE ? ");
+            params.add("%" + docId.trim().toLowerCase() + "%");
         }
 
-        // Filter: user (nama user/par_name)
+        // Filter: user (nama user/user_name)
         if (user != null && !user.isBlank()) {
-            sql.append("AND ").append(userCol).append(" LIKE ? ");
-            params.add("%" + user.trim() + "%");
+            sql.append("AND LOWER(user_name) LIKE ? ");
+            params.add("%" + user.trim().toLowerCase() + "%");
         }
 
         // Filter: itemName (nama barang)
         if (itemName != null && !itemName.isBlank()) {
-            sql.append("AND m.name LIKE ? ");
-            params.add("%" + itemName.trim() + "%");
+            sql.append("AND LOWER(item_name) LIKE ? ");
+            params.add("%" + itemName.trim().toLowerCase() + "%");
         }
 
         // Filter: sn (serial number)
         if (sn != null && !sn.isBlank()) {
-            sql.append("AND sn.sn LIKE ? ");
-            params.add("%" + sn.trim() + "%");
+            sql.append("AND LOWER(sn) LIKE ? ");
+            params.add("%" + sn.trim().toLowerCase() + "%");
         }
 
         // Filter: date range
         if (startDate != null && !startDate.isBlank() && endDate != null && !endDate.isBlank()) {
-            sql.append("AND (").append(dateColumn).append(" BETWEEN ? AND ?) ");
-            params.add(startDate);
-            params.add(endDate);
+            sql.append("AND (tanggal BETWEEN ?::timestamp AND ?::timestamp) ");
+            params.add(startDate + " 00:00:00");
+            params.add(endDate + " 23:59:59");
         }
     }
 }

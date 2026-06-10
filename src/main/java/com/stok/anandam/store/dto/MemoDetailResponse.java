@@ -1,6 +1,7 @@
 package com.stok.anandam.store.dto;
 
 import com.stok.anandam.store.core.postgres.model.enums.MemoStatus;
+import com.stok.anandam.store.core.postgres.model.enums.JenisPrinter; // 1. Tambahkan import ini
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -19,7 +20,7 @@ public class MemoDetailResponse {
     private String nomorMemo;
     private Long customerId;
     private Long pelangganMybizId;
-    private String customerName; // Added for convenience
+    private String customerName; 
 
     private String customerPhone;
     private Long marketingId;
@@ -36,12 +37,16 @@ public class MemoDetailResponse {
     private String qrCode;
 
     private String memoType;
+    
+    // 2. TAMBAHKAN FIELD INI
+    private JenisPrinter jenisPrinter; 
+
     private String orderIdMarketplace;
     private String resi;
     private String ekspedisi;
     private String subEkspedisi;
     private String platform;
-    private String kodePos; // Added for display in list
+    private String kodePos; 
     private String buktiFoto;
     private String buktiFotoUrl;
 

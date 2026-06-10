@@ -415,6 +415,7 @@ public class MemoService {
                     .deskripsi(memo.getDeskripsi())
                     .nomorJl(memo.getNomorJl())
                     .memoType(memo.getMemoType())
+                    .jenisPrinter(memo.getJenisPrinter())
                     .orderIdMarketplace(memo.getOrderIdMarketplace())
                     .resi(memo.getResi())
                     .ekspedisi(memo.getEkspedisi())
@@ -515,6 +516,7 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                 .deskripsi(memo.getDeskripsi())
                 .nomorJl(memo.getNomorJl())
                 .memoType(memo.getMemoType())
+                .jenisPrinter(memo.getJenisPrinter())
                 .orderIdMarketplace(memo.getOrderIdMarketplace())
                 .resi(memo.getResi())
                 .ekspedisi(memo.getEkspedisi())
@@ -724,6 +726,7 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                 .kodePos(request.getKodePos())
                 .tempo(request.getTempo())
                 .badanUsaha(request.getBadanUsaha())
+                .jenisPrinter(request.getJenisPrinter())
                 .revisedFromId(request.getRevisedFromId())
                 .build();
 
@@ -835,6 +838,7 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
         memo.setKodePos(request.getKodePos());
         memo.setTempo(request.getTempo());
         memo.setBadanUsaha(request.getBadanUsaha());
+        memo.setJenisPrinter(request.getJenisPrinter());
 
         memoRepository.save(memo);
 
@@ -1155,6 +1159,7 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                 .kodePos(request.getKodePos())
                 .tempo(request.getTempo())
                 .badanUsaha(request.getBadanUsaha())
+                .jenisPrinter(request.getJenisPrinter())
                 .build();
 
         memo = memoRepository.save(memo);
@@ -1263,6 +1268,7 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
         memo.setKodePos(request.getDetails().getKodePos());
         memo.setTempo(request.getDetails().getTempo());
         memo.setBadanUsaha(request.getDetails().getBadanUsaha());
+        memo.setJenisPrinter(request.getDetails().getJenisPrinter());
 
         memo.setIsTeknisRequired(request.getDetails().getIsTeknisi());
         memo.setIsDeliveryRequired(request.getDetails().getMemoType().equalsIgnoreCase("ONLINE") || request.getDetails().getIsKirim());
@@ -1607,6 +1613,7 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                 .kodePos(oldMemo.getKodePos())
                 .tempo(oldMemo.getTempo())
                 .badanUsaha(oldMemo.getBadanUsaha())
+                .jenisPrinter(oldMemo.getJenisPrinter())
                 .revisedFromId(oldMemo.getId()) // Hubungkan ke memo lama
                 .build();
 
@@ -1686,6 +1693,7 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                 .kodePos(oldMemo.getKodePos())
                 .tempo(oldMemo.getTempo())
                 .badanUsaha(oldMemo.getBadanUsaha())
+                .jenisPrinter(oldMemo.getJenisPrinter())
                 .build();
 
         newMemo = memoRepository.save(newMemo);

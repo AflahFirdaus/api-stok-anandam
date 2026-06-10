@@ -12,6 +12,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import com.stok.anandam.store.core.postgres.model.enums.MemoStatus;
 import com.stok.anandam.store.core.postgres.model.enums.MemoStatusConverter;
+import com.stok.anandam.store.core.postgres.model.enums.JenisPrinter; // 1. Tambahkan Import Ini
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -45,7 +46,6 @@ public class Memo {
     @ManyToOne
     @JoinColumn(name = "pelanggan_mybiz_id")
     private PelangganMybiz pelangganMybiz;
-
 
     @ManyToOne
     @JoinColumn(name = "marketing_id")
@@ -97,6 +97,11 @@ public class Memo {
     
     @Column(name = "memo_type")
     private String memoType;
+
+    // 2. TAMBAHKAN FIELD INI
+    @Enumerated(EnumType.STRING)
+    @Column(name = "jenis_printer", length = 50)
+    private JenisPrinter jenisPrinter;
 
     @Column(name = "order_id_marketplace")
     private String orderIdMarketplace;
