@@ -4,13 +4,15 @@ import com.stok.anandam.store.core.postgres.model.PelangganServis;
 import com.stok.anandam.store.service.PelangganServisService;
 import com.stok.anandam.store.dto.CreatePelangganServisRequest;
 import com.stok.anandam.store.dto.UpdatePelangganServisRequest;
+import com.stok.anandam.store.dto.WebResponse;
+import com.stok.anandam.store.dto.PagingResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -27,15 +29,28 @@ public class PelangganServisController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    // 2. READ ALL API (PAGINATION & SEARCH)
+    // 2. READ ALL API (PAGINATION & SEARCH) — konsisten dengan StockController
     @GetMapping
-    public ResponseEntity<org.springframework.data.domain.Page<PelangganServis>> getAllPelanggan(
+    public ResponseEntity<WebResponse<Page<PelangganServis>>> getAllPelanggan(
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "50") int size) {
             
-        org.springframework.data.domain.Page<PelangganServis> response = pelangganServisService.getAllPelanggan(search, page, size);
-        return ResponseEntity.ok(response);
+        Page<PelangganServis> pelangganPage = pelangganServisService.getAllPelanggan(search, page, size);
+
+        PagingResponse paging = PagingResponse.builder()
+                .currentPage(page)
+                .totalPage(pelangganPage.getTotalPages())
+                .size(size)
+                .totalItem(pelangganPage.getTotalElements())
+                .build();
+
+        return ResponseEntity.ok(WebResponse.<Page<PelangganServis>>builder()
+                .status(200)
+                .message("Success Fetch Pelanggan Servis Data")
+                .data(pelangganPage)
+                .paging(paging)
+                .build());
     }
 
     // 3. READ BY ID API

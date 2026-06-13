@@ -5,6 +5,7 @@ import com.stok.anandam.store.util.QrCodeGenerator;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
@@ -14,14 +15,17 @@ import java.io.ByteArrayOutputStream;
 @RequiredArgsConstructor
 public class NotaPdfService {
 
+    @Value("${app.tracking-url}")
+    private String trackingUrl;
+
     private final TemplateEngine templateEngine;
 
     public byte[] generatePdf(TransaksiServis transaksi) {
         Context context = new Context();
         context.setVariable("transaksi", transaksi);
         
-        // --- TAMBAHKAN INI ---
-        String linkTracking = "https://anandamcomputer.com/track/" + transaksi.getTrackingToken();
+        // Link tracking untuk QR Code menggunakan domain tracking
+        String linkTracking = trackingUrl + "/track/servis/" + transaksi.getTrackingToken();
         context.setVariable("qrCodeBase64", QrCodeGenerator.generateBase64(linkTracking));
         
         // Memproses template nota-template.html

@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.text.NumberFormat;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.UUID;
@@ -21,47 +22,70 @@ public class WaLinkService {
     @Value("${app.base-url}")
     private String baseUrl;
 
+    @Value("${app.tracking-url}")
+    private String trackingUrl;
+
     public String generateWaLink(UUID transaksiId, String tipePesan) {
         // 1. Cari data transaksi
         TransaksiServis transaksi = transaksiRepository.findById(transaksiId)
                 .orElseThrow(() -> new RuntimeException("Transaksi tidak ditemukan"));
 
         // 2. Ambil data yang dibutuhkan
-        String nomorHp = formatNomorHp(transaksi.getPelanggan().getNoTelepon()); // Sesuaikan nama getter-nya
-        String nama = transaksi.getPelanggan().getNamaPelanggan(); // Sesuaikan nama getter-nya
+        String nomorHp = formatNomorHp(transaksi.getPelanggan().getNoTelepon());
+        String nama = transaksi.getPelanggan().getNamaPelanggan();
         String idNota = transaksi.getId().toString();
         String trackingToken = transaksi.getTrackingToken().toString();
         
-        // Link untuk nota (PDF) dan link untuk tracking web
+        // Ambil data detail barang & keluhan
+        String barangService = transaksi.getNamaBarang();
+        String keluhan = transaksi.getKerusakan() != null ? transaksi.getKerusakan() : "-";
+        
+        // Link untuk nota (PDF) tetap pakai baseUrl API dan link untuk tracking web pakai domain tracking
         String linkNota = baseUrl + "/api/v1/nota/download/" + idNota;
-        String linkTracking = baseUrl + "/track/" + trackingToken;
+        String linkTracking = trackingUrl + "/track/servis/" + trackingToken;
         
         // 3. Susun template pesan berdasarkan tipe
         String pesan = "";
         
         if ("DITERIMA".equalsIgnoreCase(tipePesan)) {
-            // Format tanggal: "21 Juni 2024 jam 11:12 WIB"
+            // Format tanggal: "08 Juni 2026 jam 14:56 WIB"
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd MMMM yyyy 'jam' HH:mm 'WIB'", new Locale("id", "ID"));
             String tanggalMasuk = transaksi.getCreatedAt() != null ? transaksi.getCreatedAt().format(formatter) : "-";
 
-            pesan = "*Notifikasi | ANANDAM ID (ANANDAM INDONESIA)*\n\n" +
-                    "Barang Servis *" + transaksi.getJenisBarang() + " " + (transaksi.getMerek() != null ? transaksi.getMerek() : "") + "* telah diterima oleh ANANDAM ID (ANANDAM INDONESIA) " +
-                    "dengan No. Servis *" + idNota + "* pada tanggal " + tanggalMasuk + ". " +
-                    "Untuk Cek Status (Tracking) Servis barang Anda, silahkan buka Link dibawah ini. Terima Kasih.\n\n" +
+            pesan = "*Notifikasi | ANANDAM ID (ANANDAM INDONESIA)*\n" +
+                    "Atas Nama : *" + nama + "*\n" +
+                    "Barang Service : *" + barangService + "*\n" +
+                    "Keluhan : *" + keluhan + "*\n\n" +
+                    "Telah diterima oleh Anandam.ID pada tanggal " + tanggalMasuk + "\n" +
+                    "Dengan No Service :\n" +
+                    "*" + idNota + "*\n\n" +
+                    "Silahkan buka link dibawah ini untuk Cek Status (Tracking) Service barang anda.\n" +
                     linkTracking;
-                    
+
         } else if ("SELESAI".equalsIgnoreCase(tipePesan)) {
-            pesan = "Halo Kak *" + nama + "*,\n\n" +
-                    "Servis barang Anda (*" + transaksi.getJenisBarang() + " " + (transaksi.getMerek() != null ? transaksi.getMerek() : "") + "*) di Anandam Computer sudah *SELESAI* dan siap diambil.\n\n" +
-                    "Nota digital Anda dapat diunduh/dilihat di sini:\n" + linkNota + "\n\n" +
-                    "Silakan tunjukkan nota tersebut saat pengambilan. Terima Kasih!";
-                    
+            // Setup format Rupiah
+            NumberFormat formatRupiah = NumberFormat.getCurrencyInstance(new Locale("id", "ID"));
+            java.math.BigDecimal totalBiaya = transaksi.getBiayaFinal() != null ? transaksi.getBiayaFinal() : transaksi.getEstimasiBiaya();
+            String biaya = totalBiaya != null 
+                           ? formatRupiah.format(totalBiaya).replace("Rp", "Rp ") 
+                           : "Rp 0";
+
+            pesan = "Halo Kak *" + nama + "*, Servis barang Anda (*" + barangService + "*) di Anandam Computer sudah *SELESAI*\n" +
+                    "Atas Nama : *" + nama + "*\n" +
+                    "Barang Service : *" + barangService + "*\n" +
+                    "Keluhan : *" + keluhan + "*\n\n" +
+                    "Telah Selesai Service dan Bisa Diambil di Anandam.ID dengan biaya *" + biaya + "*.\n\n" +
+                    "Silahkan buka link dibawah ini untuk Cek Status (Tracking) Service barang anda.\n" +
+                    linkTracking;
+
         } else if ("KENDALA".equalsIgnoreCase(tipePesan)) {
-            pesan = "Halo Kak *" + nama + "*,\n\n" +
-                    "Ada informasi terbaru mengenai servis barang Anda (*" + transaksi.getJenisBarang() + " " + (transaksi.getMerek() != null ? transaksi.getMerek() : "") + "*). " +
-                    "Mohon cek link tracking berikut atau hubungi kami kembali untuk konfirmasi tindakan selanjutnya.\n\n" +
-                    "Link Tracking: " + linkTracking + "\n\n" +
-                    "Terima Kasih, Anandam Computer.";
+            pesan = "Halo Kak *" + nama + "*, Ada beberapa hal yang perlu kami diskusikan mengenai service\n" +
+                    "Atas Nama : *" + nama + "*\n" +
+                    "Barang Service : *" + barangService + "*\n" +
+                    "Keluhan : *" + keluhan + "*\n\n" +
+                    "Mohon balas WA ini untuk berdiskusi lebih lanjut.\n\n" +
+                    "Silahkan buka link dibawah ini untuk Cek Status (Tracking) Service barang anda.\n" +
+                    linkTracking;
         }
 
         // 4. Encode pesan agar aman dimasukkan ke dalam link URL
