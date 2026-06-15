@@ -9,7 +9,6 @@ public class CreateKlaimRequest {
     @NotBlank(message = "Nama distributor wajib diisi")
     private String namaDistributor;
     
-    @NotBlank(message = "Alamat distributor wajib diisi")
     private String alamatDistributor;
     
     private String resiPengiriman;

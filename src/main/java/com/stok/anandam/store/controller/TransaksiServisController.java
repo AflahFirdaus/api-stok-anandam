@@ -206,6 +206,23 @@ public class TransaksiServisController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @PutMapping("/klaim-distributor/{klaimId}")
+    public ResponseEntity<com.stok.anandam.store.core.postgres.model.KlaimDistributor> updateDataKlaim(
+            @PathVariable UUID klaimId,
+            @RequestBody com.stok.anandam.store.dto.CreateKlaimRequest request) {
+            
+        String currentUsername = getCurrentUsername();
+        com.stok.anandam.store.core.postgres.model.KlaimDistributor response = transaksiService.updateDataKlaim(
+                klaimId, 
+                request.getNamaDistributor(), 
+                request.getAlamatDistributor(), 
+                request.getBiayaKlaim(), 
+                currentUsername
+        );
+        
+        return ResponseEntity.ok(response);
+    }
+
     @PutMapping("/klaim-distributor/{klaimId}/status")
     public ResponseEntity<com.stok.anandam.store.core.postgres.model.KlaimDistributor> updateStatusKlaim(
             @PathVariable UUID klaimId,

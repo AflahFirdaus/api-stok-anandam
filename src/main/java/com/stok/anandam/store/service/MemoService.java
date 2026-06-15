@@ -1345,9 +1345,9 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
         Memo memo = memoRepository.findById(memoId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
         User aktor = userRepository.findByUsername(username).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
         
-        if (memo.getStatusAkhir() != MemoStatus.MENUNGGU_NOTA) {
+        if (memo.getStatusAkhir() != MemoStatus.MENUNGGU_NOTA && memo.getStatusAkhir() != MemoStatus.MENUNGGU_GUDANG) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
-                "Retry auto-match JL hanya bisa dilakukan saat status MENUNGGU_NOTA");
+                "Retry auto-match JL hanya bisa dilakukan saat status MENUNGGU_GUDANG atau MENUNGGU_NOTA");
         }
         
         boolean matched = tryAutoMatchJl(memo);
@@ -1356,12 +1356,13 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                 .message("JL tidak ditemukan. Silakan input manual atau tunggu sync data MyBiz.").build();
         }
         
+        // Jika JL ditemukan, langsung lanjut ke next status, tidak peduli MENUNGGU_GUDANG atau MENUNGGU_NOTA
         MemoStatus targetStatus = Boolean.TRUE.equals(memo.getIsTeknisRequired())
                 ? MemoStatus.MENUNGGU_TEKNISI : MemoStatus.BUFFER_ZONE;
         memo.setStatusAkhir(targetStatus);
         memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), targetStatus.name(), aktor.getId(),
-            "JL otomatis ditemukan via retry: " + memo.getNomorJl() + ". Status masuk " + targetStatus.name()));
+            "JL otomatis ditemukan via retry: " + memo.getNomorJl() + ". Status langsung masuk " + targetStatus.name()));
         
         sendMemoRefreshSignal();
         return WebResponse.<String>builder().data("OK").status(200)
@@ -1372,22 +1373,26 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
     public WebResponse<String> retryAutoMatchJlBulk(String username) {
         User aktor = userRepository.findByUsername(username).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
         
-        List<Memo> waitingMemos = memoRepository.findByStatusAkhirOrderByCreatedAtDesc(MemoStatus.MENUNGGU_NOTA);
+        // Cari memo dengan status MENUNGGU_GUDANG atau MENUNGGU_NOTA yang belum punya JL
+        List<Memo> waitingMemos = memoRepository.findByStatusAkhirInAndNomorJlIsNullOrEmpty(
+                List.of(MemoStatus.MENUNGGU_GUDANG, MemoStatus.MENUNGGU_NOTA)
+        );
         if (waitingMemos.isEmpty()) {
             return WebResponse.<String>builder().data("NO_MEMOS").status(200)
-                .message("Tidak ada memo dengan status MENUNGGU_NOTA saat ini.").build();
+                .message("Tidak ada memo yang membutuhkan pencarian JL saat ini.").build();
         }
         
         int matchCount = 0;
         for (Memo memo : waitingMemos) {
             boolean matched = tryAutoMatchJl(memo);
             if (matched) {
+                // Jika JL ditemukan, langsung lanjut ke next status
                 MemoStatus targetStatus = Boolean.TRUE.equals(memo.getIsTeknisRequired())
                         ? MemoStatus.MENUNGGU_TEKNISI : MemoStatus.BUFFER_ZONE;
                 memo.setStatusAkhir(targetStatus);
                 memoRepository.save(memo);
                 memoLogRepository.save(new MemoLog(memo.getId(), targetStatus.name(), aktor.getId(),
-                    "JL otomatis ditemukan via bulk retry: " + memo.getNomorJl() + ". Status masuk " + targetStatus.name()));
+                    "JL otomatis ditemukan via bulk retry: " + memo.getNomorJl() + ". Status langsung masuk " + targetStatus.name()));
                 matchCount++;
             }
         }

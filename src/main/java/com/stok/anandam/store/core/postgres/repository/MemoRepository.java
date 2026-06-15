@@ -68,4 +68,9 @@ public interface MemoRepository extends JpaRepository<Memo, UUID> {
 
     @Query("SELECT m.statusAkhir, COUNT(m.id) FROM Memo m WHERE m.statusAkhir IN :statuses GROUP BY m.statusAkhir")
     List<Object[]> countStatusesByStatusList(@Param("statuses") List<com.stok.anandam.store.core.postgres.model.enums.MemoStatus> statuses);
+
+    // Untuk scheduler auto-match JL: cari memo dengan status tertentu yang belum punya nomor JL
+    @Query("SELECT m FROM Memo m WHERE m.statusAkhir IN :statuses AND (m.nomorJl IS NULL OR m.nomorJl = '')")
+    List<com.stok.anandam.store.core.postgres.model.Memo> findByStatusAkhirInAndNomorJlIsNullOrEmpty(
+            @Param("statuses") List<com.stok.anandam.store.core.postgres.model.enums.MemoStatus> statuses);
 }

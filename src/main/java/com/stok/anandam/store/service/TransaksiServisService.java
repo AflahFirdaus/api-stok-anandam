@@ -313,10 +313,11 @@ public class TransaksiServisService {
             StatusServis.BELUM_CEK,
             StatusServis.SEDANG_CEK,
             StatusServis.TUNGGU_KONFIRMASI,
-            StatusServis.TUNGGU_SPAREPART
+            StatusServis.TUNGGU_SPAREPART,
+            StatusServis.KLAIM_MENUNGGU_PENGIRIMAN
         );
         if (!editableStatuses.contains(status)) {
-            throw new IllegalStateException("Transaksi dengan status " + status.getValue() + " tidak dapat diedit. Hanya transaksi dengan status BELUM_CEK, SEDANG_CEK, TUNGGU_KONFIRMASI, atau TUNGGU_SPAREPART yang bisa diedit.");
+            throw new IllegalStateException("Transaksi dengan status " + status.getValue() + " tidak dapat diedit. Hanya transaksi dengan status BELUM_CEK, SEDANG_CEK, TUNGGU_KONFIRMASI, TUNGGU_SPAREPART, atau KLAIM_MENUNGGU_PENGIRIMAN yang bisa diedit.");
         }
 
         // Cari data user yang melakukan edit untuk audit log
@@ -414,6 +415,36 @@ public class TransaksiServisService {
                 .diupdateOleh(admin) // <-- SAKRAL: Ubah dari .userUpdate ke .diupdateOleh agar tidak compile error
                 .build();
         riwayatRepository.save(riwayat);
+
+        return klaim;
+    }
+
+    @Transactional
+    public KlaimDistributor updateDataKlaim(UUID klaimId, String namaDistributor, String alamatDistributor, BigDecimal biayaKlaim, String usernameAdmin) {
+        KlaimDistributor klaim = klaimDistributorRepository.findById(klaimId)
+                .orElseThrow(() -> new ResourceNotFoundException("Data klaim distributor tidak ditemukan"));
+        
+        TransaksiServis transaksi = klaim.getTransaksi();
+        if (transaksi.getStatusTerkini() != StatusServis.KLAIM_MENUNGGU_PENGIRIMAN) {
+            throw new IllegalStateException("Data klaim hanya bisa diedit saat status masih MENUNGGU PENGIRIMAN.");
+        }
+
+        User admin = userRepository.findByUsername(usernameAdmin)
+                .orElseThrow(() -> new ResourceNotFoundException("Sesi tidak valid"));
+
+        if (namaDistributor != null) klaim.setNamaDistributor(namaDistributor);
+        if (alamatDistributor != null) klaim.setAlamatDistributor(alamatDistributor);
+        if (biayaKlaim != null) klaim.setBiayaKlaim(biayaKlaim);
+
+        klaimDistributorRepository.save(klaim);
+
+        String namaAdmin2 = admin.getNama() != null ? admin.getNama() : usernameAdmin;
+        auditTrailService.logAction("transaksi_servis", transaksi.getId().toString(),
+                                    "EDIT_KLAIM_DISTRIBUTOR",
+                                    "DATA_DIUBAH",
+                                    String.format("Data klaim distributor untuk nota %s diedit oleh %s",
+                                                  transaksi.getNoServis(), namaAdmin2),
+                                    usernameAdmin);
 
         return klaim;
     }
