@@ -15,7 +15,7 @@ public class AuditTrailService {
 
     private final AuditLogRepository auditLogRepository;
 
-    // --- Method untuk mencatat log ---
+    // --- Method untuk mencatat log (field-level change) ---
     public void logChange(String table, String id, String field, String oldVal, String newVal, String username) {
         if (oldVal != null && oldVal.equals(newVal)) return;
 
@@ -25,6 +25,20 @@ public class AuditTrailService {
                 .fieldName(field)
                 .oldValue(oldVal != null ? oldVal : "NULL")
                 .newValue(newVal != null ? newVal : "NULL")
+                .changedBy(username)
+                .build();
+        
+        auditLogRepository.save(log);
+    }
+
+    // --- Method untuk mencatat log dengan deskripsi lengkap (action-based, misal CREATE/UPDATE dengan konteks) ---
+    public void logAction(String table, String id, String actionType, String oldVal, String newVal, String username) {
+        AuditLog log = AuditLog.builder()
+                .tableName(table)
+                .entityId(id)
+                .fieldName(actionType) // actionType seperti "CREATE_NOTA_SERVIS"
+                .oldValue(oldVal != null ? oldVal : "-")
+                .newValue(newVal != null ? newVal : "-")
                 .changedBy(username)
                 .build();
         

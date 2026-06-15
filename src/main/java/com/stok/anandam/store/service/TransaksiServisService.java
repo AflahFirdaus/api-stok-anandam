@@ -37,7 +37,7 @@ public class TransaksiServisService {
     private final TransaksiServisRepository transaksiRepository;
     private final PelangganServisRepository pelangganRepository;
     private final RiwayatTrackingRepository riwayatRepository;
-    private final UserRepository userRepository; // Tambahan untuk memvalidasi user dari JWT
+    private final UserRepository userRepository;
     private final AuditTrailService auditTrailService;
 
     @Transactional
@@ -79,7 +79,19 @@ public class TransaksiServisService {
         
         transaksi = transaksiRepository.save(transaksi);
 
-        // 5. Buat Log Riwayat Awal Otomatis
+        // 5. Audit Log: Catat siapa yang membuat nota servis beserta detail lengkap
+        auditTrailService.logAction("transaksi_servis", transaksi.getId().toString(),
+                                    "CREATE_NOTA_SERVIS",
+                                    "NOTA_SERVIS_DIBUAT",
+                                    String.format("Nota servis %s dibuat oleh %s. Pelanggan: %s, Barang: %s %s",
+                                                  transaksi.getNoServis(),
+                                                  penerima.getNama() != null ? penerima.getNama() : usernamePenerima,
+                                                  pelanggan.getNamaPelanggan(),
+                                                  request.getJenisBarang(),
+                                                  request.getMerek() != null ? " - " + request.getMerek() : ""),
+                                    usernamePenerima);
+
+        // 6. Buat Log Riwayat Awal Otomatis
         RiwayatTracking riwayat = RiwayatTracking.builder()
                 .transaksi(transaksi)
                 .statusLog(statusAwal)
@@ -136,6 +148,15 @@ public class TransaksiServisService {
         if (request.getModalSparepart() != null) transaksi.setModalSparepart(request.getModalSparepart());
         if (request.getStatusBayar() != null) transaksi.setStatusBayar(request.getStatusBayar());
         if (request.getTglJatuhTempo() != null) transaksi.setTglJatuhTempo(request.getTglJatuhTempo());
+        if (request.getTglDitangani() != null) {
+            transaksi.setTglDitangani(request.getTglDitangani().atStartOfDay());
+            log.info("[UPDATE_STATUS][{}] Set tglDitangani dari request: {}", transaksi.getNoServis(), request.getTglDitangani());
+        }
+        
+        if (request.getTglAmbil() != null) {
+            transaksi.setTglAmbil(request.getTglAmbil().atStartOfDay());
+            log.info("[UPDATE_STATUS][{}] Set tglAmbil dari request: {}", transaksi.getNoServis(), request.getTglAmbil());
+        }
         
         // --- FIX BUG 1: Sinkronisasi tglJatuhTempo -> tglBatasGaransi ketika SUDAH_DIAMBIL ---
         if (request.getStatusBaru() == StatusServis.SUDAH_DIAMBIL) {
@@ -281,6 +302,56 @@ public class TransaksiServisService {
         return TransaksiServisResponse.fromEntity(transaksi);
     }
 
+    @Transactional
+    public TransaksiServisResponse updateTransaksi(UUID transaksiId, com.stok.anandam.store.dto.UpdateTransaksiRequest request, String usernamePengubah) {
+        TransaksiServis transaksi = transaksiRepository.findById(transaksiId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaksi servis tidak ditemukan dengan ID: " + transaksiId));
+
+        // Validasi: hanya bisa edit jika status masih sebelum proses pengerjaan (belum SEDANG_DIKERJAKAN atau status yang lebih lanjut)
+        StatusServis status = transaksi.getStatusTerkini();
+        List<StatusServis> editableStatuses = List.of(
+            StatusServis.BELUM_CEK,
+            StatusServis.SEDANG_CEK,
+            StatusServis.TUNGGU_KONFIRMASI,
+            StatusServis.TUNGGU_SPAREPART
+        );
+        if (!editableStatuses.contains(status)) {
+            throw new IllegalStateException("Transaksi dengan status " + status.getValue() + " tidak dapat diedit. Hanya transaksi dengan status BELUM_CEK, SEDANG_CEK, TUNGGU_KONFIRMASI, atau TUNGGU_SPAREPART yang bisa diedit.");
+        }
+
+        // Cari data user yang melakukan edit untuk audit log
+        User pengubah = userRepository.findByUsername(usernamePengubah)
+                .orElse(null);
+        String namaPengubah = (pengubah != null && pengubah.getNama() != null) 
+                ? pengubah.getNama() 
+                : usernamePengubah;
+
+        if (request.getPelangganId() != null) {
+            PelangganServis pelanggan = pelangganRepository.findById(request.getPelangganId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Pelanggan tidak ditemukan dengan ID: " + request.getPelangganId()));
+            transaksi.setPelanggan(pelanggan);
+        }
+        if (request.getJenisBarang() != null) transaksi.setJenisBarang(request.getJenisBarang());
+        if (request.getMerek() != null) transaksi.setMerek(request.getMerek());
+        if (request.getModelSeri() != null) transaksi.setModelSeri(request.getModelSeri());
+        if (request.getKelengkapan() != null) transaksi.setKelengkapan(request.getKelengkapan());
+        if (request.getKerusakan() != null) transaksi.setKerusakan(request.getKerusakan());
+        if (request.getDp() != null) transaksi.setDp(request.getDp());
+        if (request.getEstimasiBiaya() != null) transaksi.setEstimasiBiaya(request.getEstimasiBiaya());
+
+        // Audit log untuk perubahan data transaksi dengan username user yang login
+        auditTrailService.logAction("transaksi_servis", transaksiId.toString(),
+                                    "EDIT_NOTA_SERVIS",
+                                    "DATA_DIUBAH",
+                                    String.format("Data nota servis %s diedit oleh %s",
+                                                  transaksi.getNoServis(),
+                                                  namaPengubah),
+                                    usernamePengubah);
+
+        transaksi = transaksiRepository.save(transaksi);
+        return TransaksiServisResponse.fromEntity(transaksi);
+    }
+
     /**
      * Mendapatkan riwayat servis lengkap untuk seorang pelanggan (user).
      * Menampilkan informasi pelanggan, total jumlah servis, total biaya, dan detail setiap transaksi.
@@ -318,11 +389,23 @@ public class TransaksiServisService {
                 .build();
         klaim = klaimDistributorRepository.save(klaim);
 
-        // 3. Ubah Status Transaksi Menjadi Menunggu Pengiriman
+        // 3. Audit Log: Catat pembuatan klaim distributor
+        String namaAdmin = admin.getNama() != null ? admin.getNama() : usernameAdmin;
+        auditTrailService.logAction("transaksi_servis", transaksiId.toString(),
+                                    "CREATE_KLAIM_DISTRIBUTOR",
+                                    "KLAIM_DIBUAT",
+                                    String.format("Klaim distributor untuk nota %s dibuat oleh %s. Distributor: %s, Biaya: %s",
+                                                  transaksi.getNoServis(),
+                                                  namaAdmin,
+                                                  request.getNamaDistributor(),
+                                                  request.getBiayaKlaim() != null ? request.getBiayaKlaim().toString() : "0"),
+                                    usernameAdmin);
+
+        // 4. Ubah Status Transaksi Menjadi Menunggu Pengiriman
         transaksi.setStatusTerkini(StatusServis.KLAIM_MENUNGGU_PENGIRIMAN);
         transaksiRepository.save(transaksi);
 
-        // 4. Catat Riwayat Tracking (Ini yang akan ter-masking otomatis di publik)
+        // 5. Catat Riwayat Tracking (Ini yang akan ter-masking otomatis di publik)
         RiwayatTracking riwayat = RiwayatTracking.builder()
                 .transaksi(transaksi)
                 .statusLog(StatusServis.KLAIM_MENUNGGU_PENGIRIMAN)
@@ -358,12 +441,25 @@ public class TransaksiServisService {
             // Setelah diambil dari distributor, barang otomatis bersiap untuk diserahkan ke user atau masuk pengetesan toko
         }
 
-        // 4. Update Status Utama di Transaksi Servis
+        // 4. Audit Log: Catat perubahan status klaim
+        String namaAdmin2 = admin.getNama() != null ? admin.getNama() : usernameAdmin;
+        String statusKlaimDesc = statusBaru.name().replace("KLAIM_", "").replace("_", " ");
+        auditTrailService.logAction("transaksi_servis", transaksi.getId().toString(),
+                                    "UPDATE_KLAIM_STATUS",
+                                    "STATUS_KLAIM_BERUBAH",
+                                    String.format("Status klaim untuk nota %s diubah oleh %s: %s. %s",
+                                                  transaksi.getNoServis(),
+                                                  namaAdmin2,
+                                                  statusKlaimDesc,
+                                                  catatanPublik != null ? catatanPublik : ""),
+                                    usernameAdmin);
+
+        // 5. Update Status Utama di Transaksi Servis
         transaksi.setStatusTerkini(statusBaru);
         transaksiRepository.save(transaksi);
         klaimDistributorRepository.save(klaim);
 
-        // 5. Suntikkan ke History Audit Trail (Riwayat Tracking)
+        // 6. Suntikkan ke History Audit Trail (Riwayat Tracking)
         RiwayatTracking riwayat = RiwayatTracking.builder()
                 .transaksi(transaksi)
                 .statusLog(statusBaru)
@@ -409,10 +505,10 @@ public class TransaksiServisService {
             isValid = (statusBaru == StatusServis.BISA_DIAMBIL || statusBaru == StatusServis.SEDANG_DIKERJAKAN || statusBaru == StatusServis.BATAL);
             break;
         case TUNGGU_KONFIRMASI: // FIX BUG 3
-            isValid = (statusBaru == StatusServis.SEDANG_DIKERJAKAN || statusBaru == StatusServis.BATAL || statusBaru == StatusServis.BISA_DIAMBIL);
+            isValid = (statusBaru == StatusServis.SEDANG_DIKERJAKAN || statusBaru == StatusServis.BATAL || statusBaru == StatusServis.BISA_DIAMBIL || statusBaru == StatusServis.TUNGGU_SPAREPART);
             break;
         case TUNGGU_SPAREPART:
-            isValid = (statusBaru == StatusServis.SEDANG_DIKERJAKAN || statusBaru == StatusServis.BATAL);
+            isValid = (statusBaru == StatusServis.SEDANG_DIKERJAKAN || statusBaru == StatusServis.BATAL || statusBaru == StatusServis.TUNGGU_KONFIRMASI);
             break;
         case BISA_DIAMBIL:
             isValid = (statusBaru == StatusServis.SUDAH_DIAMBIL);

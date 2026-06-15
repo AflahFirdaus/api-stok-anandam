@@ -169,6 +169,16 @@ public class TransaksiServisController {
         return ResponseEntity.ok(response);
     }
 
+    @PutMapping("/{transaksiId}")
+    public ResponseEntity<TransaksiServisResponse> updateTransaksi(
+            @PathVariable UUID transaksiId,
+            @Valid @RequestBody com.stok.anandam.store.dto.UpdateTransaksiRequest request) {
+        
+        String currentUsername = getCurrentUsername();
+        TransaksiServisResponse response = transaksiService.updateTransaksi(transaksiId, request, currentUsername);
+        return ResponseEntity.ok(response);
+    }
+
     /**
      * GET /api/v1/klaim-distributor/by-transaksi/{transaksiId}
      * Mendapatkan data klaim distributor berdasarkan transaksi ID.

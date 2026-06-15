@@ -135,4 +135,13 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
 
         @Query("SELECT DISTINCT s.depCode FROM Sales s WHERE s.depCode IS NOT NULL AND TRIM(s.depCode) <> '' ORDER BY s.depCode")
         java.util.List<String> findDistinctDepCodes();
+
+        // Auto-match JL: Cari Sales berdasarkan nama pelanggan (case-insensitive) + grandTotal (sum dari semua item), ambil yang terbaru
+        @Query("SELECT s.docNo FROM Sales s WHERE LOWER(TRIM(s.parName)) = LOWER(TRIM(:parName)) " +
+                        "GROUP BY s.docNo " +
+                        "HAVING SUM(s.grandTotal) = :grandTotal " +
+                        "ORDER BY MAX(s.docDate) DESC")
+        List<String> findDocNoByParNameIgnoreCaseAndGrandTotal(
+                        @Param("parName") String parName,
+                        @Param("grandTotal") BigDecimal grandTotal);
 }

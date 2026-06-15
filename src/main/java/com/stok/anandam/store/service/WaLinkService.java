@@ -96,9 +96,16 @@ public class WaLinkService {
     }
 
     private String formatNomorHp(String nomor) {
-        if (nomor != null && nomor.startsWith("0")) {
-            return "62" + nomor.substring(1);
+        if (nomor == null) return nomor;
+        
+        // Ambil hanya digit angka dari nomor telepon (untuk menghapus prefix seperti "Telp. ",  "WA: ", dll)
+        String digitsOnly = nomor.replaceAll("[^0-9]", "");
+        
+        if (digitsOnly.isEmpty()) return nomor;
+        
+        if (digitsOnly.startsWith("0")) {
+            return "62" + digitsOnly.substring(1);
         }
-        return nomor;
+        return digitsOnly;
     }
 }

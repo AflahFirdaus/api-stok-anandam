@@ -309,4 +309,18 @@ public class MemoController {
             java.security.Principal principal) {
         return memoService.deleteMemo(memoId, principal.getName());
     }
+
+    @LogActivity("Retry auto-match JL dari data MyBiz")
+    @PutMapping(path = "/{memoId}/retry-auto-jl", produces = MediaType.APPLICATION_JSON_VALUE)
+    public WebResponse<String> retryAutoMatchJl(
+            @PathVariable("memoId") UUID memoId,
+            java.security.Principal principal) {
+        return memoService.retryAutoMatchJl(memoId, principal.getName());
+    }
+
+    @LogActivity("Bulk retry auto-match JL dari data MyBiz")
+    @PutMapping(path = "/retry-auto-jl-bulk", produces = MediaType.APPLICATION_JSON_VALUE)
+    public WebResponse<String> retryAutoMatchJlBulk(java.security.Principal principal) {
+        return memoService.retryAutoMatchJlBulk(principal.getName());
+    }
 }

@@ -14,6 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.time.LocalDate; 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -74,6 +75,7 @@ public class MemoService {
     private final CustomerRepository customerRepository;
     private final PelangganMybizRepository pelangganMybizRepository;
     private final KodeposRepository kodeposRepository;
+    private final SalesRepository salesRepository;
 
     private final FileService fileService;
     private final ObjectMapper objectMapper;
@@ -1314,17 +1316,120 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
         return WebResponse.<String>builder().data("OK").status(200).message("Memo berhasil difinalisasi").build();
     }
 
+    private boolean tryAutoMatchJl(Memo memo) {
+        // 1. Ambil nama pelanggan dari Memo
+        String customerName = null;
+        if (memo.getPelangganMybiz() != null) {
+            customerName = memo.getPelangganMybiz().getNamaPartner();
+        } else if (memo.getCustomer() != null) {
+            customerName = memo.getCustomer().getNamaPelanggan();
+        }
+        
+        if (customerName == null || customerName.isBlank()) return false;
+        if (memo.getTotalHarga() == null || memo.getTotalHarga().compareTo(BigDecimal.ZERO) == 0) return false;
+        
+        // 2. Cari di Sales (sudah GROUP BY docNo ORDER BY MAX(docDate) DESC, jadi index 0 = terbaru)
+        List<String> matches = salesRepository.findDocNoByParNameIgnoreCaseAndGrandTotal(
+            customerName, memo.getTotalHarga());
+        
+        if (matches.isEmpty()) return false;
+        
+        // 3. Ambil yang terbaru (index 0)
+        String bestMatchDocNo = matches.get(0);
+        memo.setNomorJl(bestMatchDocNo);
+        return true;
+    }
+
+    @Transactional
+    public WebResponse<String> retryAutoMatchJl(UUID memoId, String username) {
+        Memo memo = memoRepository.findById(memoId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
+        User aktor = userRepository.findByUsername(username).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
+        
+        if (memo.getStatusAkhir() != MemoStatus.MENUNGGU_NOTA) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                "Retry auto-match JL hanya bisa dilakukan saat status MENUNGGU_NOTA");
+        }
+        
+        boolean matched = tryAutoMatchJl(memo);
+        if (!matched) {
+            return WebResponse.<String>builder().data("NOT_FOUND").status(200)
+                .message("JL tidak ditemukan. Silakan input manual atau tunggu sync data MyBiz.").build();
+        }
+        
+        MemoStatus targetStatus = Boolean.TRUE.equals(memo.getIsTeknisRequired())
+                ? MemoStatus.MENUNGGU_TEKNISI : MemoStatus.BUFFER_ZONE;
+        memo.setStatusAkhir(targetStatus);
+        memoRepository.save(memo);
+        memoLogRepository.save(new MemoLog(memo.getId(), targetStatus.name(), aktor.getId(),
+            "JL otomatis ditemukan via retry: " + memo.getNomorJl() + ". Status masuk " + targetStatus.name()));
+        
+        sendMemoRefreshSignal();
+        return WebResponse.<String>builder().data("OK").status(200)
+            .message("JL otomatis ditemukan: " + memo.getNomorJl()).build();
+    }
+
+    @Transactional
+    public WebResponse<String> retryAutoMatchJlBulk(String username) {
+        User aktor = userRepository.findByUsername(username).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
+        
+        List<Memo> waitingMemos = memoRepository.findByStatusAkhirOrderByCreatedAtDesc(MemoStatus.MENUNGGU_NOTA);
+        if (waitingMemos.isEmpty()) {
+            return WebResponse.<String>builder().data("NO_MEMOS").status(200)
+                .message("Tidak ada memo dengan status MENUNGGU_NOTA saat ini.").build();
+        }
+        
+        int matchCount = 0;
+        for (Memo memo : waitingMemos) {
+            boolean matched = tryAutoMatchJl(memo);
+            if (matched) {
+                MemoStatus targetStatus = Boolean.TRUE.equals(memo.getIsTeknisRequired())
+                        ? MemoStatus.MENUNGGU_TEKNISI : MemoStatus.BUFFER_ZONE;
+                memo.setStatusAkhir(targetStatus);
+                memoRepository.save(memo);
+                memoLogRepository.save(new MemoLog(memo.getId(), targetStatus.name(), aktor.getId(),
+                    "JL otomatis ditemukan via bulk retry: " + memo.getNomorJl() + ". Status masuk " + targetStatus.name()));
+                matchCount++;
+            }
+        }
+        
+        if (matchCount > 0) {
+            sendMemoRefreshSignal();
+        }
+        
+        return WebResponse.<String>builder()
+            .data("OK")
+            .status(200)
+            .message("Berhasil mencocokkan " + matchCount + " dari " + waitingMemos.size() + " memo.")
+            .build();
+    }
+
     @Transactional
     public WebResponse<String> finishWarehouseProcess(UUID memoId, String username) {
         Memo memo = memoRepository.findById(memoId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
         User aktor = userRepository.findByUsername(username).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
+        
+        // Set status awal ke MENUNGGU_NOTA
         memo.setStatusAkhir(MemoStatus.MENUNGGU_NOTA);
-        memoRepository.save(memo);
         memoLogRepository.save(new MemoLog(memo.getId(), MemoStatus.MENUNGGU_NOTA.name(), aktor.getId(), "Gudang selesai menyiapkan barang. Menunggu Nota/Invoice."));
         
+        // === FITUR BARU: Auto-match JL ===
+        boolean jlMatched = tryAutoMatchJl(memo);
+        if (jlMatched) {
+            MemoStatus targetStatus = Boolean.TRUE.equals(memo.getIsTeknisRequired())
+                    ? MemoStatus.MENUNGGU_TEKNISI
+                    : MemoStatus.BUFFER_ZONE;
+            memo.setStatusAkhir(targetStatus);
+            memoLogRepository.save(new MemoLog(memo.getId(), targetStatus.name(), aktor.getId(),
+                "JL otomatis ditemukan: " + memo.getNomorJl() + ". Status langsung masuk " + targetStatus.name()));
+        }
+        
+        memoRepository.save(memo);
         sendMemoRefreshSignal();
-
-        return WebResponse.<String>builder().data("OK").status(200).message("Proses gudang selesai").build();
+        
+        String message = jlMatched 
+            ? "Proses gudang selesai. JL otomatis: " + memo.getNomorJl()
+            : "Proses gudang selesai. JL belum ditemukan, menunggu input manual.";
+        return WebResponse.<String>builder().data("OK").status(200).message(message).build();
     }
 
     @Transactional
