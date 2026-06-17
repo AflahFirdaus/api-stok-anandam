@@ -1,4 +1,4 @@
-        package com.stok.anandam.store.config;
+package com.stok.anandam.store.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -98,6 +98,9 @@ public class SecurityConfig {
                                         // REVISI: Izinkan semua user yang login untuk akses log sinkronisasi & profil sendiri
                                         .requestMatchers("/api/v1/activity-logs/last-sync").authenticated()
                                         .requestMatchers("/api/v1/users/me", "/api/v1/users/profile", "/api/v1/kodepos").authenticated() 
+
+                                        // PRINTER: Wajib login (membawa token) agar tidak bisa print spam dari luar
+                                        .requestMatchers("/api/v1/printer/**").authenticated()
 
                                         // REVISI: Pastikan endpoint stok bisa diakses operasional
                                         .requestMatchers("/api/v1/stock", "/api/v1/stock/**", "/api/v1/stocks", "/api/v1/stocks/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_SPV_TEKNISI", "ROLE_MARKETING", "ROLE_MARKETING_TOKO", "ROLE_MARKETING_PROJECT", "ROLE_MARKETING_DISTRIBUSI", "ROLE_MARKETING_ONLINE", "ROLE_GUDANG", "ROLE_DELIVERY", "ROLE_TEKNISI", "ROLE_NOTA")
