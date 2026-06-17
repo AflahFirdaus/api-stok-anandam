@@ -17,7 +17,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -118,9 +117,12 @@ public class MemoSchedulerService {
         if (customerName == null || customerName.isBlank()) return false;
         if (memo.getTotalHarga() == null || memo.getTotalHarga().compareTo(BigDecimal.ZERO) == 0) return false;
 
+        // Normalisasi nama: trim dan collapse multiple spaces menjadi 1 spasi
+        String normalizedName = customerName.trim().replaceAll("\\s+", " ");
+
         // 2. Cari di Sales (sudah GROUP BY docNo ORDER BY MAX(docDate) DESC, jadi index 0 = terbaru)
         List<String> matches = salesRepository.findDocNoByParNameIgnoreCaseAndGrandTotal(
-                customerName, memo.getTotalHarga());
+                normalizedName, memo.getTotalHarga());
 
         if (matches.isEmpty()) return false;
 

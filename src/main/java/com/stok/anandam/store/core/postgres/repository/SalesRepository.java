@@ -137,7 +137,9 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
         java.util.List<String> findDistinctDepCodes();
 
         // Auto-match JL: Cari Sales berdasarkan nama pelanggan (case-insensitive) + grandTotal (sum dari semua item), ambil yang terbaru
-        @Query("SELECT s.docNo FROM Sales s WHERE LOWER(TRIM(s.parName)) = LOWER(TRIM(:parName)) " +
+        // Menggunakan REPLACE(s.parName, ' ', '') untuk mengabaikan perbedaan spasi (spasi ganda, trailing/leading spaces)
+        @Query("SELECT s.docNo FROM Sales s " +
+                        "WHERE REPLACE(LOWER(TRIM(s.parName)), ' ', '') = REPLACE(LOWER(TRIM(:parName)), ' ', '') " +
                         "GROUP BY s.docNo " +
                         "HAVING SUM(s.grandTotal) = :grandTotal " +
                         "ORDER BY MAX(s.docDate) DESC")
