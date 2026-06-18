@@ -510,8 +510,8 @@ public class TransaksiServisService {
     }
 
     private void validateStatusTransition(StatusServis statusLama, StatusServis statusBaru) {
-    if (statusLama == StatusServis.SUDAH_DIAMBIL || statusLama == StatusServis.BATAL) {
-        throw new IllegalStateException("Transaksi sudah selesai/batal, tidak dapat diubah kembali.");
+    if (statusLama == StatusServis.BATAL) {
+        throw new IllegalStateException("Transaksi sudah batal, tidak dapat diubah kembali.");
     }
 
     // 2. Jika status sama, izinkan (no-op) — untuk menangani update field lain tanpa mengubah status
@@ -543,6 +543,9 @@ public class TransaksiServisService {
             break;
         case BISA_DIAMBIL:
             isValid = (statusBaru == StatusServis.SUDAH_DIAMBIL);
+            break;
+        case SUDAH_DIAMBIL:
+            isValid = (statusBaru == StatusServis.BATAL);
             break;
         case KLAIM_MENUNGGU_PENGIRIMAN: // FIX BUG 3
             isValid = (statusBaru == StatusServis.KLAIM_DIKIRIM || statusBaru == StatusServis.BATAL);
