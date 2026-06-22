@@ -12,7 +12,7 @@
 	<artifactId>store</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>store</name>
-	<description>Demo project for Spring Boot</description>
+	<description>Movva By Anandam ID</description>
 	<url/>
 	<licenses>
 		<license/>
@@ -143,6 +143,15 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-websocket</artifactId>
+		</dependency>
+		<!-- Redis untuk Presence & Activity Tracking -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.datatype</groupId>
+			<artifactId>jackson-datatype-jsr310</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>com.openhtmltopdf</groupId>

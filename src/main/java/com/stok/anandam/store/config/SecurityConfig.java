@@ -93,7 +93,7 @@ public class SecurityConfig {
                                         .requestMatchers("/api/v1/public/tracking/**").permitAll()
                                         .requestMatchers("/api/v1/internal/**").permitAll() // Secured by ApiKeyFilter
                                         .requestMatchers("/download/**").permitAll()
-                                        .requestMatchers("/ws/**").permitAll()
+                                        .requestMatchers("/ws/**", "/ws-connect/**").permitAll()
                                         
                                         // REVISI: Izinkan semua user yang login untuk akses log sinkronisasi & profil sendiri
                                         .requestMatchers("/api/v1/activity-logs/last-sync").authenticated()

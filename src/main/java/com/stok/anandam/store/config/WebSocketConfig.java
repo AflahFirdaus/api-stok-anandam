@@ -20,13 +20,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Endpoint koneksi WebSocket
-        registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*") // Izinkan semua origin sementara untuk testing
+        // Endpoint koneksi WebSocket untuk Presence & Activity Tracking
+        registry.addEndpoint("/ws-connect")
+                .setAllowedOriginPatterns("*") // Izinkan semua origin
                 .withSockJS(); // Fallback jika browser tidak support WebSocket
                 
         // Endpoint tanpa SockJS (untuk client tertentu seperti Dart/Flutter)
-        registry.addEndpoint("/ws")
+        registry.addEndpoint("/ws-connect")
                 .setAllowedOriginPatterns("*");
     }
 }

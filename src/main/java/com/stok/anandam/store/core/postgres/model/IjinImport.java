@@ -14,7 +14,7 @@ public class IjinImport {
     @Column(name = "nama_barang")
     private String namaBarang;
 
-    @Column(name = "spesifikasi")
+    @Column(name = "spesifikasi", columnDefinition = "TEXT")
     private String spesifikasi;
 
     @Column(name = "keterangan")
