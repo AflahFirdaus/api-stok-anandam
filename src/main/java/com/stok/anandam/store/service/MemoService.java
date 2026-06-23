@@ -114,7 +114,7 @@ public class MemoService {
                         boolean isCreator = m.getCreator() != null && m.getCreator().getId().equals(aktor.getId());
                         boolean isSameRole = m.getCreator() != null && m.getCreator().getRole() == aktor.getRole();
                         boolean isAssigned = assignedMemoIds.contains(m.getId());
-                        boolean isCreatedBySpvMarketing = "MARKETING_TOKO".equals(roleName)
+                        boolean isCreatedBySpvMarketing = ("MARKETING_TOKO".equals(roleName) || "MARKETING_ONLINE".equals(roleName))
                                 && m.getCreator() != null
                                 && "SPV_MARKETING".equals(m.getCreator().getRole().name());
 
