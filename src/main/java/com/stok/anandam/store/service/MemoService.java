@@ -1331,9 +1331,16 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
         // Normalisasi nama: trim dan collapse multiple spaces menjadi 1 spasi
         String normalizedName = customerName.trim().replaceAll("\\s+", " ");
         
+        // Rentang minimal tanggal transaksi: H-3 dari tanggal memo / pembuatan memo
+        LocalDateTime memoDateTime = memo.getTanggalMemo() != null ? memo.getTanggalMemo() : memo.getCreatedAt();
+        if (memoDateTime == null) {
+            memoDateTime = LocalDateTime.now();
+        }
+        LocalDate minDate = memoDateTime.toLocalDate().minusDays(3);
+
         // 2. Cari di Sales (sudah GROUP BY docNo ORDER BY MAX(docDate) DESC, jadi index 0 = terbaru)
-        List<String> matches = salesRepository.findDocNoByParNameIgnoreCaseAndGrandTotal(
-            normalizedName, memo.getTotalHarga());
+        List<String> matches = salesRepository.findDocNoForAutoMatch(
+            normalizedName, memo.getTotalHarga(), minDate);
         
         if (matches.isEmpty()) return false;
         

@@ -146,4 +146,16 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
         List<String> findDocNoByParNameIgnoreCaseAndGrandTotal(
                         @Param("parName") String parName,
                         @Param("grandTotal") BigDecimal grandTotal);
+
+        @Query("SELECT s.docNo FROM Sales s " +
+                        "WHERE REPLACE(LOWER(TRIM(s.parName)), ' ', '') = REPLACE(LOWER(TRIM(:parName)), ' ', '') " +
+                        "AND s.docDate >= :minDate " +
+                        "AND NOT EXISTS (SELECT 1 FROM Memo m WHERE m.nomorJl = s.docNo) " +
+                        "GROUP BY s.docNo " +
+                        "HAVING SUM(s.grandTotal) = :grandTotal " +
+                        "ORDER BY MAX(s.docDate) DESC")
+        List<String> findDocNoForAutoMatch(
+                        @Param("parName") String parName,
+                        @Param("grandTotal") BigDecimal grandTotal,
+                        @Param("minDate") LocalDate minDate);
 }
