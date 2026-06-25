@@ -132,6 +132,52 @@ public class ActivityLogController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/active-today")
+    public ResponseEntity<WebResponse<com.stok.anandam.store.dto.ActiveUsersTodayResponse>> getActiveUsersToday() {
+        long count = activityLogRepository.countDistinctActiveUsersToday();
+        List<String> usernames = activityLogRepository.findDistinctActiveUsernamesToday();
+
+        com.stok.anandam.store.dto.ActiveUsersTodayResponse data = com.stok.anandam.store.dto.ActiveUsersTodayResponse.builder()
+                .count(count)
+                .usernames(usernames)
+                .build();
+
+        WebResponse<com.stok.anandam.store.dto.ActiveUsersTodayResponse> response = WebResponse.<com.stok.anandam.store.dto.ActiveUsersTodayResponse>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success fetch active users today")
+                .data(data)
+                .paging(null)
+                .build();
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/daily-stats")
+    public ResponseEntity<WebResponse<List<com.stok.anandam.store.dto.DailyActiveUserStatResponse>>> getDailyStats(
+            @RequestParam(name = "days", defaultValue = "30") int days) {
+        java.time.LocalDate startDate = java.time.LocalDate.now().minusDays(days - 1);
+        List<Object[]> raw = activityLogRepository.findDailyActiveUserStats(startDate);
+
+        List<com.stok.anandam.store.dto.DailyActiveUserStatResponse> data = raw.stream().map(row -> {
+            // raw query returns java.sql.Date or java.time.LocalDate for CAST(a.timestamp AS date)
+            String dateStr = row[0] != null ? row[0].toString() : "";
+            long count = row[1] != null ? ((Number) row[1]).longValue() : 0L;
+            return com.stok.anandam.store.dto.DailyActiveUserStatResponse.builder()
+                    .date(dateStr)
+                    .userCount(count)
+                    .build();
+        }).collect(Collectors.toList());
+
+        WebResponse<List<com.stok.anandam.store.dto.DailyActiveUserStatResponse>> response = WebResponse.<List<com.stok.anandam.store.dto.DailyActiveUserStatResponse>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Success fetch daily active users stats")
+                .data(data)
+                .paging(null)
+                .build();
+
+        return ResponseEntity.ok(response);
+    }
+
     private ActivityLogResponse toResponse(ActivityLog log) {
         return ActivityLogResponse.builder()
                 .id(log.getId())

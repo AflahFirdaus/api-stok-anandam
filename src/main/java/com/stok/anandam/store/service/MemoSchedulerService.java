@@ -51,10 +51,6 @@ public class MemoSchedulerService {
 
     /**
      * Auto-match JL setiap 30 detik untuk memo yang:
-     * 1. Status MENUNGGU_GUDANG (sebelum Gudang selesai picking)
-     * 2. Status MENUNGGU_NOTA (setelah Gudang selesai picking)
-     *
-     * Mencocokkan nama pelanggan + total harga dengan data Sales (MyBiz) di PostgreSQL.
      */
     @Scheduled(fixedRate = 30000)
     @Transactional

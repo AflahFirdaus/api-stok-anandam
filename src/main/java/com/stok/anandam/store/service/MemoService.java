@@ -1657,6 +1657,54 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
         return WebResponse.<String>builder().data("OK").status(200).message("Pengiriman selesai, status: Diterima User").build();
     }
 
+    // ─── PHOTO EVIDENCE (khusus upload foto tanpa ubah status) ──────────────────
+
+    @Transactional
+    public WebResponse<String> uploadEvidencePhoto(UUID memoId, MultipartFile photo, String username) {
+        Memo memo = memoRepository.findById(memoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
+        User aktor = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
+
+        if (photo == null || photo.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File foto tidak boleh kosong");
+        }
+
+        validateImageFile(photo);
+        String fileName = "memo_evidence_" + memoId + "_" + System.currentTimeMillis() + ".jpg";
+        try {
+            java.nio.file.Path path = java.nio.file.Paths.get("uploads/memos/" + fileName);
+            java.nio.file.Files.createDirectories(path.getParent());
+            java.nio.file.Files.write(path, photo.getBytes());
+        } catch (java.io.IOException e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Gagal menyimpan foto: " + e.getMessage());
+        }
+
+        // Simpan nama file foto ke memo (overwrite jika sudah ada)
+        memo.setBuktiFoto(fileName);
+        memoRepository.save(memo);
+
+        // Catat sebagai log audit
+        memoLogRepository.save(new MemoLog(
+            memo.getId(), 
+            memo.getStatusAkhir().name(), 
+            aktor.getId(), 
+            "Foto bukti (evidence) diupload oleh " + aktor.getNama()
+        ));
+
+        // Audit trail
+        activityLogService.log(username, "MEMO_EVIDENCE_PHOTO",
+            "Foto bukti diupload untuk Memo " + memo.getNomorMemo());
+
+        sendMemoRefreshSignal();
+
+        return WebResponse.<String>builder()
+                .data(fileName)
+                .status(200)
+                .message("Foto bukti berhasil disimpan")
+                .build();
+    }
+
     @Transactional
     public WebResponse<String> completeMemo(UUID memoId, String username) {
         Memo memo = memoRepository.findById(memoId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
@@ -1902,5 +1950,10 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                 .status(HttpStatus.OK.value())
                 .message("Draf memo berhasil dihapus karena dibatalkan")
                 .build();
+    }
+
+    public WebResponse<List<MemoDetailResponse>> searchByResi(String resi, String name) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'searchByResi'");
     }
 }

@@ -286,6 +286,19 @@ public class MemoController {
         return memoService.finishDeliveryProcess(memoId, photo, catatan, principal.getName());
     }
 
+    @LogActivity("User mengunggah foto bukti (evidence) tanpa mengubah status")
+    @PutMapping(
+            path = "/{memoId}/photo-evidence",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public WebResponse<String> uploadEvidencePhoto(
+            @PathVariable("memoId") UUID memoId,
+            @RequestParam("photo") MultipartFile photo,
+            java.security.Principal principal) {
+        return memoService.uploadEvidencePhoto(memoId, photo, principal.getName());
+    }
+
     @LogActivity("Melakukan duplikat dan revisi memo")
     @PostMapping(path = "/{memoId}/duplicate-revision", produces = MediaType.APPLICATION_JSON_VALUE)
     public WebResponse<com.stok.anandam.store.dto.MemoDetailResponse> duplicateRevision(
@@ -322,5 +335,15 @@ public class MemoController {
     @PutMapping(path = "/retry-auto-jl-bulk", produces = MediaType.APPLICATION_JSON_VALUE)
     public WebResponse<String> retryAutoMatchJlBulk(java.security.Principal principal) {
         return memoService.retryAutoMatchJlBulk(principal.getName());
+    }
+
+    @GetMapping(
+            path = "/search/by-resi",
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public WebResponse<java.util.List<com.stok.anandam.store.dto.MemoDetailResponse>> searchByResi(
+            @RequestParam("resi") String resi,
+            java.security.Principal principal) {
+        return memoService.searchByResi(resi, principal.getName());
     }
 }

@@ -73,4 +73,7 @@ public interface MemoRepository extends JpaRepository<Memo, UUID> {
     @Query("SELECT m FROM Memo m WHERE m.statusAkhir IN :statuses AND (m.nomorJl IS NULL OR m.nomorJl = '')")
     List<com.stok.anandam.store.core.postgres.model.Memo> findByStatusAkhirInAndNomorJlIsNullOrEmpty(
             @Param("statuses") List<com.stok.anandam.store.core.postgres.model.enums.MemoStatus> statuses);
+
+    // Search memo by resi (case-insensitive partial match)
+    List<Memo> findByResiIgnoreCaseContaining(String resi);
 }
