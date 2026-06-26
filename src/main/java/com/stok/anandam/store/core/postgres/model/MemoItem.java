@@ -1,5 +1,6 @@
 package com.stok.anandam.store.core.postgres.model;
 
+import com.stok.anandam.store.core.postgres.model.enums.ItemStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -45,6 +46,10 @@ public class MemoItem {
 
     @Column(name = "catatan_gudang", columnDefinition = "text")
     private String catatanGudang;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "item_status", length = 20)
+    private ItemStatus itemStatus;
 
     @Column(length = 50)
     private String status;

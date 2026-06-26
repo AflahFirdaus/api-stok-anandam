@@ -1,5 +1,6 @@
 package com.stok.anandam.store.dto;
 
+import com.stok.anandam.store.core.postgres.model.enums.ItemStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -19,5 +20,6 @@ public class MemoItemResponse {
     private Integer qtyShipped;
     private Integer qtyRemaining;
     private String catatanGudang;
+    private ItemStatus itemStatus;
     private String status;
 }

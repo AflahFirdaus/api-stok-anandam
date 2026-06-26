@@ -343,6 +343,7 @@ public class MemoService {
                             .hargaSatuan(item.getHargaSatuan())
                             .subtotal(item.getSubtotal())
                             .catatanGudang(item.getCatatanGudang())
+                            .itemStatus(item.getItemStatus())
                             .status(item.getStatus())
                             .build()
                     ).collect(Collectors.toList());
@@ -479,6 +480,7 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                         .hargaSatuan(item.getHargaSatuan())
                         .subtotal(item.getSubtotal())
                         .catatanGudang(item.getCatatanGudang())
+                        .itemStatus(item.getItemStatus())
                         .status(item.getStatus())
                         .build()
                 ).collect(Collectors.toList());
@@ -1091,6 +1093,30 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                 .data("OK")
                 .status(200)
                 .message("Catatan gudang untuk item berhasil diperbarui")
+                .build();
+    }
+
+    @Transactional
+    public WebResponse<String> updateItemStatus(Long itemId, UpdateItemStatusRequest request, String username) {
+        MemoItem item = memoItemRepository.findById(itemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Item tidak ditemukan"));
+
+        User aktor = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
+
+        item.setItemStatus(request.getItemStatus());
+        memoItemRepository.save(item);
+
+        // Audit Log
+        activityLogService.log(username, "ITEM_STATUS_UPDATE",
+                "Mengubah status item " + item.getNamaBarang() + " menjadi " + request.getItemStatus());
+
+        sendMemoRefreshSignal();
+
+        return WebResponse.<String>builder()
+                .data("OK")
+                .status(200)
+                .message("Status item berhasil diperbarui menjadi " + request.getItemStatus())
                 .build();
     }
 
