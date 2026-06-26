@@ -62,17 +62,26 @@ public class MigrationService {
 
     private static final String SQL_PURCHASE = """
                 SELECT
-                    MAX(d.doc_date) as doc_date, d.doc_no, MAX(d.par_name) as par_name,
-                    MAX(dept.code) AS dep_code, m.code AS item_code, MAX(m.name) AS item_name,
+                    MAX(d.doc_date) AS doc_date, 
+                    d.doc_no, 
+                    MAX(d.par_name) AS par_name,
+                    MAX(dept.code) AS dep_code, 
+                    MAX(dept.name) AS dep_name,
+                    m.code AS item_code, 
+                    MAX(m.name) AS item_name,
                     SUM(CASE WHEN d.doc_no LIKE '%%RB%%' THEN -t.qty_def ELSE t.qty_def END) AS qty_def,
-                    MAX(t.price) as price,
+                    MAX(t.price) AS price,
                     SUM(CASE WHEN d.doc_no LIKE '%%RB%%' THEN -t.qty_def ELSE t.qty_def END * t.price) AS grand_total
                 FROM dbtpurchasedoc d
                 LEFT JOIN dbtpurchasetrans t ON d.id = t.doc_id
                 LEFT JOIN dbmitem m ON t.ite_id = m.id
                 LEFT JOIN dbmdepartment dept ON m.dep_id = dept.id
-                GROUP BY d.doc_no, m.code
-                ORDER BY doc_date DESC, MAX(d.id) DESC
+                GROUP BY 
+                    d.doc_no, 
+                    m.code
+                ORDER BY 
+                    doc_date DESC,
+                    MAX(d.id) DESC;
             """;
 
     private String getSqlPurchase() {
@@ -146,7 +155,9 @@ public class MigrationService {
                     d.doc_no,
                     MAX(p.code) AS code,
                     MAX(dep.code) AS dep_code,
+                    MAX(dep.name) AS dep_name,
                     MAX(d.par_name) AS par_name,
+                    MAX(i.code) AS ite_code,
                     t.ite_name,
                     SUM(
                         CASE

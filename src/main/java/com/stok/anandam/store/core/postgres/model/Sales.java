@@ -44,6 +44,12 @@ public class Sales {
     @Column(name = "dep_code", length = 50)
     private String depCode;
 
+    @Column(name = "dep_name")
+    private String depName;
+
+    @Column(name = "ite_code", length = 50)
+    private String iteCode;
+
     @Column(name = "qty")
     private Integer qty;
 

@@ -3,6 +3,7 @@ package com.stok.anandam.store.core.mysql.model;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 @Entity
@@ -36,4 +37,19 @@ public class Sales {
 
     @Column(name = "emp_code", length = 50)
     private String empCode;
+
+    @Column(name = "dep_code", length = 50)
+    private String depCode;
+
+    @Column(name = "dep_name")
+    private String depName;
+
+    @Column(name = "ite_code")
+    private String iteCode;
+
+    @Column(name = "emp_name")
+    private String empName;
+
+    @Column(name = "last_synced")
+    private LocalDateTime lastSynced;
 }

@@ -39,6 +39,9 @@ public class Purchase {
     @Column(name = "dep_code", length = 50)
     private String depCode;
 
+    @Column(name = "dep_name")
+    private String depName;
+
     @Column(name = "item_code", length = 50)
     private String itemCode;
 
