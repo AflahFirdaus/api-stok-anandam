@@ -196,12 +196,13 @@ public class MemoController {
     }
 
     @LogActivity("User memperbarui status item memo")
-    @PutMapping(path = "/items/{itemId}/status", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PutMapping(path = "/{memoId}/items/{itemId}/status", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public WebResponse<String> updateItemStatus(
+            @PathVariable("memoId") UUID memoId,
             @PathVariable("itemId") Long itemId,
             @RequestBody @Validated com.stok.anandam.store.dto.UpdateItemStatusRequest request,
             java.security.Principal principal) {
-        return memoService.updateItemStatus(itemId, request, principal.getName());
+        return memoService.updateItemStatus(memoId, itemId, request, principal.getName());
     }
 
     @LogActivity("Gudang menyelesaikan proses picking (Ready di Rak Keluar)")

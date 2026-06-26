@@ -1097,9 +1097,16 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
     }
 
     @Transactional
-    public WebResponse<String> updateItemStatus(Long itemId, UpdateItemStatusRequest request, String username) {
+    public WebResponse<String> updateItemStatus(UUID memoId, Long itemId, UpdateItemStatusRequest request, String username) {
+        Memo memo = memoRepository.findById(memoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
+
         MemoItem item = memoItemRepository.findById(itemId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Item tidak ditemukan"));
+
+        if (!item.getMemo().getId().equals(memo.getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Item tidak terdaftar di memo ini");
+        }
 
         User aktor = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
@@ -1109,7 +1116,7 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
 
         // Audit Log
         activityLogService.log(username, "ITEM_STATUS_UPDATE",
-                "Mengubah status item " + item.getNamaBarang() + " menjadi " + request.getItemStatus());
+                "Mengubah status item " + item.getNamaBarang() + " menjadi " + request.getItemStatus() + " pada memo " + memo.getNomorMemo());
 
         sendMemoRefreshSignal();
 
