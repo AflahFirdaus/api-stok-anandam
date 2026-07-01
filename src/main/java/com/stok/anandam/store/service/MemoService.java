@@ -468,7 +468,7 @@ public class MemoService {
         return responses;
     }
 
-private MemoDetailResponse mapToDetailResponse(Memo memo) {
+    private MemoDetailResponse mapToDetailResponse(Memo memo) {
         List<MemoItemResponse> itemResponses = memoItemRepository.findByMemoId(memo.getId())
                 .stream()
                 .map(item -> MemoItemResponse.builder()
@@ -1985,8 +1985,145 @@ private MemoDetailResponse mapToDetailResponse(Memo memo) {
                 .build();
     }
 
+    public WebResponse<List<MemoDetailResponse>> searchByBarcode(String code, String name) {
+        if (code == null || code.trim().isEmpty()) {
+            return WebResponse.<List<MemoDetailResponse>>builder()
+                    .data(List.of())
+                    .status(HttpStatus.OK.value())
+                    .message("Parameter kode tidak boleh kosong")
+                    .build();
+        }
+
+        String trimmed = code.trim();
+
+        // Priority 1: Exact match by resi
+        List<Memo> memos = memoRepository.findByResiIgnoreCase(trimmed);
+        if (memos.isEmpty()) {
+            // Priority 2: Exact match by orderIdMarketplace
+            memos = memoRepository.findByOrderIdMarketplaceIgnoreCase(trimmed);
+        }
+        if (memos.isEmpty()) {
+            // Priority 3: Exact match by nomorMemo
+            Optional<Memo> byNomorMemo = memoRepository.findByNomorMemo(trimmed);
+            if (byNomorMemo.isPresent()) {
+                memos = List.of(byNomorMemo.get());
+            }
+        }
+        if (memos.isEmpty()) {
+            // Priority 4: Partial match by resi (LIKE %code%)
+            memos = memoRepository.findByResiIgnoreCaseContaining(trimmed);
+        }
+        if (memos.isEmpty()) {
+            // Priority 5: Partial match by orderIdMarketplace (LIKE %code%)
+            memos = memoRepository.findByOrderIdMarketplaceIgnoreCaseContaining(trimmed);
+        }
+
+        List<MemoDetailResponse> responseList = memos.stream()
+                .map(memo -> toMemoDetailResponse(memo, name))
+                .collect(Collectors.toList());
+
+        return WebResponse.<List<MemoDetailResponse>>builder()
+                .data(responseList)
+                .status(HttpStatus.OK.value())
+                .build();
+    }
+
     public WebResponse<List<MemoDetailResponse>> searchByResi(String resi, String name) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'searchByResi'");
+        if (resi == null || resi.trim().isEmpty()) {
+            return WebResponse.<List<MemoDetailResponse>>builder()
+                    .data(List.of())
+                    .status(HttpStatus.OK.value())
+                    .message("Parameter resi tidak boleh kosong")
+                    .build();
+        }
+
+        List<Memo> memos = memoRepository.findByResiIgnoreCaseContaining(resi.trim());
+
+        List<MemoDetailResponse> responseList = memos.stream()
+                .map(memo -> toMemoDetailResponse(memo, name))
+                .collect(Collectors.toList());
+
+        return WebResponse.<List<MemoDetailResponse>>builder()
+                .data(responseList)
+                .status(HttpStatus.OK.value())
+                .build();
+    }
+
+    public WebResponse<List<MemoDetailResponse>> searchByOrderId(String orderId, String name) {
+        if (orderId == null || orderId.trim().isEmpty()) {
+            return WebResponse.<List<MemoDetailResponse>>builder()
+                    .data(List.of())
+                    .status(HttpStatus.OK.value())
+                    .message("Parameter orderId tidak boleh kosong")
+                    .build();
+        }
+
+        List<Memo> memos = memoRepository.findByOrderIdMarketplaceIgnoreCaseContaining(orderId.trim());
+
+        List<MemoDetailResponse> responseList = memos.stream()
+                .map(memo -> toMemoDetailResponse(memo, name))
+                .collect(Collectors.toList());
+
+        return WebResponse.<List<MemoDetailResponse>>builder()
+                .data(responseList)
+                .status(HttpStatus.OK.value())
+                .build();
+    }
+
+    private MemoDetailResponse toMemoDetailResponse(Memo memo, String username) {
+        List<MemoItemResponse> itemResponses = memoItemRepository.findByMemoId(memo.getId())
+                .stream()
+                .map(item -> MemoItemResponse.builder()
+                        .id(item.getId())
+                        .namaBarang(item.getNamaBarang())
+                        .qty(item.getQty())
+                        .qtyShipped(item.getQtyShipped())
+                        .hargaSatuan(item.getHargaSatuan())
+                        .subtotal(item.getSubtotal())
+                        .status(item.getStatus())
+                        .catatanGudang(item.getCatatanGudang())
+                        .build()
+                )
+                .collect(Collectors.toList());
+
+        List<PenjadwalanResponse> jadwalResponses = penjadwalanRepo.findByMemo_IdAndDeletedAtIsNull(memo.getId())
+                .stream()
+                .map(this::mapToPenjadwalanResponse)
+                .collect(Collectors.toList());
+
+        return MemoDetailResponse.builder()
+                .id(memo.getId())
+                .nomorMemo(memo.getNomorMemo())
+                .customerId(memo.getCustomer() != null ? memo.getCustomer().getId() : null)
+                .pelangganMybizId(memo.getPelangganMybiz() != null ? memo.getPelangganMybiz().getId() : null)
+                .customerName(memo.getPelangganMybiz() != null ? memo.getPelangganMybiz().getNamaPartner() :
+                        (memo.getCustomer() != null ? memo.getCustomer().getNamaPelanggan() : null))
+                .customerPhone(memo.getPelangganMybiz() != null ? memo.getPelangganMybiz().getNoTelepon() :
+                        (memo.getCustomer() != null ? memo.getCustomer().getNoHp() : null))
+                .tanggalMemo(memo.getTanggalMemo())
+                .totalHarga(memo.getTotalHarga())
+                .deskripsi(memo.getDeskripsi())
+                .statusAkhir(memo.getStatusAkhir())
+                .isTeknisRequired(memo.getIsTeknisRequired())
+                .isDeliveryRequired(memo.getIsDeliveryRequired())
+                .marketingName(memo.getMarketingName())
+                .marketingUsername(memo.getMarketing() != null ? memo.getMarketing().getUsername() : null)
+                .marketingEmpCode(memo.getMarketingEmpCode())
+                .metodePembayaran(memo.getMetodePembayaran())
+                .memoType(memo.getMemoType())
+                .orderIdMarketplace(memo.getOrderIdMarketplace())
+                .resi(memo.getResi())
+                .ekspedisi(memo.getEkspedisi())
+                .subEkspedisi(memo.getSubEkspedisi())
+                .platform(memo.getPlatform())
+                .kodePos(memo.getKodePos())
+                .tempo(memo.getTempo())
+                .badanUsaha(memo.getBadanUsaha())
+                .nomorJl(memo.getNomorJl())
+                .opsiPengiriman(memo.getOpsiPengiriman())
+                .tipeOngkir(memo.getTipeOngkir())
+                .items(itemResponses)
+                .penjadwalanHistory(jadwalResponses)
+                .build();
     }
 }

@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
 import java.util.List;
 
 @RestController
@@ -19,24 +20,33 @@ public class PurchaseController {
         @Autowired
         private PurchaseService purchaseService;
 
-        // GET /api/purchases?startDate=2023-01-01&endDate=2023-01-31&search=Budi
         @GetMapping
         public ResponseEntity<WebResponse<PurchaseSummaryResponse<Purchase>>> getPurchases(
-
                         @RequestParam(name = "page", defaultValue = "0") int page,
                         @RequestParam(name = "size", defaultValue = "10") int size,
                         @RequestParam(name = "sortBy", defaultValue = "docDate") String sortBy,
                         @RequestParam(name = "dir", defaultValue = "desc") String dir,
                         @RequestParam(name = "startDate", required = false) String startDate,
                         @RequestParam(name = "endDate", required = false) String endDate,
+                        @RequestParam(name = "empCode", required = false) String empCode,
                         @RequestParam(name = "categories", required = false) List<String> categories,
                         @RequestParam(name = "search", required = false) String search,
                         @RequestParam(name = "searchColumn", required = false) String searchColumn) {
 
+                // Convert comma-separated empCode to list
+                List<String> empCodes = null;
+                if (empCode != null && !empCode.trim().isEmpty()) {
+                        empCodes = Arrays.asList(empCode.trim().split("\\s*,\\s*"));
+                        empCodes = empCodes.stream()
+                                .filter(s -> !s.isEmpty())
+                                .collect(java.util.stream.Collectors.toList());
+                        if (empCodes.isEmpty()) empCodes = null;
+                }
+
                 PurchaseSummaryResponse<Purchase> data = purchaseService.getPurchases(
-                                page, size, sortBy, dir, startDate, endDate, categories, search, searchColumn);
+                                page, size, sortBy, dir, startDate, endDate, empCodes, categories, search, searchColumn);
                 if (data.getContent().isEmpty() && data.getTotalElements() > 0 && page > 0) {
-                        data = purchaseService.getPurchases(0, size, sortBy, dir, startDate, endDate, categories, search, searchColumn);
+                        data = purchaseService.getPurchases(0, size, sortBy, dir, startDate, endDate, empCodes, categories, search, searchColumn);
                         page = 0;
                 }
 
@@ -68,16 +78,26 @@ public class PurchaseController {
         @Autowired
         private ExcelExportService excelExportService;
 
-        // GET /api/v1/purchases/export?startDate=...&endDate=...&search=...
         @GetMapping("/export")
         public ResponseEntity<org.springframework.core.io.Resource> exportToExcel(
                         @RequestParam(name = "startDate", required = false) String startDate,
                         @RequestParam(name = "endDate", required = false) String endDate,
+                        @RequestParam(name = "empCode", required = false) String empCode,
                         @RequestParam(name = "categories", required = false) List<String> categories,
                         @RequestParam(name = "search", required = false) String search,
                         @RequestParam(name = "searchColumn", required = false) String searchColumn) throws java.io.IOException {
 
-                java.util.List<Purchase> data = purchaseService.getAllPurchasesForExport(startDate, endDate, categories, search, searchColumn);
+                // Convert comma-separated empCode to list
+                List<String> empCodes = null;
+                if (empCode != null && !empCode.trim().isEmpty()) {
+                        empCodes = Arrays.asList(empCode.trim().split("\\s*,\\s*"));
+                        empCodes = empCodes.stream()
+                                .filter(s -> !s.isEmpty())
+                                .collect(java.util.stream.Collectors.toList());
+                        if (empCodes.isEmpty()) empCodes = null;
+                }
+
+                java.util.List<Purchase> data = purchaseService.getAllPurchasesForExport(startDate, endDate, empCodes, categories, search, searchColumn);
                 byte[] bytes = excelExportService.exportPurchaseToExcel(data);
 
                 String filename = "purchases_" + java.time.LocalDate.now() + ".xlsx";

@@ -22,8 +22,8 @@ public class PurchaseService {
 
         public PurchaseSummaryResponse<Purchase> getPurchases(
                         int page, int size, String sortBy, String dir,
-                        String startDateStr, String endDateStr, List<String> categories, String search, String searchColumn) {
-                // 1. Parsing Tanggal (Default: Tahun 2000 s/d Hari Ini jika kosong)
+                        String startDateStr, String endDateStr, List<String> empCodes, 
+                        List<String> categories, String search, String searchColumn) {
                 LocalDate start = (startDateStr != null && !startDateStr.isBlank())
                                 ? LocalDate.parse(startDateStr)
                                 : LocalDate.of(2016, 1, 1);
@@ -32,18 +32,14 @@ public class PurchaseService {
                                 ? LocalDate.parse(endDateStr)
                                 : LocalDate.now();
 
-                // 2. Setup Paging & Sorting
                 Sort.Direction direction = dir.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
                 Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
 
-                // 3. Ambil List Data
-                Page<Purchase> pageResult = purchaseRepository.findByDateRangeAndSearch(start, end, categories, search, searchColumn, pageable);
+                Page<Purchase> pageResult = purchaseRepository.findByDateRangeAndSearch(start, end, empCodes, categories, search, searchColumn, pageable);
 
-                // 4. Ambil Total Sum (Uang)
-                BigDecimal totalSum = purchaseRepository.sumGrandTotalByDateRange(start, end, categories, search, searchColumn);
-                Long totalQty = purchaseRepository.sumQtyByDateRange(start, end, categories, search, searchColumn);
+                BigDecimal totalSum = purchaseRepository.sumGrandTotalByDateRange(start, end, empCodes, categories, search, searchColumn);
+                Long totalQty = purchaseRepository.sumQtyByDateRange(start, end, empCodes, categories, search, searchColumn);
 
-                // 5. Return DTO Summary
                 return PurchaseSummaryResponse.<Purchase>builder()
                                 .content(pageResult.getContent())
                                 .totalGrandSum(totalSum)
@@ -54,7 +50,7 @@ public class PurchaseService {
         }
 
         public java.util.List<Purchase> getAllPurchasesForExport(String startDateStr, String endDateStr,
-                        List<String> categories, String search, String searchColumn) {
+                        List<String> empCodes, List<String> categories, String search, String searchColumn) {
                 LocalDate start = (startDateStr != null && !startDateStr.isBlank())
                                 ? LocalDate.parse(startDateStr)
                                 : LocalDate.of(2016, 1, 1);
@@ -63,7 +59,7 @@ public class PurchaseService {
                                 ? LocalDate.parse(endDateStr)
                                 : LocalDate.now();
 
-                return purchaseRepository.findAllByDateRangeAndSearch(start, end, categories, search, searchColumn);
+                return purchaseRepository.findAllByDateRangeAndSearch(start, end, empCodes, categories, search, searchColumn);
         }
 
         public java.util.List<String> getDeptCodes() {

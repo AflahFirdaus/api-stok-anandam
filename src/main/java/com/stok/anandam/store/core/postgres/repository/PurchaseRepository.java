@@ -18,15 +18,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
 
-        // Fitur: Hapus semua data & Reset ID ke 1
         @Modifying
         @Transactional
         @Query(value = "TRUNCATE TABLE purchases RESTART IDENTITY", nativeQuery = true)
         void truncateTable();
 
-        // Query 1: Ambil Data dengan Filter Tanggal & Pencarian
         @Query("SELECT p FROM Purchase p WHERE " +
                         "(p.docDate BETWEEN :startDate AND :endDate) AND " +
+                        "(:empCodes IS NULL OR p.empCode IN :empCodes) AND " +
                         "(:categories IS NULL OR p.depCode IN :categories) AND " +
                         "(:search IS NULL OR :search = '' OR " +
                         "((:searchColumn IS NULL OR :searchColumn = 'ALL' OR :searchColumn = '') AND (LOWER(p.docNoP) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.parName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.depCode) LIKE LOWER(CONCAT('%', :search, '%')))) OR " +
@@ -38,6 +37,7 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
         Page<Purchase> findByDateRangeAndSearch(
                         @Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate,
+                        @Param("empCodes") List<String> empCodes,
                         @Param("categories") List<String> categories,
                         @Param("search") String search,
                         @Param("searchColumn") String searchColumn,
@@ -45,6 +45,7 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
 
         @Query("SELECT p FROM Purchase p WHERE " +
                         "(p.docDate BETWEEN :startDate AND :endDate) AND " +
+                        "(:empCodes IS NULL OR p.empCode IN :empCodes) AND " +
                         "(:categories IS NULL OR p.depCode IN :categories) AND " +
                         "(:search IS NULL OR :search = '' OR " +
                         "((:searchColumn IS NULL OR :searchColumn = 'ALL' OR :searchColumn = '') AND (LOWER(p.docNoP) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.parName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.depCode) LIKE LOWER(CONCAT('%', :search, '%')))) OR " +
@@ -56,13 +57,14 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
         java.util.List<Purchase> findAllByDateRangeAndSearch(
                         @Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate,
+                        @Param("empCodes") List<String> empCodes,
                         @Param("categories") List<String> categories,
                         @Param("search") String search,
                         @Param("searchColumn") String searchColumn);
 
-        // Query 2: Hitung Total Uang (SUM Grand Total) dengan filter yang sama
         @Query("SELECT COALESCE(SUM(p.grandTotal), 0) FROM Purchase p WHERE " +
                         "(p.docDate BETWEEN :startDate AND :endDate) AND " +
+                        "(:empCodes IS NULL OR p.empCode IN :empCodes) AND " +
                         "(:categories IS NULL OR p.depCode IN :categories) AND " +
                         "(:search IS NULL OR :search = '' OR " +
                         "((:searchColumn IS NULL OR :searchColumn = 'ALL' OR :searchColumn = '') AND (LOWER(p.docNoP) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.parName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.depCode) LIKE LOWER(CONCAT('%', :search, '%')))) OR " +
@@ -74,6 +76,7 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
         BigDecimal sumGrandTotalByDateRange(
                         @Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate,
+                        @Param("empCodes") List<String> empCodes,
                         @Param("categories") List<String> categories,
                         @Param("search") String search,
                         @Param("searchColumn") String searchColumn);
@@ -83,6 +86,7 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
 
         @Query("SELECT COALESCE(SUM(p.qty), 0) FROM Purchase p WHERE " +
                         "(p.docDate BETWEEN :startDate AND :endDate) AND " +
+                        "(:empCodes IS NULL OR p.empCode IN :empCodes) AND " +
                         "(:categories IS NULL OR p.depCode IN :categories) AND " +
                         "(:search IS NULL OR :search = '' OR " +
                         "((:searchColumn IS NULL OR :searchColumn = 'ALL' OR :searchColumn = '') AND (LOWER(p.docNoP) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.parName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.depCode) LIKE LOWER(CONCAT('%', :search, '%')))) OR " +
@@ -94,6 +98,7 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
         Long sumQtyByDateRange(
                         @Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate,
+                        @Param("empCodes") List<String> empCodes,
                         @Param("categories") List<String> categories,
                         @Param("search") String search,
                         @Param("searchColumn") String searchColumn);

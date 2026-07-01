@@ -356,4 +356,24 @@ public class MemoController {
             java.security.Principal principal) {
         return memoService.searchByResi(resi, principal.getName());
     }
+
+    @GetMapping(
+            path = "/search/by-order-id",
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public WebResponse<java.util.List<com.stok.anandam.store.dto.MemoDetailResponse>> searchByOrderId(
+            @RequestParam("orderId") String orderId,
+            java.security.Principal principal) {
+        return memoService.searchByOrderId(orderId, principal.getName());
+    }
+
+    @GetMapping(
+            path = "/search/by-barcode",
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public WebResponse<java.util.List<com.stok.anandam.store.dto.MemoDetailResponse>> searchByBarcode(
+            @RequestParam("code") String code,
+            java.security.Principal principal) {
+        return memoService.searchByBarcode(code, principal.getName());
+    }
 }

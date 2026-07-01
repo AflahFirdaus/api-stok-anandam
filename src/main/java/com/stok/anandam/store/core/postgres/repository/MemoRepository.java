@@ -76,4 +76,13 @@ public interface MemoRepository extends JpaRepository<Memo, UUID> {
 
     // Search memo by resi (case-insensitive partial match)
     List<Memo> findByResiIgnoreCaseContaining(String resi);
+    
+    // Search memo by orderIdMarketplace (case-insensitive partial match)
+    List<Memo> findByOrderIdMarketplaceIgnoreCaseContaining(String orderId);
+
+    // Search exact match by resi (prioritas utama untuk scan barcode)
+    List<Memo> findByResiIgnoreCase(String resi);
+
+    // Search exact match by orderIdMarketplace (prioritas kedua)
+    List<Memo> findByOrderIdMarketplaceIgnoreCase(String orderId);
 }

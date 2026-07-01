@@ -22,7 +22,7 @@ public class SalesService {
 
         public SalesSummaryResponse<Sales> getSales(
                         int page, int size, String sortBy, String dir,
-                        String startDateStr, String endDateStr, String empCode, 
+                        String startDateStr, String endDateStr, List<String> empCodes, 
                         List<String> categories, String search, String searchColumn) {
                 // 1. Parsing Tanggal
                 LocalDate start = (startDateStr != null && !startDateStr.isBlank())
@@ -38,11 +38,11 @@ public class SalesService {
                 Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
 
                 // 3. Ambil Data
-                Page<Sales> pageResult = salesRepository.findByFilters(start, end, empCode, categories, search, searchColumn, pageable);
+                Page<Sales> pageResult = salesRepository.findByFilters(start, end, empCodes, categories, search, searchColumn, pageable);
 
                 // 4. Ambil Total Sum
-                BigDecimal totalSum = salesRepository.sumGrandTotalByFilters(start, end, empCode, categories, search, searchColumn);
-                Long totalQty = salesRepository.sumQtyByFilters(start, end, empCode, categories, search, searchColumn);
+                BigDecimal totalSum = salesRepository.sumGrandTotalByFilters(start, end, empCodes, categories, search, searchColumn);
+                Long totalQty = salesRepository.sumQtyByFilters(start, end, empCodes, categories, search, searchColumn);
 
                 // 5. Return Response
                 return SalesSummaryResponse.<Sales>builder()
@@ -54,7 +54,7 @@ public class SalesService {
                                 .build();
         }
 
-        public java.util.List<Sales> getAllSalesForExport(String startDateStr, String endDateStr, String empCode,
+        public java.util.List<Sales> getAllSalesForExport(String startDateStr, String endDateStr, List<String> empCodes,
                         List<String> categories, String search, String searchColumn) {
                 LocalDate start = (startDateStr != null && !startDateStr.isBlank())
                                 ? LocalDate.parse(startDateStr)
@@ -64,7 +64,7 @@ public class SalesService {
                                 ? LocalDate.parse(endDateStr)
                                 : LocalDate.now();
 
-                return salesRepository.findAllByFilters(start, end, empCode, categories, search, searchColumn);
+                return salesRepository.findAllByFilters(start, end, empCodes, categories, search, searchColumn);
         }
 
         public java.util.List<com.stok.anandam.store.dto.EmployeeOption> getEmployeeCodes() {

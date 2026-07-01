@@ -10,6 +10,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 @RestController
@@ -19,25 +22,33 @@ public class SalesController {
         @Autowired
         private SalesService salesService;
 
-        // GET /api/sales?startDate=...&empCode=...&search=...
         @GetMapping
         public ResponseEntity<WebResponse<SalesSummaryResponse<Sales>>> getAllSales(
                         @RequestParam(name = "page", defaultValue = "0") int page,
                         @RequestParam(name = "size", defaultValue = "10") int size,
                         @RequestParam(name = "sortBy", defaultValue = "docDate") String sortBy,
                         @RequestParam(name = "direction", defaultValue = "desc") String direction,
-                        // Filter Tambahan:
                         @RequestParam(name = "startDate", required = false) String startDate,
                         @RequestParam(name = "endDate", required = false) String endDate,
-                        @RequestParam(name = "empCode", required = false) String empCode, // Filter Karyawan
+                        @RequestParam(name = "empCode", required = false) String empCode,
                         @RequestParam(name = "categories", required = false) List<String> categories,
                         @RequestParam(name = "search", required = false) String search,
                         @RequestParam(name = "searchColumn", required = false) String searchColumn) {
 
+                // Convert comma-separated empCode to list
+                List<String> empCodes = null;
+                if (empCode != null && !empCode.trim().isEmpty()) {
+                        empCodes = Arrays.asList(empCode.trim().split("\\s*,\\s*"));
+                        empCodes = empCodes.stream()
+                                .filter(s -> !s.isEmpty())
+                                .collect(java.util.stream.Collectors.toList());
+                        if (empCodes.isEmpty()) empCodes = null;
+                }
+
                 SalesSummaryResponse<Sales> data = salesService.getSales(
-                                page, size, sortBy, direction, startDate, endDate, empCode, categories, search, searchColumn);
+                                page, size, sortBy, direction, startDate, endDate, empCodes, categories, search, searchColumn);
                 if (data.getContent().isEmpty() && data.getTotalElements() > 0 && page > 0) {
-                        data = salesService.getSales(0, size, sortBy, direction, startDate, endDate, empCode, categories, search, searchColumn);
+                        data = salesService.getSales(0, size, sortBy, direction, startDate, endDate, empCodes, categories, search, searchColumn);
                         page = 0;
                 }
 
@@ -56,10 +67,6 @@ public class SalesController {
                                 .build());
         }
 
-        /**
-         * GET /api/v1/sales/employee-codes – daftar kode karyawan unik untuk dropdown
-         * filter (satu request).
-         */
         @GetMapping("/employee-codes")
         public ResponseEntity<WebResponse<java.util.List<com.stok.anandam.store.dto.EmployeeOption>>> getEmployeeCodes() {
                 java.util.List<com.stok.anandam.store.dto.EmployeeOption> codes = salesService.getEmployeeCodes();
@@ -85,7 +92,6 @@ public class SalesController {
         @Autowired
         private ExcelExportService excelExportService;
 
-        // GET /api/v1/sales/export?startDate=...&endDate=...&empCode=...&search=...
         @GetMapping("/export")
         public ResponseEntity<org.springframework.core.io.Resource> exportToExcel(
                         @RequestParam(name = "startDate", required = false) String startDate,
@@ -95,7 +101,17 @@ public class SalesController {
                         @RequestParam(name = "search", required = false) String search,
                         @RequestParam(name = "searchColumn", required = false) String searchColumn) throws java.io.IOException {
 
-                java.util.List<Sales> data = salesService.getAllSalesForExport(startDate, endDate, empCode, categories, search, searchColumn);
+                // Convert comma-separated empCode to list
+                List<String> empCodes = null;
+                if (empCode != null && !empCode.trim().isEmpty()) {
+                        empCodes = Arrays.asList(empCode.trim().split("\\s*,\\s*"));
+                        empCodes = empCodes.stream()
+                                .filter(s -> !s.isEmpty())
+                                .collect(java.util.stream.Collectors.toList());
+                        if (empCodes.isEmpty()) empCodes = null;
+                }
+
+                java.util.List<Sales> data = salesService.getAllSalesForExport(startDate, endDate, empCodes, categories, search, searchColumn);
                 byte[] bytes = excelExportService.exportSalesToExcel(data);
 
                 String filename = "sales_" + java.time.LocalDate.now() + ".xlsx";

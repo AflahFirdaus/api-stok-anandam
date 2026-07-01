@@ -21,7 +21,6 @@ import java.time.LocalDateTime;
 public class Purchase {
 
     @Id
-    // Ganti IDENTITY menjadi SEQUENCE
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "purchase_seq_gen")
     @SequenceGenerator(name = "purchase_seq_gen", sequenceName = "purchase_seq", allocationSize = 50)
     private Long id;
@@ -29,7 +28,6 @@ public class Purchase {
     @Column(name = "doc_date")
     private LocalDate docDate;
 
-    // Sesuai request: doc_no_p
     @Column(name = "doc_no_p", length = 50)
     private String docNoP;
 
@@ -51,13 +49,17 @@ public class Purchase {
     @Column(name = "qty")
     private Integer qty;
 
-    // Walau di DB tipe int(11), untuk harga sebaiknya BigDecimal di Java
-    // agar perhitungan akurat. JPA akan otomatis konversi.
     @Column(name = "price")
     private BigDecimal price;
 
     @Column(name = "grand_total")
     private BigDecimal grandTotal;
+
+    @Column(name = "emp_code", length = 50)
+    private String empCode;
+
+    @Column(name = "emp_name")
+    private String empName;
 
     @Column(name = "last_synced")
     private LocalDateTime lastSynced;

@@ -26,7 +26,7 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
         // QUERY 1: Ambil Data List dengan Filter Lengkap
         @Query("SELECT s FROM Sales s WHERE " +
                         "(s.docDate BETWEEN :startDate AND :endDate) AND " +
-                        "(:empCode IS NULL OR :empCode = '' OR s.empCode = :empCode) AND " +
+                        "(:empCodes IS NULL OR s.empCode IN :empCodes) AND " +
                         "(:categories IS NULL OR s.depCode IN :categories) AND " +
                         "(:search IS NULL OR :search = '' OR " +
                         "((:searchColumn IS NULL OR :searchColumn = 'ALL' OR :searchColumn = '') AND (LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.code) LIKE LOWER(CONCAT('%', :search, '%')))) OR " +
@@ -39,7 +39,7 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
         Page<Sales> findByFilters(
                         @Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate,
-                        @Param("empCode") String empCode,
+                        @Param("empCodes") List<String> empCodes,
                         @Param("categories") List<String> categories,
                         @Param("search") String search,
                         @Param("searchColumn") String searchColumn,
@@ -47,7 +47,7 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
 
         @Query("SELECT s FROM Sales s WHERE " +
                         "(s.docDate BETWEEN :startDate AND :endDate) AND " +
-                        "(:empCode IS NULL OR :empCode = '' OR s.empCode = :empCode) AND " +
+                        "(:empCodes IS NULL OR s.empCode IN :empCodes) AND " +
                         "(:categories IS NULL OR s.depCode IN :categories) AND " +
                         "(:search IS NULL OR :search = '' OR " +
                         "((:searchColumn IS NULL OR :searchColumn = 'ALL' OR :searchColumn = '') AND (LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.code) LIKE LOWER(CONCAT('%', :search, '%')))) OR " +
@@ -60,7 +60,7 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
         List<Sales> findAllByFilters(
                         @Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate,
-                        @Param("empCode") String empCode,
+                        @Param("empCodes") List<String> empCodes,
                         @Param("categories") List<String> categories,
                         @Param("search") String search,
                         @Param("searchColumn") String searchColumn);
@@ -68,7 +68,7 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
         // QUERY 2: Hitung Total Grand (SUM) dengan filter yang sama
         @Query("SELECT COALESCE(SUM(s.grandTotal), 0) FROM Sales s WHERE " +
                         "(s.docDate BETWEEN :startDate AND :endDate) AND " +
-                        "(:empCode IS NULL OR :empCode = '' OR s.empCode = :empCode) AND " +
+                        "(:empCodes IS NULL OR s.empCode IN :empCodes) AND " +
                         "(:categories IS NULL OR s.depCode IN :categories) AND " +
                         "(:search IS NULL OR :search = '' OR " +
                         "((:searchColumn IS NULL OR :searchColumn = 'ALL' OR :searchColumn = '') AND (LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.code) LIKE LOWER(CONCAT('%', :search, '%')))) OR " +
@@ -81,7 +81,7 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
         BigDecimal sumGrandTotalByFilters(
                         @Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate,
-                        @Param("empCode") String empCode,
+                        @Param("empCodes") List<String> empCodes,
                         @Param("categories") List<String> categories,
                         @Param("search") String search,
                         @Param("searchColumn") String searchColumn);
@@ -91,7 +91,7 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
 
         @Query("SELECT COALESCE(SUM(s.qty), 0) FROM Sales s WHERE " +
                         "(s.docDate BETWEEN :startDate AND :endDate) AND " +
-                        "(:empCode IS NULL OR :empCode = '' OR s.empCode = :empCode) AND " +
+                        "(:empCodes IS NULL OR s.empCode IN :empCodes) AND " +
                         "(:categories IS NULL OR s.depCode IN :categories) AND " +
                         "(:search IS NULL OR :search = '' OR " +
                         "((:searchColumn IS NULL OR :searchColumn = 'ALL' OR :searchColumn = '') AND (LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.code) LIKE LOWER(CONCAT('%', :search, '%')))) OR " +
@@ -104,7 +104,7 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
         Long sumQtyByFilters(
                         @Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate,
-                        @Param("empCode") String empCode,
+                        @Param("empCodes") List<String> empCodes,
                         @Param("categories") List<String> categories,
                         @Param("search") String search,
                         @Param("searchColumn") String searchColumn);
