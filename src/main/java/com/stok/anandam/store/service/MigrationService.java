@@ -468,13 +468,10 @@ public class MigrationService {
                         .completedFuture("ERROR: Kolom nama item tidak ditemukan (header/fallback gagal).");
             }
 
-            // Fill-down: nilai kosong diisi dari baris atas (HANYA spesifikasi & pricelist)
-            String lastSpesifikasi = null;
-            BigDecimal lastPricelist = null;
-            Map<String, Object[]> byItemName = new HashMap<>(); // normalized key -> [spesifikasi, modal,
-                                                                // finalPricelist]
-            List<Object[]> orderedSheetRows = new ArrayList<>(); // urutan asli sheet -> [itemName, spesifikasi, modal,
-                                                                 // pricelist]
+            // Merge ke atas: jika ada beberapa baris dengan nama item yang sama,
+            // ambil nilai PERTAMA yang non-null untuk setiap field (spesifikasi, modal, pricelist).
+            // Baris pertama yang punya nilai menang, baris berikutnya tidak overwrite.
+            Map<String, Object[]> byItemName = new LinkedHashMap<>(); // normalized key -> [spesifikasi, modal, finalPricelist]
 
             for (int i = 0; i < values.size(); i++) {
                 if (i == headerRowIndex)
@@ -487,37 +484,21 @@ public class MigrationService {
                 String modalStr = getValByIndex(row, idxModal);
                 String pricelistStr = getValByIndex(row, idxPricelist);
 
-                // Fill-down: kosong pakai nilai baris atas (spesifikasi & pricelist)
-                if (spesifikasiRaw != null && !spesifikasiRaw.isBlank())
-                    lastSpesifikasi = spesifikasiRaw;
-                String spesifikasi = (spesifikasiRaw != null && !spesifikasiRaw.isBlank()) ? spesifikasiRaw
-                        : lastSpesifikasi;
-
-                // Modal TIDAK fill-down: jika kosong tetap null
+                String spesifikasi = (spesifikasiRaw != null && !spesifikasiRaw.isBlank()) ? spesifikasiRaw : null;
                 BigDecimal modal = (modalStr != null && !modalStr.isBlank()) ? cleanBigDecimal(modalStr) : null;
+                BigDecimal pricelist = (pricelistStr != null && !pricelistStr.isBlank()) ? cleanBigDecimal(pricelistStr) : null;
 
-                if (pricelistStr != null && !pricelistStr.isBlank())
-                    lastPricelist = cleanBigDecimal(pricelistStr);
-                BigDecimal pricelist = (pricelistStr != null && !pricelistStr.isBlank()) ? cleanBigDecimal(pricelistStr)
-                        : lastPricelist;
-
-                Object[] payload = new Object[] { spesifikasi, modal, pricelist };
+                // Merge logic: untuk setiap key, gabungkan dengan data yang sudah ada.
+                // Field yang sudah ada (non-null) TIDAK di-overwrite.
+                // Field yang masih null diisi dari baris saat ini jika ada nilainya.
                 if (itemName != null && !itemName.isBlank()) {
-                    byItemName.put(com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(itemName), payload);
+                    mergePricelistData(byItemName, com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(itemName), spesifikasi, modal, pricelist);
                 }
                 if (itemCode != null && !itemCode.isBlank()) {
-                    byItemName.put(com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(itemCode), payload);
+                    mergePricelistData(byItemName, com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(itemCode), spesifikasi, modal, pricelist);
                 }
-                // Fallback penting untuk format tanpa header: kolom A kadang berisi nama item
-                // versi panjang
                 if (fallbackNameColA != null && !fallbackNameColA.isBlank()) {
-                    byItemName.put(com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(fallbackNameColA),
-                            payload);
-                }
-
-                // Simpan urutan baris sheet untuk fallback by-order
-                if (itemName != null && !itemName.isBlank()) {
-                    orderedSheetRows.add(new Object[] { itemName, spesifikasi, modal, pricelist });
+                    mergePricelistData(byItemName, com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(fallbackNameColA), spesifikasi, modal, pricelist);
                 }
             }
 
@@ -549,6 +530,24 @@ public class MigrationService {
 
     // Normalization methods moved to NormalizationUtil
 
+    /**
+     * Helper untuk merge data pricelist ke map byItemName.
+     * Jika key sudah ada, field yang masih null diisi dari baris saat ini.
+     * Field yang sudah ada (non-null) TIDAK di-overwrite (merge ke atas).
+     */
+    private static void mergePricelistData(Map<String, Object[]> byItemName, String key,
+                                           String spesifikasi, BigDecimal modal, BigDecimal pricelist) {
+        if (key == null || key.isBlank()) return;
+        Object[] existing = byItemName.get(key);
+        if (existing == null) {
+            byItemName.put(key, new Object[] { spesifikasi, modal, pricelist });
+        } else {
+            if (existing[0] == null && spesifikasi != null) existing[0] = spesifikasi;
+            if (existing[1] == null && modal != null) existing[1] = modal;
+            if (existing[2] == null && pricelist != null) existing[2] = pricelist;
+        }
+    }
+
     private static Integer getHeaderIndexFirst(Map<String, Integer> headerMap, String... names) {
         for (String n : names) {
             if (headerMap.containsKey(n))
@@ -569,17 +568,47 @@ public class MigrationService {
     private BigDecimal cleanBigDecimal(String val) {
         if (val == null || val.isBlank())
             return null;
-        String s = val.replace("\u00A0", "").replace(" ", "").replace("Rp", "");
-        if (s.contains(".") && !s.contains(","))
-            s = s.replace(".", "");
-        else if (s.contains(".") && s.contains(","))
-            s = s.split(",")[0].replace(".", "");
-        s = s.replaceAll("[^0-9.-]", "");
+        // Remove non-breaking spaces, regular spaces, and currency prefix
+        String s = val.replace("\u00A0", "").replace(" ", "").replace("Rp", "").replace("rp", "");
+        // Remove any remaining non-numeric characters except dots, commas, and minus
+        s = s.replaceAll("[^0-9.,\\-]", "");
         if (s.isEmpty())
             return null;
+
+        // Detect Indonesian number format:
+        // "2.857.000" (dots = thousand sep) → remove dots
+        // "2.857.000,50" (dots = thousand, comma = decimal) → remove dots, comma→decimal
+        // "2857000" (plain) → use as-is
+        if (s.contains(",")) {
+            // Comma present: if also has dots, dots are thousand separators
+            // Replace comma with dot for decimal, remove all dots
+            s = s.replace(".", "").replace(",", ".");
+        } else if (s.contains(".")) {
+            // Only dots present: check if they look like thousand separators
+            // If multiple dots with 3-digit groups → thousand separators
+            String[] parts = s.split("\\.");
+            if (parts.length > 1) {
+                boolean allThreeDigits = true;
+                for (int i = 1; i < parts.length; i++) {
+                    if (parts[i].length() != 3) {
+                        allThreeDigits = false;
+                        break;
+                    }
+                }
+                if (allThreeDigits) {
+                    // Dots are thousand separators → remove them
+                    s = s.replace(".", "");
+                }
+                // else: single dot is decimal separator → keep as-is (e.g. "44.00")
+            }
+        }
+
         try {
-            return new BigDecimal(s);
+            BigDecimal result = new BigDecimal(s);
+            log.debug("cleanBigDecimal: '{}' → '{}' → {}", val, s, result);
+            return result;
         } catch (Exception e) {
+            log.warn("cleanBigDecimal failed for input '{}' (cleaned: '{}'): {}", val, s, e.getMessage());
             return null;
         }
     }

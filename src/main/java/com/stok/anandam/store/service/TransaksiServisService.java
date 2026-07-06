@@ -242,6 +242,8 @@ public class TransaksiServisService {
     /**
      * Mencari transaksi servis berdasarkan status dan keyword pencarian (noServis / namaPelanggan).
      * Mendukung pagination (page & size).
+     * Untuk status KLAIM, response akan di-enrich dengan hariDiDistributor dan diurutkan
+     * dari yang PALING LAMA di distributor (descending).
      */
     @Transactional(readOnly = true)
     public Page<TransaksiServisResponse> getServisByStatus(String search, StatusServis status, int page, int size) {
@@ -251,8 +253,47 @@ public class TransaksiServisService {
                 .where(TransaksiServisSpecification.hasStatus(status))
                 .and(TransaksiServisSpecification.searchByNoServisOrNamaPelanggan(search));
 
-        return transaksiRepository.findAll(spec, pageable)
+        Page<TransaksiServisResponse> resultPage = transaksiRepository.findAll(spec, pageable)
                 .map(TransaksiServisResponse::fromEntity);
+
+        // Enrich dengan hariDiDistributor untuk status KLAIM
+        if (status.getValue().startsWith("Klaim")) {
+            List<TransaksiServisResponse> contentList = new java.util.ArrayList<>(resultPage.getContent());
+            enrichWithKlaimData(contentList);
+            // Urutkan dari yang paling lama di distributor (descending)
+            contentList.sort((a, b) -> {
+                Long ha = a.getHariDiDistributor() != null ? a.getHariDiDistributor() : 0L;
+                Long hb = b.getHariDiDistributor() != null ? b.getHariDiDistributor() : 0L;
+                return hb.compareTo(ha); // DESC
+            });
+            // Wrap ulang ke Page
+            return new org.springframework.data.domain.PageImpl<>(contentList, pageable, resultPage.getTotalElements());
+        }
+
+        return resultPage;
+    }
+
+    /**
+     * Memperkaya TransaksiServisResponse dengan data KlaimDistributor (hariDiDistributor).
+     */
+    private void enrichWithKlaimData(List<TransaksiServisResponse> responses) {
+        if (responses.isEmpty()) return;
+        List<UUID> transaksiIds = responses.stream()
+                .map(TransaksiServisResponse::getId)
+                .filter(id -> id != null)
+                .collect(Collectors.toList());
+
+        if (transaksiIds.isEmpty()) return;
+
+        List<KlaimDistributor> klaimList = klaimDistributorRepository.findByTransaksiIdIn(transaksiIds);
+        java.util.Map<UUID, KlaimDistributor> klaimMap = klaimList.stream()
+                .collect(Collectors.toMap(
+                        k -> k.getTransaksi().getId(),
+                        k -> k,
+                        (a, b) -> a
+                ));
+
+        TransaksiServisResponse.enrichHariDiDistributor(responses, klaimMap);
     }
 
     /**

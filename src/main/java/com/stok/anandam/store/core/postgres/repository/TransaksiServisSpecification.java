@@ -1,4 +1,4 @@
-package com.stok.anandam.store.core.postgres.repository;
+     package com.stok.anandam.store.core.postgres.repository;
 
 import com.stok.anandam.store.core.postgres.model.StatusServis;
 import com.stok.anandam.store.core.postgres.model.TransaksiServis;
@@ -18,7 +18,12 @@ import java.util.List;
 public class TransaksiServisSpecification {
 
     /**
-     * Mencari berdasarkan noServis (LIKE %search%) ATAU namaPelanggan (LIKE %search%).
+     * Mencari berdasarkan noServis, namaPelanggan, noTelepon, atau jenisBarang.
+     * Query multi-kata di-split menjadi kata-kata individual, lalu setiap kata
+     * dicari di SEMUA kolom (AND antar kata, OR antar kolom).
+     *
+     * Contoh: "Laptop ACER" → mencari baris yang mengandung "Laptop" AND "ACER"
+     * di salah satu kolom: noServis, jenisBarang, namaPelanggan, atau noTelepon.
      */
     public static Specification<TransaksiServis> searchByNoServisOrNamaPelanggan(String search) {
         return (root, query, criteriaBuilder) -> {
@@ -26,20 +31,77 @@ public class TransaksiServisSpecification {
                 return criteriaBuilder.conjunction(); // no filter
             }
 
-            String pattern = "%" + search.trim().toLowerCase() + "%";
+            // Split query menjadi kata-kata individual (dipisah spasi)
+            String[] keywords = search.trim().toLowerCase().split("\\s+");
 
-            // LIKE pada noServis
-            Predicate noServisLike = criteriaBuilder.like(
-                    criteriaBuilder.lower(root.get("noServis")), pattern);
+            // Join ke tabel pelanggan (sekali saja)
+            var pelangganJoin = root.join("pelanggan", JoinType.LEFT);
 
-            // LIKE pada namaPelanggan (join ke tabel pelanggan)
-            Predicate namaPelangganLike = criteriaBuilder.like(
-                    criteriaBuilder.lower(
-                            root.join("pelanggan", JoinType.LEFT).get("namaPelanggan")),
-                    pattern);
+            // Untuk setiap kata, buat OR predicate di semua kolom
+            List<Predicate> keywordPredicates = new ArrayList<>();
 
-            return criteriaBuilder.or(noServisLike, namaPelangganLike);
+            for (String keyword : keywords) {
+                if (keyword.isEmpty()) continue;
+                String pattern = "%" + keyword + "%";
+
+                List<Predicate> fieldPredicates = new ArrayList<>();
+
+                // LIKE pada noServis
+                fieldPredicates.add(criteriaBuilder.like(
+                        criteriaBuilder.lower(root.get("noServis")), pattern));
+
+                // LIKE pada jenisBarang (nama barang yang diservis)
+                fieldPredicates.add(criteriaBuilder.like(
+                        criteriaBuilder.lower(root.get("jenisBarang")), pattern));
+
+                // LIKE pada merek (merek barang)
+                fieldPredicates.add(criteriaBuilder.like(
+                        criteriaBuilder.lower(root.get("merek")), pattern));
+
+                // LIKE pada namaPelanggan
+                fieldPredicates.add(criteriaBuilder.like(
+                        criteriaBuilder.lower(pelangganJoin.get("namaPelanggan")), pattern));
+
+                // LIKE pada noTelepon
+                fieldPredicates.add(criteriaBuilder.like(
+                        criteriaBuilder.lower(pelangganJoin.get("noTelepon")), pattern));
+
+                // Normalisasi prefix noTelepon: "62xxx" ↔ "0xxx"
+                // Agar user bisa mencari dengan format internasional (62) maupun lokal (08/0)
+                String normalizedKeyword = normalizePhonePrefix(keyword);
+                if (!normalizedKeyword.equals(keyword)) {
+                    String normalizedPattern = "%" + normalizedKeyword + "%";
+                    fieldPredicates.add(criteriaBuilder.like(
+                            criteriaBuilder.lower(pelangganJoin.get("noTelepon")), normalizedPattern));
+                }
+
+                // Kata ini harus muncul di minimal SATU kolom (OR antar kolom)
+                keywordPredicates.add(
+                        criteriaBuilder.or(fieldPredicates.toArray(new Predicate[0])));
+            }
+
+            // Semua kata harus match (AND antar kata)
+            return criteriaBuilder.and(keywordPredicates.toArray(new Predicate[0]));
         };
+    }
+
+    /**
+     * Normalisasi prefix nomor telepon Indonesia.
+     * "6281234..." ↔ "081234..." ↔ "81234..."
+     */
+    private static String normalizePhonePrefix(String phone) {
+        if (phone == null || phone.isEmpty()) return phone;
+        if (phone.startsWith("62")) {
+            return "0" + phone.substring(2);
+        }
+        if (phone.startsWith("0")) {
+            return "62" + phone.substring(1);
+        }
+        // Coba juga tanpa leading 0/62 (user ketik "8123456" → tambahkan prefix 08 dan 628)
+        if (phone.length() >= 8 && Character.isDigit(phone.charAt(0)) && phone.charAt(0) == '8') {
+            return "0" + phone;
+        }
+        return phone;
     }
 
     /**

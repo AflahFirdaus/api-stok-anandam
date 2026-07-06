@@ -12,6 +12,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Data
@@ -68,6 +70,14 @@ public class TransaksiServisResponse {
     private LocalDateTime updatedAt;
 
     /**
+     * Jumlah hari sejak barang dikirim ke distributor.
+     * null jika bukan status KLAIM atau belum dikirim.
+     * Untuk status KLAIM_SUDAH_DIAMBIL: selisih tanggalKembali - tanggalKirim (fixed).
+     * Untuk status KLAIM_DIKIRIM / KLAIM_SUDAH_DIKIRIM: selisih now - tanggalKirim (berjalan).
+     */
+    private Long hariDiDistributor;
+
+    /**
      * Menghitung sisa hari garansi secara real-time.
      * Jika tglBatasGaransi null atau sudah lewat, mengembalikan 0.
      */
@@ -76,6 +86,31 @@ public class TransaksiServisResponse {
         LocalDateTime now = LocalDateTime.now();
         if (now.isAfter(tglBatasGaransi)) return 0L;
         return ChronoUnit.DAYS.between(now, tglBatasGaransi);
+    }
+
+    /**
+     * Menghitung hari di distributor dari data KlaimDistributor.
+     * DIPANGGIL DARI SERVICE LAYER (setelah data di-fetch).
+     */
+    public static void enrichHariDiDistributor(List<TransaksiServisResponse> responses,
+                                                java.util.Map<UUID, com.stok.anandam.store.core.postgres.model.KlaimDistributor> klaimMap) {
+        LocalDateTime now = LocalDateTime.now();
+        for (TransaksiServisResponse r : responses) {
+            if (r.getId() == null) continue;
+            var klaim = klaimMap.get(r.getId());
+            if (klaim == null || klaim.getTanggalKirim() == null) {
+                r.hariDiDistributor = null;
+                continue;
+            }
+            // Jika sudah diambil, gunakan tanggalKembali (hari fixed)
+            if (klaim.getTanggalKembali() != null) {
+                r.hariDiDistributor = ChronoUnit.DAYS.between(klaim.getTanggalKirim(), klaim.getTanggalKembali());
+            } else {
+                // Masih dalam proses — hitung dari sekarang
+                r.hariDiDistributor = ChronoUnit.DAYS.between(klaim.getTanggalKirim(), now);
+            }
+            if (r.hariDiDistributor < 0) r.hariDiDistributor = 0L;
+        }
     }
 
     public static TransaksiServisResponse fromEntity(TransaksiServis transaksi) {
