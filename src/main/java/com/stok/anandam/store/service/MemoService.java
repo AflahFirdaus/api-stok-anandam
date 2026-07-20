@@ -436,6 +436,7 @@ public class MemoService {
                     .isDeliveryRequired(java.lang.Boolean.TRUE.equals(memo.getIsDeliveryRequired()))
                     .opsiPengiriman(memo.getOpsiPengiriman())
                     .tipeOngkir(memo.getTipeOngkir())
+                    .estimasiOngkir(memo.getEstimasiOngkir())
                     .metodePembayaran(memo.getMetodePembayaran())
                     .buktiFoto(memo.getBuktiFoto())
                     .buktiFotoUrl(memo.getBuktiFoto() != null ? "/uploads/memos/" + memo.getBuktiFoto() : null)
@@ -538,6 +539,7 @@ public class MemoService {
                 .isDeliveryRequired(java.lang.Boolean.TRUE.equals(memo.getIsDeliveryRequired()))
                 .opsiPengiriman(memo.getOpsiPengiriman())
                 .tipeOngkir(memo.getTipeOngkir())
+                .estimasiOngkir(memo.getEstimasiOngkir())
                 .metodePembayaran(memo.getMetodePembayaran())
                 .buktiFoto(memo.getBuktiFoto())
                 .buktiFotoUrl(memo.getBuktiFoto() != null ? "/uploads/memos/" + memo.getBuktiFoto() : null)
@@ -717,6 +719,7 @@ public class MemoService {
                 .isDeliveryRequired(request.getMemoType().equalsIgnoreCase("ONLINE") || request.getIsKirim())
                 .opsiPengiriman(request.getOpsiPengiriman())
                 .tipeOngkir(request.getTipeOngkir())
+                .estimasiOngkir(request.getEstimasiOngkir())
                 .metodePembayaran(request.getMetodePembayaran())
                 .statusAkhir(MemoStatus.DRAFT)
                 .totalHarga(request.getTotalHarga())
@@ -830,6 +833,7 @@ public class MemoService {
         memo.setIsDeliveryRequired(request.getMemoType().equalsIgnoreCase("ONLINE") || request.getIsKirim());
         memo.setOpsiPengiriman(request.getOpsiPengiriman());
         memo.setTipeOngkir(request.getTipeOngkir());
+        memo.setEstimasiOngkir(request.getEstimasiOngkir());
         memo.setMetodePembayaran(request.getMetodePembayaran());
         memo.setTotalHarga(request.getTotalHarga());
         memo.setDeskripsi(request.getDeskripsi());
@@ -1181,6 +1185,7 @@ public class MemoService {
                 .isDeliveryRequired(request.getMemoType().equalsIgnoreCase("ONLINE") || request.getIsKirim())
                 .opsiPengiriman(request.getOpsiPengiriman())
                 .tipeOngkir(request.getTipeOngkir())
+                .estimasiOngkir(request.getEstimasiOngkir())
                 .metodePembayaran(request.getMetodePembayaran())
                 .statusAkhir(MemoStatus.MENUNGGU_PERSETUJUAN)
                 .totalHarga(request.getTotalHarga())
@@ -2122,6 +2127,7 @@ public class MemoService {
                 .nomorJl(memo.getNomorJl())
                 .opsiPengiriman(memo.getOpsiPengiriman())
                 .tipeOngkir(memo.getTipeOngkir())
+                .estimasiOngkir(memo.getEstimasiOngkir())
                 .items(itemResponses)
                 .penjadwalanHistory(jadwalResponses)
                 .build();

@@ -75,6 +75,9 @@ public class Memo {
     @Column(name = "tipe_ongkir")
     private String tipeOngkir;
 
+    @Column(name = "estimasi_ongkir", length = 50)
+    private String estimasiOngkir;
+
     @Column(name = "qr_code", columnDefinition = "text")
     private String qrCode;
     

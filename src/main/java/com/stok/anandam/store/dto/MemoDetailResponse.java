@@ -33,6 +33,7 @@ public class MemoDetailResponse {
     private Boolean isDeliveryRequired;
     private String opsiPengiriman;
     private String tipeOngkir;
+    private String estimasiOngkir;
     private String metodePembayaran;
     private String qrCode;
 
