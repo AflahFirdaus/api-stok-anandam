@@ -158,4 +158,52 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
                         @Param("parName") String parName,
                         @Param("grandTotal") BigDecimal grandTotal,
                         @Param("minDate") LocalDate minDate);
+
+        // ==================== PROFITABILITAS PENJUALAN ====================
+        // Ringkasan per barang: qty, omset (grand_total), total HPP, laba kotor.
+        // Nilai retur (RJ) sudah diperhitungkan di level baris saat migrasi,
+        // jadi agregasi di sini cukup menjumlahkan kolom yang sudah ada.
+        @Query("SELECT s.iteCode, s.itemName, MAX(s.depCode), MAX(s.depName), " +
+                        "COALESCE(SUM(s.qty), 0), COALESCE(SUM(s.grandTotal), 0), " +
+                        "COALESCE(SUM(s.totalHpp), 0), COALESCE(SUM(s.labaKotor), 0) " +
+                        "FROM Sales s WHERE " +
+                        "(s.docDate BETWEEN :startDate AND :endDate) AND " +
+                        "(:empCodes IS NULL OR s.empCode IN :empCodes) AND " +
+                        "(:categories IS NULL OR s.depCode IN :categories) AND " +
+                        "(:search IS NULL OR :search = '' OR " +
+                        "((:searchColumn IS NULL OR :searchColumn = 'ALL' OR :searchColumn = '') AND (LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.iteCode) LIKE LOWER(CONCAT('%', :search, '%')))) OR " +
+                        "(:searchColumn = 'barang' AND LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'dept' AND LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'iteCode' AND LOWER(s.iteCode) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+                        ") " +
+                        "GROUP BY s.iteCode, s.itemName " +
+                        "ORDER BY COALESCE(SUM(s.labaKotor), 0) DESC")
+        java.util.List<Object[]> findProfitabilityByFilters(
+                        @Param("startDate") LocalDate startDate,
+                        @Param("endDate") LocalDate endDate,
+                        @Param("empCodes") java.util.List<String> empCodes,
+                        @Param("categories") java.util.List<String> categories,
+                        @Param("search") String search,
+                        @Param("searchColumn") String searchColumn);
+
+        // Total agregat untuk footer laporan (dengan filter yang sama)
+        @Query("SELECT COALESCE(SUM(s.qty), 0), COALESCE(SUM(s.grandTotal), 0), " +
+                        "COALESCE(SUM(s.totalHpp), 0), COALESCE(SUM(s.labaKotor), 0) " +
+                        "FROM Sales s WHERE " +
+                        "(s.docDate BETWEEN :startDate AND :endDate) AND " +
+                        "(:empCodes IS NULL OR s.empCode IN :empCodes) AND " +
+                        "(:categories IS NULL OR s.depCode IN :categories) AND " +
+                        "(:search IS NULL OR :search = '' OR " +
+                        "((:searchColumn IS NULL OR :searchColumn = 'ALL' OR :searchColumn = '') AND (LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.iteCode) LIKE LOWER(CONCAT('%', :search, '%')))) OR " +
+                        "(:searchColumn = 'barang' AND LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'dept' AND LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'iteCode' AND LOWER(s.iteCode) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+                        ")")
+        Object[] sumProfitabilityByFilters(
+                        @Param("startDate") LocalDate startDate,
+                        @Param("endDate") LocalDate endDate,
+                        @Param("empCodes") java.util.List<String> empCodes,
+                        @Param("categories") java.util.List<String> categories,
+                        @Param("search") String search,
+                        @Param("searchColumn") String searchColumn);
 }

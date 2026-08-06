@@ -2,6 +2,8 @@ package com.stok.anandam.store.controller;
 
 import com.stok.anandam.store.core.postgres.model.Sales;
 import com.stok.anandam.store.dto.PagingResponse;
+import com.stok.anandam.store.dto.ProfitabilityResponse;
+import com.stok.anandam.store.dto.ProfitabilityRowResponse;
 import com.stok.anandam.store.dto.SalesSummaryResponse;
 import com.stok.anandam.store.dto.WebResponse;
 import com.stok.anandam.store.service.ExcelExportService;
@@ -86,6 +88,36 @@ public class SalesController {
                                 .status(200)
                                 .message("Success fetch categories")
                                 .data(categories)
+                                .build());
+        }
+
+        // Laporan Profitabilitas Penjualan (HPP & Laba Kotor per barang)
+        @GetMapping({ "/profitabilitas", "/profitability" })
+        public ResponseEntity<WebResponse<ProfitabilityResponse<ProfitabilityRowResponse>>> getProfitability(
+                        @RequestParam(name = "startDate", required = false) String startDate,
+                        @RequestParam(name = "endDate", required = false) String endDate,
+                        @RequestParam(name = "empCode", required = false) String empCode,
+                        @RequestParam(name = "categories", required = false) List<String> categories,
+                        @RequestParam(name = "search", required = false) String search,
+                        @RequestParam(name = "searchColumn", required = false) String searchColumn) {
+
+                List<String> empCodes = null;
+                if (empCode != null && !empCode.trim().isEmpty()) {
+                        empCodes = Arrays.asList(empCode.trim().split("\\s*,\\s*"));
+                        empCodes = empCodes.stream()
+                                        .filter(s -> !s.isEmpty())
+                                        .collect(java.util.stream.Collectors.toList());
+                        if (empCodes.isEmpty()) empCodes = null;
+                }
+
+                ProfitabilityResponse<ProfitabilityRowResponse> data = salesService.getProfitability(
+                                startDate, endDate, empCodes, categories, search, searchColumn);
+
+                return ResponseEntity.ok(WebResponse.<ProfitabilityResponse<ProfitabilityRowResponse>>builder()
+                                .status(200)
+                                .message("Success fetch Profitability Data")
+                                .data(data)
+                                .paging(null)
                                 .build());
         }
 

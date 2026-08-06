@@ -2,6 +2,8 @@ package com.stok.anandam.store.service;
 
 import com.stok.anandam.store.core.postgres.model.Sales;
 import com.stok.anandam.store.core.postgres.repository.SalesRepository;
+import com.stok.anandam.store.dto.ProfitabilityResponse;
+import com.stok.anandam.store.dto.ProfitabilityRowResponse;
 import com.stok.anandam.store.dto.SalesSummaryResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -11,8 +13,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class SalesService {
@@ -78,5 +82,77 @@ public class SalesService {
 
         public java.util.List<String> getDeptCodes() {
                 return salesRepository.findDistinctDepCodes();
+        }
+
+        /**
+         * Laporan Profitabilitas Penjualan per barang.
+         * Source: tabel sales (Postgres) yang sudah diisi kolom hpp_satuan/total_hpp/laba_kotor
+         * oleh service migrasi. Retur (RJ) sudah diperhitungkan di level baris.
+         */
+        public ProfitabilityResponse<ProfitabilityRowResponse> getProfitability(
+                        String startDateStr, String endDateStr, List<String> empCodes,
+                        List<String> categories, String search, String searchColumn) {
+
+                LocalDate start = (startDateStr != null && !startDateStr.isBlank())
+                                ? LocalDate.parse(startDateStr)
+                                : LocalDate.of(2000, 1, 1);
+
+                LocalDate end = (endDateStr != null && !endDateStr.isBlank())
+                                ? LocalDate.parse(endDateStr)
+                                : LocalDate.now();
+
+                List<Object[]> rows = salesRepository.findProfitabilityByFilters(start, end, empCodes, categories, search, searchColumn);
+
+                List<ProfitabilityRowResponse> content = rows.stream().map(row -> {
+                        BigDecimal omset = num((Object) row[5]);
+                        BigDecimal totalHpp = num((Object) row[6]);
+                        BigDecimal labaKotor = num((Object) row[7]);
+
+                        return ProfitabilityRowResponse.builder()
+                                        .itemCode((String) row[0])
+                                        .itemName((String) row[1])
+                                        .depCode((String) row[2])
+                                        .depName((String) row[3])
+                                        .qty(num((Object) row[4]))
+                                        .omset(omset)
+                                        .totalHpp(totalHpp)
+                                        .labaKotor(labaKotor)
+                                        .marginPct(marginPct(omset, labaKotor))
+                                        .build();
+                }).collect(Collectors.toList());
+
+                Object[] totals = salesRepository.sumProfitabilityByFilters(start, end, empCodes, categories, search, searchColumn);
+                BigDecimal totalQty = num(totals[0]);
+                BigDecimal totalOmset = num(totals[1]);
+                BigDecimal totalHpp = num(totals[2]);
+                BigDecimal totalLaba = num(totals[3]);
+
+                return ProfitabilityResponse.<ProfitabilityRowResponse>builder()
+                                .content(content)
+                                .totalQty(totalQty)
+                                .totalOmset(totalOmset)
+                                .totalHpp(totalHpp)
+                                .totalLabaKotor(totalLaba)
+                                .marginPct(marginPct(totalOmset, totalLaba))
+                                .build();
+        }
+
+        /** Konversi nilai SUM (Long/BigDecimal/null) menjadi BigDecimal aman. */
+        private BigDecimal num(Object o) {
+                if (o == null)
+                        return BigDecimal.ZERO;
+                if (o instanceof BigDecimal bd)
+                        return bd;
+                if (o instanceof Number n)
+                        return BigDecimal.valueOf(n.doubleValue());
+                return BigDecimal.ZERO;
+        }
+
+        /** margin % = labaKotor / omset * 100 (2 desimal, hindari pembagian nol). */
+        private BigDecimal marginPct(BigDecimal omset, BigDecimal laba) {
+                if (omset == null || omset.compareTo(BigDecimal.ZERO) == 0)
+                        return BigDecimal.ZERO;
+                return laba.multiply(BigDecimal.valueOf(100))
+                                .divide(omset, 2, RoundingMode.HALF_UP);
         }
 }

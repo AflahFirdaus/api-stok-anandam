@@ -59,6 +59,15 @@ public class Sales {
     @Column(name = "grand_total")
     private BigDecimal grandTotal;
 
+    @Column(name = "hpp_satuan", precision = 19, scale = 6)
+    private BigDecimal hppSatuan;
+
+    @Column(name = "total_hpp", precision = 19, scale = 6)
+    private BigDecimal totalHpp;
+
+    @Column(name = "laba_kotor", precision = 19, scale = 6)
+    private BigDecimal labaKotor;
+
     @Column(name = "emp_code", length = 50)
     private String empCode;
 

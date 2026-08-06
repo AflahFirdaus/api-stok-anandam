@@ -23,6 +23,7 @@ public class PostgresSchemaInitializer {
         fixUserRoleConstraint();
         addRevisionFields();
         fixMemoStatuses();
+        addSalesProfitabilityColumns();
         log.info("=== POSTGRESQL DATABASE SCHEMA INITIALIZATION COMPLETED ===");
     }
 
@@ -48,6 +49,18 @@ public class PostgresSchemaInitializer {
             log.info("Successfully checked/added revision fields.");
         } catch (Exception e) {
             log.error("Failed to add revision fields: {}", e.getMessage());
+        }
+    }
+
+    private void addSalesProfitabilityColumns() {
+        log.info("Checking and adding sales profitability columns (hpp_satuan, total_hpp, laba_kotor)...");
+        try {
+            pgJdbcTemplate.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS hpp_satuan NUMERIC(19,6)");
+            pgJdbcTemplate.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS total_hpp NUMERIC(19,6)");
+            pgJdbcTemplate.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS laba_kotor NUMERIC(19,6)");
+            log.info("Successfully checked/added sales profitability columns.");
+        } catch (Exception e) {
+            log.error("Failed to add sales profitability columns: {}", e.getMessage());
         }
     }
 

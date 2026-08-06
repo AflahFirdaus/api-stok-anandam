@@ -21,7 +21,9 @@ public class ExcelExportService {
             Row headerRow = sheet.createRow(0);
             String[] columns = { 
                 "ID", "Tanggal", "No Nota", "Kode", "Nama User", "Dept", 
-                "Barang", "Qty", "Harga", "Total", "Marketing Code", "Marketing Name" 
+                "Barang", "Qty", "Harga", "Total",
+                "HPP Satuan", "Total HPP", "Laba Kotor", "Margin %",
+                "Marketing Code", "Marketing Name" 
             };
             CellStyle headerStyle = workbook.createCellStyle();
             Font font = workbook.createFont();
@@ -47,8 +49,12 @@ public class ExcelExportService {
                 row.createCell(7).setCellValue(sales.getQty() != null ? sales.getQty() : 0);
                 row.createCell(8).setCellValue(sales.getPrice() != null ? sales.getPrice().doubleValue() : 0.0);
                 row.createCell(9).setCellValue(sales.getGrandTotal() != null ? sales.getGrandTotal().doubleValue() : 0.0);
-                row.createCell(10).setCellValue(sales.getEmpCode());
-                row.createCell(11).setCellValue(sales.getEmpName());
+                row.createCell(10).setCellValue(sales.getHppSatuan() != null ? sales.getHppSatuan().doubleValue() : 0.0);
+                row.createCell(11).setCellValue(sales.getTotalHpp() != null ? sales.getTotalHpp().doubleValue() : 0.0);
+                row.createCell(12).setCellValue(sales.getLabaKotor() != null ? sales.getLabaKotor().doubleValue() : 0.0);
+                row.createCell(13).setCellValue(marginPercent(sales));
+                row.createCell(14).setCellValue(sales.getEmpCode());
+                row.createCell(15).setCellValue(sales.getEmpName());
             }
 
             for (int i = 0; i < columns.length; i++) {
@@ -58,6 +64,17 @@ public class ExcelExportService {
             workbook.write(out);
             return out.toByteArray();
         }
+    }
+
+    /** Margin % = laba kotor / total penjualan * 100 (2 desimal, hindari pembagian nol). */
+    private double marginPercent(Sales sales) {
+        if (sales.getGrandTotal() == null
+                || sales.getGrandTotal().doubleValue() == 0.0
+                || sales.getLabaKotor() == null) {
+            return 0.0;
+        }
+        return Math.round(sales.getLabaKotor().doubleValue() * 100.0
+                / sales.getGrandTotal().doubleValue() * 100.0) / 100.0;
     }
 
     public byte[] exportPurchaseToExcel(List<Purchase> purchaseList) throws IOException {
