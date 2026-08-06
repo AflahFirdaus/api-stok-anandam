@@ -109,6 +109,48 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
                         @Param("search") String search,
                         @Param("searchColumn") String searchColumn);
 
+        // QUERY: Total HPP (SUM) dengan filter yang sama
+        @Query("SELECT COALESCE(SUM(s.totalHpp), 0) FROM Sales s WHERE " +
+                        "(s.docDate BETWEEN :startDate AND :endDate) AND " +
+                        "(:empCodes IS NULL OR s.empCode IN :empCodes) AND " +
+                        "(:categories IS NULL OR s.depCode IN :categories) AND " +
+                        "(:search IS NULL OR :search = '' OR " +
+                        "((:searchColumn IS NULL OR :searchColumn = 'ALL' OR :searchColumn = '') AND (LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.code) LIKE LOWER(CONCAT('%', :search, '%')))) OR " +
+                        "(:searchColumn = 'code' AND LOWER(s.code) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'noNota' AND LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'distributor' AND LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'barang' AND LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'dept' AND LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+                        ")")
+        BigDecimal sumTotalHppByFilters(
+                        @Param("startDate") LocalDate startDate,
+                        @Param("endDate") LocalDate endDate,
+                        @Param("empCodes") List<String> empCodes,
+                        @Param("categories") List<String> categories,
+                        @Param("search") String search,
+                        @Param("searchColumn") String searchColumn);
+
+        // QUERY: Total Laba Kotor (SUM) dengan filter yang sama
+        @Query("SELECT COALESCE(SUM(s.labaKotor), 0) FROM Sales s WHERE " +
+                        "(s.docDate BETWEEN :startDate AND :endDate) AND " +
+                        "(:empCodes IS NULL OR s.empCode IN :empCodes) AND " +
+                        "(:categories IS NULL OR s.depCode IN :categories) AND " +
+                        "(:search IS NULL OR :search = '' OR " +
+                        "((:searchColumn IS NULL OR :searchColumn = 'ALL' OR :searchColumn = '') AND (LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.code) LIKE LOWER(CONCAT('%', :search, '%')))) OR " +
+                        "(:searchColumn = 'code' AND LOWER(s.code) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'noNota' AND LOWER(s.docNo) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'distributor' AND LOWER(s.parName) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'barang' AND LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
+                        "(:searchColumn = 'dept' AND LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+                        ")")
+        BigDecimal sumLabaKotorByFilters(
+                        @Param("startDate") LocalDate startDate,
+                        @Param("endDate") LocalDate endDate,
+                        @Param("empCodes") List<String> empCodes,
+                        @Param("categories") List<String> categories,
+                        @Param("search") String search,
+                        @Param("searchColumn") String searchColumn);
+
         @Query("SELECT MAX(s.docDate) FROM Sales s WHERE s.itemName = :itemName")
         LocalDate findLatestDocDateByItemName(@Param("itemName") String itemName);
 
@@ -179,27 +221,6 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
                         "GROUP BY s.iteCode, s.itemName " +
                         "ORDER BY COALESCE(SUM(s.labaKotor), 0) DESC")
         java.util.List<Object[]> findProfitabilityByFilters(
-                        @Param("startDate") LocalDate startDate,
-                        @Param("endDate") LocalDate endDate,
-                        @Param("empCodes") java.util.List<String> empCodes,
-                        @Param("categories") java.util.List<String> categories,
-                        @Param("search") String search,
-                        @Param("searchColumn") String searchColumn);
-
-        // Total agregat untuk footer laporan (dengan filter yang sama)
-        @Query("SELECT COALESCE(SUM(s.qty), 0), COALESCE(SUM(s.grandTotal), 0), " +
-                        "COALESCE(SUM(s.totalHpp), 0), COALESCE(SUM(s.labaKotor), 0) " +
-                        "FROM Sales s WHERE " +
-                        "(s.docDate BETWEEN :startDate AND :endDate) AND " +
-                        "(:empCodes IS NULL OR s.empCode IN :empCodes) AND " +
-                        "(:categories IS NULL OR s.depCode IN :categories) AND " +
-                        "(:search IS NULL OR :search = '' OR " +
-                        "((:searchColumn IS NULL OR :searchColumn = 'ALL' OR :searchColumn = '') AND (LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(s.iteCode) LIKE LOWER(CONCAT('%', :search, '%')))) OR " +
-                        "(:searchColumn = 'barang' AND LOWER(s.itemName) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
-                        "(:searchColumn = 'dept' AND LOWER(s.depCode) LIKE LOWER(CONCAT('%', :search, '%'))) OR " +
-                        "(:searchColumn = 'iteCode' AND LOWER(s.iteCode) LIKE LOWER(CONCAT('%', :search, '%'))) " +
-                        ")")
-        Object[] sumProfitabilityByFilters(
                         @Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate,
                         @Param("empCodes") java.util.List<String> empCodes,

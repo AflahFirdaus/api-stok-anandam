@@ -47,12 +47,17 @@ public class SalesService {
                 // 4. Ambil Total Sum
                 BigDecimal totalSum = salesRepository.sumGrandTotalByFilters(start, end, empCodes, categories, search, searchColumn);
                 Long totalQty = salesRepository.sumQtyByFilters(start, end, empCodes, categories, search, searchColumn);
+                BigDecimal totalHpp = salesRepository.sumTotalHppByFilters(start, end, empCodes, categories, search, searchColumn);
+                BigDecimal totalLaba = salesRepository.sumLabaKotorByFilters(start, end, empCodes, categories, search, searchColumn);
 
                 // 5. Return Response
                 return SalesSummaryResponse.<Sales>builder()
                                 .content(pageResult.getContent())
                                 .totalGrandSum(totalSum)
                                 .totalQty(totalQty != null ? BigDecimal.valueOf(totalQty) : BigDecimal.ZERO)
+                                .totalHpp(totalHpp != null ? totalHpp : BigDecimal.ZERO)
+                                .totalLabaKotor(totalLaba != null ? totalLaba : BigDecimal.ZERO)
+                                .marginPct(marginPct(totalSum, totalLaba))
                                 .totalPages(pageResult.getTotalPages())
                                 .totalElements(pageResult.getTotalElements())
                                 .build();
@@ -121,11 +126,19 @@ public class SalesService {
                                         .build();
                 }).collect(Collectors.toList());
 
-                Object[] totals = salesRepository.sumProfitabilityByFilters(start, end, empCodes, categories, search, searchColumn);
-                BigDecimal totalQty = num(totals[0]);
-                BigDecimal totalOmset = num(totals[1]);
-                BigDecimal totalHpp = num(totals[2]);
-                BigDecimal totalLaba = num(totals[3]);
+                // Total footer dihitung langsung dari baris hasil (tidak lewat query agregat
+                // tambahan, karena proyeksi Object[] agregat tanpa GROUP BY di Hibernate
+                // bisa dikembalikan sebagai array dengan panjang tidak terduga).
+                BigDecimal totalQty = BigDecimal.ZERO;
+                BigDecimal totalOmset = BigDecimal.ZERO;
+                BigDecimal totalHpp = BigDecimal.ZERO;
+                BigDecimal totalLaba = BigDecimal.ZERO;
+                for (ProfitabilityRowResponse r : content) {
+                        totalQty = totalQty.add(val(r.getQty()));
+                        totalOmset = totalOmset.add(val(r.getOmset()));
+                        totalHpp = totalHpp.add(val(r.getTotalHpp()));
+                        totalLaba = totalLaba.add(val(r.getLabaKotor()));
+                }
 
                 return ProfitabilityResponse.<ProfitabilityRowResponse>builder()
                                 .content(content)
@@ -146,6 +159,11 @@ public class SalesService {
                 if (o instanceof Number n)
                         return BigDecimal.valueOf(n.doubleValue());
                 return BigDecimal.ZERO;
+        }
+
+        /** BigDecimal non-null helper untuk penjumlahan. */
+        private BigDecimal val(BigDecimal v) {
+                return v == null ? BigDecimal.ZERO : v;
         }
 
         /** margin % = labaKotor / omset * 100 (2 desimal, hindari pembagian nol). */
