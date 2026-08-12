@@ -525,6 +525,9 @@ public class MigrationService {
         String lastItemNameKey = null;
         String lastItemCodeKey = null;
         String lastFallbackNameKey = null;
+        String lastSpesifikasi = null;
+        String lastModalStr = null;
+        String lastPricelistStr = null;
 
         for (int i = 0; i < values.size(); i++) {
             if (i == headerRowIndex)
@@ -536,6 +539,18 @@ public class MigrationService {
             String spesifikasiRaw = getValByIndex(row, idxSpesifikasi);
             String modalStr = getValByIndex(row, idxModal);
             String pricelistStr = getValByIndex(row, idxPricelist);
+
+            // FILL-DOWN KOLOM: jika sel spesifikasi/modal/pricelist kosong, diturunkan dari
+            // produk pada baris di atasnya (mis. seri/variant yang barisnya kosong),
+            // sehingga data tidak hilang seperti kasus "NB ACER AL14-37P-32RZ".
+            if (spesifikasiRaw != null && !spesifikasiRaw.isBlank()) lastSpesifikasi = spesifikasiRaw;
+            else spesifikasiRaw = lastSpesifikasi;
+
+            if (modalStr != null && !modalStr.isBlank()) lastModalStr = modalStr;
+            else modalStr = lastModalStr;
+
+            if (pricelistStr != null && !pricelistStr.isBlank()) lastPricelistStr = pricelistStr;
+            else pricelistStr = lastPricelistStr;
 
             String spesifikasi = (spesifikasiRaw != null && !spesifikasiRaw.isBlank()) ? spesifikasiRaw : null;
             BigDecimal modal = (modalStr != null && !modalStr.isBlank()) ? cleanBigDecimal(modalStr) : null;

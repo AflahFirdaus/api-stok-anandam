@@ -89,4 +89,26 @@ class MigrationServicePricelistParsingTest {
         assertThat(payload[1]).isEqualTo(new BigDecimal("1000"));
         assertThat(payload[2]).isEqualTo(new BigDecimal("2000"));
     }
+
+    @Test
+    void variantKosongMewarisiSpesifikasiDanPricelistDariBarisAtas() {
+        // Kasus nyata: AL14-37P-32AV lengkap, AL14-37P-32RZ punya modal tapi spec & pricelist kosong.
+        // Spec + pricelist harus diturunkan (fill-down) dari baris di atasnya.
+        List<List<Object>> values = header();
+        values.add(row("NB ACER AL14-37P-32AV", "Intel Core 3 N355 / 8GB DDR4 / SSD 512GB / 14 FHD IPS / WIN 11", "8000000", "8699000"));
+        values.add(row("NB ACER AL14-37P-32RZ", null, "8000000", null));
+
+        Map<String, Object[]> map = parse(values);
+
+        Object[] av = map.get("NB ACER AL14 37P 32AV");
+        assertThat(av[0]).isEqualTo("Intel Core 3 N355 / 8GB DDR4 / SSD 512GB / 14 FHD IPS / WIN 11");
+        assertThat(av[1]).isEqualTo(new BigDecimal("8000000"));
+        assertThat(av[2]).isEqualTo(new BigDecimal("8699000"));
+
+        // RZ harus mewarisi spesifikasi & pricelist dari baris di atasnya (AV).
+        Object[] rz = map.get("NB ACER AL14 37P 32RZ");
+        assertThat(rz[0]).isEqualTo("Intel Core 3 N355 / 8GB DDR4 / SSD 512GB / 14 FHD IPS / WIN 11");
+        assertThat(rz[1]).isEqualTo(new BigDecimal("8000000"));
+        assertThat(rz[2]).isEqualTo(new BigDecimal("8699000"));
+    }
 }
