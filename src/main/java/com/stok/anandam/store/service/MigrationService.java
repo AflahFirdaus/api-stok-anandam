@@ -1393,9 +1393,14 @@ public class MigrationService {
                 buffer.clear();
             }
 
-            // 2. CLEANUP DATA LAMA
+            // CLEANUP DATA LAMA
             log.info("Cleaning up old PelangganMybiz data...");
-            int deleted = pgJdbcTemplate.update("DELETE FROM pelanggan_mybiz WHERE last_synced < ?", syncTime);
+            // JANGAN hapus pelanggan yang masih dirujuk oleh tabel memos (FK constraint),
+            // supaya DELETE tidak melanggar foreign key (SQLState 23503) dan data memo tetap valid.
+            int deleted = pgJdbcTemplate.update(
+                    "DELETE FROM pelanggan_mybiz pm WHERE pm.last_synced < ? "
+                            + "AND NOT EXISTS (SELECT 1 FROM memos m WHERE m.pelanggan_mybiz_id = pm.id)",
+                    syncTime);
             log.info("Cleaned up {} stale PelangganMybiz records.", deleted);
 
             long duration = System.currentTimeMillis() - startTime;
