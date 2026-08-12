@@ -168,11 +168,11 @@ public class StockService {
                                 .collect(Collectors.toList());
                 
                 Map<String, com.stok.anandam.store.core.postgres.model.Pricelist> pricelistMap = new HashMap<>();
-                pricelistRepository.findByItemNameIn(normalizedNames).forEach(p -> {
+                pricelistRepository.findByNormalizedItemNameIn(normalizedNames).forEach(p -> {
                     // Map back to original name for lookup convenience in the stream below
                     // We need to find which original name matches this normalized one
                     itemNames.stream()
-                        .filter(original -> com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(original).equals(p.getItemName()))
+                        .filter(original -> com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(original).equals(p.getNormalizedItemName()))
                         .forEach(original -> pricelistMap.put(original, p));
                 });
 
@@ -439,7 +439,7 @@ public class StockService {
                 // Fetch from pricelist using normalized name
                 String normalizedName = com.stok.anandam.store.util.NormalizationUtil
                                 .normalizeItemName(stock.getItemName());
-                pricelistRepository.findByItemName(normalizedName).ifPresent(p -> {
+                pricelistRepository.findByNormalizedItemName(normalizedName).ifPresent(p -> {
                         stock.setSpesifikasi(p.getSpesifikasi());
                         stock.setModal(p.getModal());
                         stock.setFinalPricelist(p.getFinalPricelist());

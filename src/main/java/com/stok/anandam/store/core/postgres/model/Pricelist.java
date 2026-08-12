@@ -14,7 +14,8 @@ import java.math.BigDecimal;
 @Builder
 @Entity
 @Table(name = "pricelist", indexes = {
-        @Index(name = "idx_pricelist_item_name", columnList = "item_name")
+        @Index(name = "idx_pricelist_item_name", columnList = "item_name"),
+        @Index(name = "idx_pricelist_norm_item_name", columnList = "normalized_item_name")
 })
 public class Pricelist {
 
@@ -23,8 +24,15 @@ public class Pricelist {
     @SequenceGenerator(name = "pricelist_seq_gen", sequenceName = "pricelist_seq", allocationSize = 50)
     private Long id;
 
-    @Column(name = "item_name", length = 500, unique = true)
+    // Nama asli sesuai spreadsheet (bisa mengandung tanda '-', dst). Dipakai utk tampilan / pencarian manual.
+    @Column(name = "item_name", length = 500)
     private String itemName;
+
+    // Nama ternormalisasi (huruf besar, tanpa karakter khusus seperti '-').
+    // Dipakai sbg kunci join/penyamaan dengan Stock.normalizedItemName, sehingga robust
+    // terhadap data lama yang mungkin disimpan dgn format berbeda.
+    @Column(name = "normalized_item_name", length = 500)
+    private String normalizedItemName;
 
     @Column(name = "spesifikasi", length = 3000)
     private String spesifikasi;

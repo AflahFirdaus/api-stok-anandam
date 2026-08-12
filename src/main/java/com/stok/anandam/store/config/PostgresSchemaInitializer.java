@@ -24,7 +24,20 @@ public class PostgresSchemaInitializer {
         addRevisionFields();
         fixMemoStatuses();
         addSalesProfitabilityColumns();
+        addPricelistNormalizedColumn();
         log.info("=== POSTGRESQL DATABASE SCHEMA INITIALIZATION COMPLETED ===");
+    }
+
+    private void addPricelistNormalizedColumn() {
+        log.info("Checking and adding normalized_item_name column to pricelist table...");
+        try {
+            pgJdbcTemplate.execute("ALTER TABLE pricelist ADD COLUMN IF NOT EXISTS normalized_item_name VARCHAR(500)");
+            pgJdbcTemplate.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_pricelist_norm_item_name ON pricelist (normalized_item_name)");
+            log.info("Successfully checked/added pricelist.normalized_item_name.");
+        } catch (Exception e) {
+            log.error("Failed to add pricelist.normalized_item_name: {}", e.getMessage());
+        }
     }
 
     private void fixUserRoleConstraint() {

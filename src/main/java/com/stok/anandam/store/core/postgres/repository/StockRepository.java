@@ -74,7 +74,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                         Pageable pageable);
 
         /** Fetch unique item codes with joined sorting. */
-        @Query(value = "SELECT s.itemCode FROM Stock s LEFT JOIN Pricelist p ON s.normalizedItemName = p.itemName WHERE " +
+        @Query(value = "SELECT s.itemCode FROM Stock s LEFT JOIN Pricelist p ON s.normalizedItemName = p.normalizedItemName WHERE " +
                         "(:search IS NULL OR :search = '' OR " +
                         "LOWER(TRIM(s.itemName)) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
                         "LOWER(TRIM(s.itemCode)) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
@@ -99,7 +99,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                         "CASE WHEN :direction = 'desc' AND :sortBy = 'p.finalPricelist' THEN p.finalPricelist END DESC, "
                         +
                         "CASE WHEN :direction = 'desc' AND :sortBy = 'p.spesifikasi' THEN p.spesifikasi END DESC, " +
-                        "CASE WHEN :direction = 'desc' AND :sortBy = 'SUM(s.finalStok)' THEN SUM(s.finalStok) END DESC", countQuery = "SELECT count(DISTINCT s.itemCode) FROM Stock s LEFT JOIN Pricelist p ON s.normalizedItemName = p.itemName WHERE "
+                        "CASE WHEN :direction = 'desc' AND :sortBy = 'SUM(s.finalStok)' THEN SUM(s.finalStok) END DESC", countQuery = "SELECT count(DISTINCT s.itemCode) FROM Stock s LEFT JOIN Pricelist p ON s.normalizedItemName = p.normalizedItemName WHERE "
                                         +
                                         "(:search IS NULL OR :search = '' OR " +
                                         "LOWER(TRIM(s.itemName)) LIKE LOWER(CONCAT('%', :search, '%')) OR " +

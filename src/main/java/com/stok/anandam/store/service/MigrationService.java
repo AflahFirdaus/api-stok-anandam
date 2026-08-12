@@ -468,48 +468,27 @@ public class MigrationService {
                         .completedFuture("ERROR: Kolom nama item tidak ditemukan (header/fallback gagal).");
             }
 
-            // Merge ke atas: jika ada beberapa baris dengan nama item yang sama,
-            // ambil nilai PERTAMA yang non-null untuk setiap field (spesifikasi, modal, pricelist).
-            // Baris pertama yang punya nilai menang, baris berikutnya tidak overwrite.
-            Map<String, Object[]> byItemName = new LinkedHashMap<>(); // normalized key -> [spesifikasi, modal, finalPricelist]
-
-            for (int i = 0; i < values.size(); i++) {
-                if (i == headerRowIndex)
-                    continue; // skip baris header (jika ada)
-                List<Object> row = values.get(i);
-                String itemName = getValByIndex(row, idxItemName);
-                String itemCode = getValByIndex(row, idxItemCode);
-                String fallbackNameColA = (headerRowIndex < 0) ? getValByIndex(row, 0) : null;
-                String spesifikasiRaw = getValByIndex(row, idxSpesifikasi);
-                String modalStr = getValByIndex(row, idxModal);
-                String pricelistStr = getValByIndex(row, idxPricelist);
-
-                String spesifikasi = (spesifikasiRaw != null && !spesifikasiRaw.isBlank()) ? spesifikasiRaw : null;
-                BigDecimal modal = (modalStr != null && !modalStr.isBlank()) ? cleanBigDecimal(modalStr) : null;
-                BigDecimal pricelist = (pricelistStr != null && !pricelistStr.isBlank()) ? cleanBigDecimal(pricelistStr) : null;
-
-                // Merge logic: untuk setiap key, gabungkan dengan data yang sudah ada.
-                // Field yang sudah ada (non-null) TIDAK di-overwrite.
-                // Field yang masih null diisi dari baris saat ini jika ada nilainya.
-                if (itemName != null && !itemName.isBlank()) {
-                    mergePricelistData(byItemName, com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(itemName), spesifikasi, modal, pricelist);
-                }
-                if (itemCode != null && !itemCode.isBlank()) {
-                    mergePricelistData(byItemName, com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(itemCode), spesifikasi, modal, pricelist);
-                }
-                if (fallbackNameColA != null && !fallbackNameColA.isBlank()) {
-                    mergePricelistData(byItemName, com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(fallbackNameColA), spesifikasi, modal, pricelist);
-                }
-            }
+            // Merge ke atas + FILL-DOWN: logika parsing sheet dijadikan method statis (mudah diuji).
+            // - Fill-down: jika nama item kosong (sel merged), baris tsb diatributkan ke produk baris
+            //   sebelumnya sehingga spesifikasi/modal/pricelist di baris lanjutan tidak hilang.
+            // - Merge ke atas: untuk key yang sama, ambil nilai PERTAMA yang non-null tiap field.
+            Map<String, Object[]> byItemName = buildPricelistDataMap(
+                    values, headerRowIndex, idxItemName, idxItemCode,
+                    idxSpesifikasi, idxModal, idxPricelist, headerRowIndex >= 0);
 
             List<Pricelist> pricelistUpdates = new ArrayList<>();
             int updated = 0;
             for (Map.Entry<String, Object[]> entry : byItemName.entrySet()) {
-                String itemName = entry.getKey();
+                String normalizedKey = entry.getKey();
                 Object[] payload = entry.getValue();
+                String rawName = (String) payload[3];
 
-                Pricelist p = pricelistRepository.findByItemName(itemName)
-                        .orElse(Pricelist.builder().itemName(itemName).build());
+                // Dedupe & update via kunci ternormalisasi (robust thd format nama lama yg berbeda).
+                Pricelist p = pricelistRepository.findByNormalizedItemName(normalizedKey)
+                        .orElse(Pricelist.builder()
+                                .itemName(rawName != null ? rawName : normalizedKey)
+                                .normalizedItemName(normalizedKey)
+                                .build());
 
                 p.setSpesifikasi((String) payload[0]);
                 p.setModal((BigDecimal) payload[1]);
@@ -520,11 +499,85 @@ public class MigrationService {
             }
 
             pricelistRepository.saveAll(pricelistUpdates);
+
+            // Backfill data lama yang belum punya normalized_item_name, agar join stok↔pricelist
+            // tetap ketemu walau item_name lama disimpan dgn format berbeda.
+            backfillPricelistNormalizedNames();
+
             log.info("Pricelist mapping keys total: {}", byItemName.size());
             return CompletableFuture.completedFuture("Pricelist sync: " + updated + " item di-update dari sheet.");
         } catch (Exception e) {
             log.error("Error sync pricelist from sheet: {}", e.getMessage(), e);
             return CompletableFuture.completedFuture("ERROR sync: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Membangun map pricelist dari baris sheet, lengkap dgn fill-down & merge.
+     * Key = normalized item name; value = [spesifikasi, modal, finalPricelist, rawName].
+     * Method statis murni (tanpa DB/network) sehingga mudah diuji.
+     */
+    static Map<String, Object[]> buildPricelistDataMap(List<List<Object>> values, int headerRowIndex,
+                                                       Integer idxItemName, Integer idxItemCode,
+                                                       Integer idxSpesifikasi, Integer idxModal,
+                                                       Integer idxPricelist, boolean headerFound) {
+        Map<String, Object[]> byItemName = new LinkedHashMap<>();
+        String lastItemNameKey = null;
+        String lastItemCodeKey = null;
+        String lastFallbackNameKey = null;
+
+        for (int i = 0; i < values.size(); i++) {
+            if (i == headerRowIndex)
+                continue; // skip baris header (jika ada)
+            List<Object> row = values.get(i);
+            String itemName = getValByIndex(row, idxItemName);
+            String itemCode = getValByIndex(row, idxItemCode);
+            String fallbackNameColA = headerFound ? null : getValByIndex(row, 0);
+            String spesifikasiRaw = getValByIndex(row, idxSpesifikasi);
+            String modalStr = getValByIndex(row, idxModal);
+            String pricelistStr = getValByIndex(row, idxPricelist);
+
+            String spesifikasi = (spesifikasiRaw != null && !spesifikasiRaw.isBlank()) ? spesifikasiRaw : null;
+            BigDecimal modal = (modalStr != null && !modalStr.isBlank()) ? cleanBigDecimal(modalStr) : null;
+            BigDecimal pricelist = (pricelistStr != null && !pricelistStr.isBlank()) ? cleanBigDecimal(pricelistStr) : null;
+
+            // Normalisasi key & isi (fill-down) dari baris sebelumnya jika kosong.
+            String itemNameKey = (itemName != null && !itemName.isBlank())
+                    ? com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(itemName) : null;
+            String itemCodeKey = (itemCode != null && !itemCode.isBlank())
+                    ? com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(itemCode) : null;
+            String fallbackNameKey = (fallbackNameColA != null && !fallbackNameColA.isBlank())
+                    ? com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(fallbackNameColA) : null;
+
+            if (itemNameKey != null) lastItemNameKey = itemNameKey;
+            else itemNameKey = lastItemNameKey;
+
+            if (itemCodeKey != null) lastItemCodeKey = itemCodeKey;
+            else itemCodeKey = lastItemCodeKey;
+
+            if (fallbackNameKey != null) lastFallbackNameKey = fallbackNameKey;
+            else fallbackNameKey = lastFallbackNameKey;
+
+            mergePricelistData(byItemName, itemNameKey, itemName, spesifikasi, modal, pricelist);
+            mergePricelistData(byItemName, itemCodeKey, itemCode, spesifikasi, modal, pricelist);
+            mergePricelistData(byItemName, fallbackNameKey, fallbackNameColA, spesifikasi, modal, pricelist);
+        }
+        return byItemName;
+    }
+
+    private void backfillPricelistNormalizedNames() {
+        java.util.List<Pricelist> missing = pricelistRepository.findByNormalizedItemNameIsNull();
+        if (missing == null || missing.isEmpty()) return;
+        int n = 0;
+        for (Pricelist p : missing) {
+            if (p.getItemName() != null && !p.getItemName().isBlank()) {
+                p.setNormalizedItemName(com.stok.anandam.store.util.NormalizationUtil.normalizeItemName(p.getItemName()));
+                n++;
+            }
+        }
+        if (n > 0) {
+            pricelistRepository.saveAll(missing);
+            log.info("Pricelist normalized_item_name backfill: {} rows.", n);
         }
     }
 
@@ -536,15 +589,16 @@ public class MigrationService {
      * Field yang sudah ada (non-null) TIDAK di-overwrite (merge ke atas).
      */
     private static void mergePricelistData(Map<String, Object[]> byItemName, String key,
-                                           String spesifikasi, BigDecimal modal, BigDecimal pricelist) {
+                                           String rawName, String spesifikasi, BigDecimal modal, BigDecimal pricelist) {
         if (key == null || key.isBlank()) return;
         Object[] existing = byItemName.get(key);
         if (existing == null) {
-            byItemName.put(key, new Object[] { spesifikasi, modal, pricelist });
+            byItemName.put(key, new Object[] { spesifikasi, modal, pricelist, rawName });
         } else {
             if (existing[0] == null && spesifikasi != null) existing[0] = spesifikasi;
             if (existing[1] == null && modal != null) existing[1] = modal;
             if (existing[2] == null && pricelist != null) existing[2] = pricelist;
+            if (existing[3] == null && rawName != null) existing[3] = rawName;
         }
     }
 
@@ -565,7 +619,7 @@ public class MigrationService {
         return (v == null) ? null : v.toString().trim();
     }
 
-    private BigDecimal cleanBigDecimal(String val) {
+    private static BigDecimal cleanBigDecimal(String val) {
         if (val == null || val.isBlank())
             return null;
         // Remove non-breaking spaces, regular spaces, and currency prefix
