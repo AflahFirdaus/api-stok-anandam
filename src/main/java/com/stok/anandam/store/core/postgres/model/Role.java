@@ -1,6 +1,7 @@
 package com.stok.anandam.store.core.postgres.model;
 
 public enum Role {
+    MANAGER,
     ADMIN,
     SPV_MARKETING,
     SPV_GUDANG,

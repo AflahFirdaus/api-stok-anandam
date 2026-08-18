@@ -128,6 +128,8 @@ public class SecurityConfig {
                                         .requestMatchers(HttpMethod.GET, "/api/v1/users", "/api/v1/users/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_SPV_TEKNISI", "ROLE_GUDANG", "ROLE_MARKETING", "ROLE_MARKETING_ONLINE", "ROLE_TEKNISI", "ROLE_DELIVERY")
 .requestMatchers("/api/v1/users/**", "/api/v1/activity-logs/**", "/api/v1/old-data/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_SPV_TEKNISI", "ROLE_MARKETING_ONLINE", "ROLE_TEKNISI")
                                         .requestMatchers("/api/v1/sales/export", "/api/v1/purchases/export").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_SPV_TEKNISI")
+                                        // Laporan Omset Marketing hanya untuk ROLE_MANAGER
+                                        .requestMatchers("/api/v1/sales/reports/marketing/**").hasAuthority("ROLE_MANAGER")
 
                                         // Catch-all sisanya
                                         .anyRequest().authenticated()

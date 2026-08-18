@@ -44,7 +44,7 @@ public class PostgresSchemaInitializer {
         log.info("Checking and fixing users_role_check constraint...");
         try {
             String sqlDrop = "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check";
-            String sqlAdd = "ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('ADMIN', 'SPV_MARKETING', 'SPV_GUDANG', 'SPV_TEKNISI', 'MARKETING', 'MARKETING_TOKO', 'MARKETING_PROJECT', 'MARKETING_DISTRIBUSI', 'MARKETING_ONLINE', 'GUDANG', 'NOTA', 'DELIVERY', 'TEKNISI'))";
+            String sqlAdd = "ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('MANAGER', 'ADMIN', 'SPV_MARKETING', 'SPV_GUDANG', 'SPV_TEKNISI', 'MARKETING', 'MARKETING_TOKO', 'MARKETING_PROJECT', 'MARKETING_DISTRIBUSI', 'MARKETING_ONLINE', 'GUDANG', 'NOTA', 'DELIVERY', 'TEKNISI'))";
             
             pgJdbcTemplate.execute(sqlDrop);
             pgJdbcTemplate.execute(sqlAdd);
