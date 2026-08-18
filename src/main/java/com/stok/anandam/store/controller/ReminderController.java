@@ -1,5 +1,6 @@
 package com.stok.anandam.store.controller;
 
+import com.stok.anandam.store.dto.ReminderItem;
 import com.stok.anandam.store.dto.WebResponse;
 import com.stok.anandam.store.service.ReminderService;
 import org.slf4j.Logger;
@@ -12,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/reminders")
@@ -24,10 +24,10 @@ public class ReminderController {
     private ReminderService reminderService;
 
     @GetMapping
-    public ResponseEntity<WebResponse<List<Map<String, Object>>>> getReminders() {
+    public ResponseEntity<WebResponse<List<ReminderItem>>> getReminders() {
         try {
-            List<Map<String, Object>> data = reminderService.getAllReminders();
-            WebResponse<List<Map<String, Object>>> response = WebResponse.<List<Map<String, Object>>>builder()
+            List<ReminderItem> data = reminderService.getAllReminders();
+            WebResponse<List<ReminderItem>> response = WebResponse.<List<ReminderItem>>builder()
                     .status(HttpStatus.OK.value())
                     .message("Success fetch reminders")
                     .data(data)
@@ -36,7 +36,7 @@ public class ReminderController {
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Gagal memuat reminder dari database portal: {}", e.getMessage(), e);
-            WebResponse<List<Map<String, Object>>> error = WebResponse.<List<Map<String, Object>>>builder()
+            WebResponse<List<ReminderItem>> error = WebResponse.<List<ReminderItem>>builder()
                     .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
                     .message("Gagal memuat reminder: " + e.getMessage())
                     .data(null)
