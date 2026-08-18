@@ -1,54 +1,67 @@
 package com.stok.anandam.store.controller;
 
-import com.stok.anandam.store.core.postgres.model.DataCanvasing;
+import com.stok.anandam.store.dto.CanvasVisitRecord;
 import com.stok.anandam.store.dto.DataCanvasingRequest;
 import com.stok.anandam.store.dto.PagingResponse;
 import com.stok.anandam.store.dto.WebResponse;
-import com.stok.anandam.store.service.DataCanvasingService;
+import com.stok.anandam.store.service.CanvasingPortalService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
-import jakarta.validation.Valid;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * Fitur Catat Canvas: kunjungan disimpan & dibaca dari tabel Canvas
+ * di database Portal (eksternal).
+ */
 @RestController
 @RequestMapping("/api/v1/data-canvasing")
 public class DataCanvasingController {
 
     @Autowired
-    private DataCanvasingService service;
+    private CanvasingPortalService portalService;
 
-    // === 1. TAMBAH DATA ===
+    // === 1. TAMBAH DATA (INSERT ke Canvas eksternal) ===
     @PostMapping
-    public ResponseEntity<WebResponse<DataCanvasing>> create(
-            @Valid @RequestBody DataCanvasingRequest request,
-            java.security.Principal principal) {
-        DataCanvasing result = service.create(request, principal.getName());
-        return ResponseEntity.ok(WebResponse.<DataCanvasing>builder()
+    public ResponseEntity<WebResponse<String>> create(
+            @Valid @RequestBody DataCanvasingRequest request) {
+        String id = portalService.createCanvas(
+                request.getPelangganId(),
+                request.getTanggal(),
+                request.getCanvasVisit(),
+                request.getKeterangan(),
+                request.getCatatan());
+        return ResponseEntity.ok(WebResponse.<String>builder()
                 .status(200)
                 .message("Berhasil Menambahkan Data Kunjungan")
-                .data(result)
+                .data(id)
                 .paging(null)
                 .build());
     }
 
-    // === 2. GET ALL (PAGINATION) ===
+    // === 2. GET ALL RIWAYAT (SELECT dari Canvas eksternal) ===
     @GetMapping
-    public ResponseEntity<WebResponse<List<DataCanvasing>>> getAll(
+    public ResponseEntity<WebResponse<List<CanvasVisitRecord>>> getAll(
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "10") int size,
             @RequestParam(name = "sortBy", defaultValue = "tanggal") String sortBy,
             @RequestParam(name = "direction", defaultValue = "desc") String direction,
-            // Tambahan Filter
             @RequestParam(name = "startDate", required = false) String startDate,
             @RequestParam(name = "endDate", required = false) String endDate,
             @RequestParam(name = "search", required = false) String search,
-            @RequestParam(name = "canvasingId", required = false) Long canvasingId,
+            @RequestParam(name = "canvasingId", required = false) String canvasingId,
             @RequestParam(name = "canvasVisit", required = false) String canvasVisit
     ) {
-        Page<DataCanvasing> result = service.getAll(page, size, sortBy, direction, startDate, endDate, search, canvasingId, canvasVisit);
+        Page<CanvasVisitRecord> result = portalService.getAllCanvas(
+                page, size, startDate, endDate, search, canvasingId, canvasVisit);
 
         PagingResponse paging = PagingResponse.builder()
                 .currentPage(result.getNumber())
@@ -57,11 +70,11 @@ public class DataCanvasingController {
                 .totalItem(result.getTotalElements())
                 .build();
 
-        return ResponseEntity.ok(WebResponse.<List<DataCanvasing>>builder()
+        return ResponseEntity.ok(WebResponse.<List<CanvasVisitRecord>>builder()
                 .status(200)
                 .message("Success Fetch Data Canvasing")
                 .data(result.getContent())
                 .paging(paging)
                 .build());
-        }
+    }
 }

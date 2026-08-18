@@ -8,8 +8,8 @@ import java.time.LocalDate;
 
 @Data
 public class DataCanvasingRequest {
-    @NotNull(message = "Canvasing ID wajib diisi")
-    private Long canvasingId;
+    @NotBlank(message = "ID Pelanggan wajib diisi")
+    private String pelangganId;
 
     @NotNull(message = "Tanggal wajib diisi")
     private LocalDate tanggal;
