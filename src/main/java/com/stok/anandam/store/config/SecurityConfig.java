@@ -130,6 +130,7 @@ public class SecurityConfig {
                                         .requestMatchers("/api/v1/sales/export", "/api/v1/purchases/export").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_SPV_TEKNISI")
                                         // Laporan Omset Marketing hanya untuk ROLE_MANAGER
                                         .requestMatchers("/api/v1/sales/reports/marketing/**").hasAuthority("ROLE_MANAGER")
+                                        .requestMatchers("/api/v1/reminders/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
 
                                         // Catch-all sisanya
                                         .anyRequest().authenticated()
