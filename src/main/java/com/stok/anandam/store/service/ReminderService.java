@@ -25,7 +25,9 @@ public class ReminderService {
      * Nilai dikonversi ke String agar aman untuk serialisasi JSON.
      */
     public List<Map<String, Object>> getAllReminders() {
-        List<Map<String, Object>> rows = portalJdbcTemplate.queryForList("SELECT * FROM Reminder");
+        // Nama tabel sengaja di-quote ("Reminder") karena dibuat via Prisma dengan
+        // huruf kapital; tanpa quote, PostgreSQL akan mengubah ke huruf kecil.
+        List<Map<String, Object>> rows = portalJdbcTemplate.queryForList("SELECT * FROM \"Reminder\"");
         return rows.stream().map(row -> {
             Map<String, Object> normalized = new LinkedHashMap<>();
             for (Map.Entry<String, Object> e : row.entrySet()) {
