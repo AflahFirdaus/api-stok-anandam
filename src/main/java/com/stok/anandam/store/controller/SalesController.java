@@ -1,6 +1,9 @@
 package com.stok.anandam.store.controller;
 
 import com.stok.anandam.store.core.postgres.model.Sales;
+import com.stok.anandam.store.dto.MarketingItemDetailResponse;
+import com.stok.anandam.store.dto.MarketingNotaDetailResponse;
+import com.stok.anandam.store.dto.MarketingSalesSummaryResponse;
 import com.stok.anandam.store.dto.PagingResponse;
 import com.stok.anandam.store.dto.ProfitabilityResponse;
 import com.stok.anandam.store.dto.ProfitabilityRowResponse;
@@ -153,5 +156,84 @@ public class SalesController {
                                 .contentType(org.springframework.http.MediaType.parseMediaType(
                                                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                                 .body(new org.springframework.core.io.ByteArrayResource(bytes));
+        }
+        // ==================== LAPORAN OMSET & MARGIN PER MARKETING ====================
+
+        /**
+         * Ringkasan omzet + margin kotor per marketing.
+         * Filter periode: period=DAY|WEEK|MONTH|YEAR & date=YYYY-MM-DD.
+         * empCode opsional, bisa multi (dipisah koma) untuk membatasi marketing tertentu.
+         */
+        @GetMapping("/reports/marketing/overview")
+        public ResponseEntity<WebResponse<MarketingSalesSummaryResponse>> getMarketingSalesOverview(
+                        @RequestParam(name = "period", defaultValue = "DAY") String period,
+                        @RequestParam(name = "date", required = false) String date,
+                        @RequestParam(name = "empCode", required = false) String empCode) {
+
+                MarketingSalesSummaryResponse data = salesService.getMarketingSalesSummary(
+                                period,
+                                parseDate(date),
+                                splitEmpCodes(empCode));
+
+                return ResponseEntity.ok(WebResponse.<MarketingSalesSummaryResponse>builder()
+                                .status(200)
+                                .message("Success fetch marketing sales report")
+                                .data(data)
+                                .paging(null)
+                                .build());
+        }
+
+        /**
+         * Detail per nota (doc) untuk satu marketing pada periode.
+         */
+        @GetMapping("/reports/marketing/notas")
+        public ResponseEntity<WebResponse<MarketingNotaDetailResponse>> getMarketingSalesNotas(
+                        @RequestParam(name = "period", defaultValue = "DAY") String period,
+                        @RequestParam(name = "date", required = false) String date,
+                        @RequestParam(name = "empCode", required = false) String empCode) {
+
+                MarketingNotaDetailResponse data = salesService.getMarketingSalesNotaDetail(
+                                period, parseDate(date), empCode);
+
+                return ResponseEntity.ok(WebResponse.<MarketingNotaDetailResponse>builder()
+                                .status(200)
+                                .message("Success fetch marketing nota detail")
+                                .data(data)
+                                .paging(null)
+                                .build());
+        }
+
+        /**
+         * Detail per barang (item) untuk satu marketing pada periode.
+         */
+        @GetMapping("/reports/marketing/items")
+        public ResponseEntity<WebResponse<MarketingItemDetailResponse>> getMarketingSalesItems(
+                        @RequestParam(name = "period", defaultValue = "DAY") String period,
+                        @RequestParam(name = "date", required = false) String date,
+                        @RequestParam(name = "empCode", required = false) String empCode) {
+
+                MarketingItemDetailResponse data = salesService.getMarketingSalesItemDetail(
+                                period, parseDate(date), empCode);
+
+                return ResponseEntity.ok(WebResponse.<MarketingItemDetailResponse>builder()
+                                .status(200)
+                                .message("Success fetch marketing item detail")
+                                .data(data)
+                                .paging(null)
+                                .build());
+        }
+
+        /** Parse tanggal opsional; null jika kosong. */
+        private java.time.LocalDate parseDate(String date) {
+                return (date == null || date.isBlank()) ? null : java.time.LocalDate.parse(date);
+        }
+
+        /** Ubah string kode marketing (koma) menjadi list; null jika kosong. */
+        private java.util.List<String> splitEmpCodes(String empCode) {
+                if (empCode == null || empCode.trim().isEmpty())
+                        return null;
+                return java.util.Arrays.stream(empCode.trim().split("\\s*,\\s*"))
+                                .filter(s -> !s.isEmpty())
+                                .collect(java.util.stream.Collectors.toList());
         }
 }

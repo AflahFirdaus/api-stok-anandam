@@ -2,6 +2,12 @@ package com.stok.anandam.store.service;
 
 import com.stok.anandam.store.core.postgres.model.Sales;
 import com.stok.anandam.store.core.postgres.repository.SalesRepository;
+import com.stok.anandam.store.dto.MarketingItemDetailResponse;
+import com.stok.anandam.store.dto.MarketingItemRow;
+import com.stok.anandam.store.dto.MarketingNotaDetailResponse;
+import com.stok.anandam.store.dto.MarketingNotaRow;
+import com.stok.anandam.store.dto.MarketingSalesRow;
+import com.stok.anandam.store.dto.MarketingSalesSummaryResponse;
 import com.stok.anandam.store.dto.ProfitabilityResponse;
 import com.stok.anandam.store.dto.ProfitabilityRowResponse;
 import com.stok.anandam.store.dto.SalesSummaryResponse;
@@ -14,7 +20,10 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -172,5 +181,221 @@ public class SalesService {
                         return BigDecimal.ZERO;
                 return laba.multiply(BigDecimal.valueOf(100))
                                 .divide(omset, 2, RoundingMode.HALF_UP);
+        }
+// ==================== LAPORAN OMSET & MARGIN PER MARKETING ====================
+
+        /**
+         * Ringkasan omzet + margin kotor per marketing untuk satu periode.
+         *
+         * @param period   DAY | WEEK | MONTH | YEAR
+         * @param date     tanggal acuan (YYYY-MM-DD) untuk menentukan rentang periode
+         * @param empCodes daftar kode marketing (opsional). Jika null/empty -> semua marketing.
+         */
+        public MarketingSalesSummaryResponse getMarketingSalesSummary(String period, LocalDate date, List<String> empCodes) {
+                PeriodRange range = resolveRange(period, date);
+                List<String> filter = normalizeEmpCodes(empCodes);
+
+                List<MarketingSalesRow> content = salesRepository
+                                .sumMarketingSalesByFilters(range.start, range.end, filter).stream()
+                                .map(row -> {
+                                        BigDecimal omset = num(row[3]);
+                                        BigDecimal laba = num(row[5]);
+                                        return MarketingSalesRow.builder()
+                                                        .empCode(((Object) row[0]) == null ? null : (String) row[0])
+                                                        .empName(((Object) row[1]) == null ? null : (String) row[1])
+                                                        .qty(num(row[2]))
+                                                        .omset(omset)
+                                                        .totalHpp(num(row[4]))
+                                                        .labaKotor(laba)
+                                                        .marginPct(marginPct(omset, laba))
+                                                        .build();
+                                })
+                                .collect(Collectors.toList());
+
+                BigDecimal totalOmset = BigDecimal.ZERO;
+                BigDecimal totalHpp = BigDecimal.ZERO;
+                BigDecimal totalLaba = BigDecimal.ZERO;
+                BigDecimal totalQty = BigDecimal.ZERO;
+                for (MarketingSalesRow r : content) {
+                        totalOmset = totalOmset.add(val(r.getOmset()));
+                        totalHpp = totalHpp.add(val(r.getTotalHpp()));
+                        totalLaba = totalLaba.add(val(r.getLabaKotor()));
+                        totalQty = totalQty.add(val(r.getQty()));
+                }
+
+                return MarketingSalesSummaryResponse.builder()
+                                .period(period.toUpperCase())
+                                .range(MarketingSalesSummaryResponse.LocalDateRange.builder()
+                                                .start(range.start).end(range.end).build())
+                                .content(content)
+                                .totalQty(totalQty)
+                                .totalOmset(totalOmset)
+                                .totalHpp(totalHpp)
+                                .totalLabaKotor(totalLaba)
+                                .marginPct(marginPct(totalOmset, totalLaba))
+                                .build();
+        }
+
+        /**
+         * Menentukan rentang tanggal untuk filter periode (DAY/WEEK/MONTH/YEAR).
+         * WEEK dimulai Senin. Range inklusif (start..end).
+         */
+        private PeriodRange resolveRange(String period, LocalDate date) {
+                LocalDate ref = date != null ? date : LocalDate.now();
+                String p = period == null ? "" : period.toUpperCase();
+
+                if ("WEEK".equals(p)) {
+                        LocalDate start = ref.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+                        return new PeriodRange(start, start.plusDays(6));
+                } else if ("MONTH".equals(p)) {
+                        LocalDate start = ref.withDayOfMonth(1);
+                        return new PeriodRange(start, ref.with(TemporalAdjusters.lastDayOfMonth()));
+                } else if ("YEAR".equals(p)) {
+                        LocalDate start = ref.withDayOfYear(1);
+                        return new PeriodRange(start, ref.with(TemporalAdjusters.lastDayOfYear()));
+                } else { // DAY (default)
+                        return new PeriodRange(ref, ref);
+                }
+        }
+        /**
+         * Detail drill-down per nota (doc) untuk satu marketing pada periode.
+         *
+         * @param period  DAY | WEEK | MONTH | YEAR
+         * @param date    tanggal acuan (YYYY-MM-DD)
+         * @param empCode kode marketing. Jika null -> semua marketing (ringkasan nota).
+         */
+        public MarketingNotaDetailResponse getMarketingSalesNotaDetail(String period, LocalDate date, String empCode) {
+                PeriodRange range = resolveRange(period, date);
+                List<String> filter = normalizeEmpCodes(empCode == null ? null : Collections.singletonList(empCode));
+
+                List<MarketingNotaRow> content = salesRepository
+                                .findNotaByFilters(range.start, range.end, filter).stream()
+                                .map(row -> {
+                                        BigDecimal omset = num(row[5]);
+                                        BigDecimal laba = num(row[7]);
+                                        return MarketingNotaRow.builder()
+                                                        .docNo(((Object) row[0]) == null ? null : (String) row[0])
+                                                        .docDate(((Object) row[1]) == null ? null : (LocalDate) row[1])
+                                                        .code(((Object) row[2]) == null ? null : (String) row[2])
+                                                        .parName(((Object) row[3]) == null ? null : (String) row[3])
+                                                        .qty(num(row[4]))
+                                                        .omset(omset)
+                                                        .totalHpp(num(row[6]))
+                                                        .labaKotor(laba)
+                                                        .marginPct(marginPct(omset, laba))
+                                                        .empCode(((Object) row[8]) == null ? null : (String) row[8])
+                                                        .empName(((Object) row[9]) == null ? null : (String) row[9])
+                                                        .build();
+                                })
+                                .collect(Collectors.toList());
+
+                BigDecimal totalOmset = BigDecimal.ZERO;
+                BigDecimal totalHpp = BigDecimal.ZERO;
+                BigDecimal totalLaba = BigDecimal.ZERO;
+                BigDecimal totalQty = BigDecimal.ZERO;
+                for (MarketingNotaRow r : content) {
+                        totalOmset = totalOmset.add(val(r.getOmset()));
+                        totalHpp = totalHpp.add(val(r.getTotalHpp()));
+                        totalLaba = totalLaba.add(val(r.getLabaKotor()));
+                        totalQty = totalQty.add(val(r.getQty()));
+                }
+
+                String resolvedName = (empCode != null && !empCode.isBlank() && !content.isEmpty())
+                                ? content.get(0).getEmpName() : null;
+
+                return MarketingNotaDetailResponse.builder()
+                                .empCode(empCode)
+                                .empName(resolvedName)
+                                .period(period.toUpperCase())
+                                .start(range.start)
+                                .end(range.end)
+                                .content(content)
+                                .totalQty(totalQty)
+                                .totalOmset(totalOmset)
+                                .totalHpp(totalHpp)
+                                .totalLabaKotor(totalLaba)
+                                .marginPct(marginPct(totalOmset, totalLaba))
+                                .build();
+        }
+/**
+         * Detail drill-down per barang (item) untuk satu marketing pada periode.
+         *
+         * @param period  DAY | WEEK | MONTH | YEAR
+         * @param date    tanggal acuan (YYYY-MM-DD)
+         * @param empCode kode marketing. Jika null -> semua marketing (ringkasan barang).
+         */
+        public MarketingItemDetailResponse getMarketingSalesItemDetail(String period, LocalDate date, String empCode) {
+                PeriodRange range = resolveRange(period, date);
+                List<String> filter = normalizeEmpCodes(empCode == null ? null : Collections.singletonList(empCode));
+
+                List<MarketingItemRow> content = salesRepository
+                                .findItemByFilters(range.start, range.end, filter).stream()
+                                .map(row -> {
+                                        BigDecimal omset = num(row[5]);
+                                        BigDecimal laba = num(row[7]);
+                                        return MarketingItemRow.builder()
+                                                        .iteCode(((Object) row[0]) == null ? null : (String) row[0])
+                                                        .itemName(((Object) row[1]) == null ? null : (String) row[1])
+                                                        .depCode(((Object) row[2]) == null ? null : (String) row[2])
+                                                        .depName(((Object) row[3]) == null ? null : (String) row[3])
+                                                        .qty(num(row[4]))
+                                                        .omset(omset)
+                                                        .totalHpp(num(row[6]))
+                                                        .labaKotor(laba)
+                                                        .marginPct(marginPct(omset, laba))
+                                                        .empCode(((Object) row[8]) == null ? null : (String) row[8])
+                                                        .empName(((Object) row[9]) == null ? null : (String) row[9])
+                                                        .build();
+                                })
+                                .collect(Collectors.toList());
+
+                BigDecimal totalOmset = BigDecimal.ZERO;
+                BigDecimal totalHpp = BigDecimal.ZERO;
+                BigDecimal totalLaba = BigDecimal.ZERO;
+                BigDecimal totalQty = BigDecimal.ZERO;
+                for (MarketingItemRow r : content) {
+                        totalOmset = totalOmset.add(val(r.getOmset()));
+                        totalHpp = totalHpp.add(val(r.getTotalHpp()));
+                        totalLaba = totalLaba.add(val(r.getLabaKotor()));
+                        totalQty = totalQty.add(val(r.getQty()));
+                }
+
+                String resolvedName = (empCode != null && !empCode.isBlank() && !content.isEmpty())
+                                ? content.get(0).getEmpName() : null;
+
+                return MarketingItemDetailResponse.builder()
+                                .empCode(empCode)
+                                .empName(resolvedName)
+                                .period(period.toUpperCase())
+                                .start(range.start)
+                                .end(range.end)
+                                .content(content)
+                                .totalQty(totalQty)
+                                .totalOmset(totalOmset)
+                                .totalHpp(totalHpp)
+                                .totalLabaKotor(totalLaba)
+                                .marginPct(marginPct(totalOmset, totalLaba))
+                                .build();
+        }
+
+        /** Normalisasi list kode marketing: blank/null menjadi null (semua), else list non-empty. */
+        private List<String> normalizeEmpCodes(List<String> empCodes) {
+                if (empCodes == null || empCodes.isEmpty())
+                        return null;
+                List<String> cleaned = empCodes.stream()
+                                .filter(e -> e != null && !e.trim().isEmpty())
+                                .collect(Collectors.toList());
+                return cleaned.isEmpty() ? null : cleaned;
+        }
+
+        /** Nilai rentang tanggal (start & end) untuk filter periode. */
+        private static class PeriodRange {
+                final LocalDate start;
+                final LocalDate end;
+
+                PeriodRange(LocalDate start, LocalDate end) {
+                        this.start = start;
+                        this.end = end;
+                }
         }
 }

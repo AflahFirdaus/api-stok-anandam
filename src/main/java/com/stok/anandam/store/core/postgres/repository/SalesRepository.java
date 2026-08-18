@@ -227,4 +227,53 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
                         @Param("categories") java.util.List<String> categories,
                         @Param("search") String search,
                         @Param("searchColumn") String searchColumn);
+
+        // ==================== LAPORAN OMSET PER MARKETING ====================
+        // Ringkasan per marketing: qty, omset (grand_total), total HPP, laba kotor.
+        // Nilai retur (RJ) sudah diperhitungkan di level baris saat migrasi,
+        // jadi agregasi cukup menjumlahkan kolom yang sudah ada.
+        // empCodes nullable -> jika diisi hanya satu marketing (untuk drill-down),
+        // jika null -> mencakup semua marketing (untuk ringkasan).
+        @Query("SELECT s.empCode, MIN(s.empName), " +
+                        "COALESCE(SUM(s.qty), 0), COALESCE(SUM(s.grandTotal), 0), " +
+                        "COALESCE(SUM(s.totalHpp), 0), COALESCE(SUM(s.labaKotor), 0) " +
+                        "FROM Sales s WHERE " +
+                        "(s.docDate BETWEEN :startDate AND :endDate) AND " +
+                        "(:empCodes IS NULL OR s.empCode IN :empCodes) " +
+                        "GROUP BY s.empCode " +
+                        "ORDER BY COALESCE(SUM(s.grandTotal), 0) DESC")
+        java.util.List<Object[]> sumMarketingSalesByFilters(
+                        @Param("startDate") LocalDate startDate,
+                        @Param("endDate") LocalDate endDate,
+                        @Param("empCodes") java.util.List<String> empCodes);
+
+        // Detail drill-down per nota (doc) untuk satu marketing pada periode.
+        @Query("SELECT s.docNo, MAX(s.docDate), MAX(s.code), MAX(s.parName), " +
+                        "COALESCE(SUM(s.qty), 0), COALESCE(SUM(s.grandTotal), 0), " +
+                        "COALESCE(SUM(s.totalHpp), 0), COALESCE(SUM(s.labaKotor), 0), " +
+                        "MAX(s.empCode), MAX(s.empName) " +
+                        "FROM Sales s WHERE " +
+                        "(s.docDate BETWEEN :startDate AND :endDate) AND " +
+                        "(:empCodes IS NULL OR s.empCode IN :empCodes) " +
+                        "GROUP BY s.docNo " +
+                        "ORDER BY MAX(s.docDate) DESC")
+        java.util.List<Object[]> findNotaByFilters(
+                        @Param("startDate") LocalDate startDate,
+                        @Param("endDate") LocalDate endDate,
+                        @Param("empCodes") java.util.List<String> empCodes);
+
+        // Detail drill-down per barang (item) untuk satu marketing pada periode.
+        @Query("SELECT s.iteCode, MIN(s.itemName), MAX(s.depCode), MAX(s.depName), " +
+                        "COALESCE(SUM(s.qty), 0), COALESCE(SUM(s.grandTotal), 0), " +
+                        "COALESCE(SUM(s.totalHpp), 0), COALESCE(SUM(s.labaKotor), 0), " +
+                        "MAX(s.empCode), MAX(s.empName) " +
+                        "FROM Sales s WHERE " +
+                        "(s.docDate BETWEEN :startDate AND :endDate) AND " +
+                        "(:empCodes IS NULL OR s.empCode IN :empCodes) " +
+                        "GROUP BY s.iteCode " +
+                        "ORDER BY COALESCE(SUM(s.grandTotal), 0) DESC")
+        java.util.List<Object[]> findItemByFilters(
+                        @Param("startDate") LocalDate startDate,
+                        @Param("endDate") LocalDate endDate,
+                        @Param("empCodes") java.util.List<String> empCodes);
 }
