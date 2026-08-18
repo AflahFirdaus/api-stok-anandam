@@ -788,7 +788,7 @@ public class MemoService {
         boolean isCreator = memo.getCreator() != null && memo.getCreator().getId().equals(aktor.getId());
         boolean isSameRole = memo.getCreator() != null && memo.getCreator().getRole() == aktor.getRole();
         
-        if (!isCreator && !isSameRole && !aktor.getRole().name().equals("ADMIN") && !aktor.getRole().name().startsWith("SPV_")) {
+        if (!isCreator && !isSameRole && !aktor.getRole().name().equals("ADMIN") && !aktor.getRole().name().startsWith("SPV_") && !aktor.getRole().name().equals("MANAGER")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Anda tidak memiliki hak untuk mengubah memo ini");
         }
 
@@ -978,7 +978,7 @@ public class MemoService {
             jadwal.setStatusJadwal(StatusJadwal.MENUNGGU_KONFIRMASI);
         }
 
-        if (aktor.getRole().name().equals("GUDANG") || aktor.getRole().name().equals("ADMIN")) {
+        if (aktor.getRole().name().equals("GUDANG") || aktor.getRole().name().equals("ADMIN") || aktor.getRole().name().equals("MANAGER")) {
             jadwal.setStatusJadwal(StatusJadwal.DIJADWALKAN);
         }
 
@@ -1086,7 +1086,7 @@ public class MemoService {
         User aktor = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
 
-        if (!aktor.getRole().name().equals("GUDANG") && !aktor.getRole().name().equals("SPV_GUDANG") && !aktor.getRole().name().equals("ADMIN")) {
+        if (!aktor.getRole().name().equals("GUDANG") && !aktor.getRole().name().equals("SPV_GUDANG") && !aktor.getRole().name().equals("ADMIN") && !aktor.getRole().name().equals("MANAGER")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Akses ditolak: Hanya bagian gudang yang bisa mengisi catatan item");
         }
 
@@ -1241,7 +1241,8 @@ public class MemoService {
         if (!aktor.getRole().name().equals("ADMIN") && 
             !aktor.getRole().name().equals("SPV_MARKETING") && 
             !aktor.getRole().name().equals("SPV_GUDANG") && 
-            !aktor.getRole().name().equals("GUDANG")) {
+            !aktor.getRole().name().equals("GUDANG") && 
+            !aktor.getRole().name().equals("MANAGER")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Hanya Admin, Supervisor, atau Bagian Gudang yang dapat menyetujui memo");
         }
 
@@ -1265,7 +1266,8 @@ public class MemoService {
         if (!aktor.getRole().name().equals("ADMIN") && 
             !aktor.getRole().name().equals("SPV_MARKETING") && 
             !aktor.getRole().name().equals("SPV_GUDANG") && 
-            !aktor.getRole().name().equals("GUDANG")) {
+            !aktor.getRole().name().equals("GUDANG") && 
+            !aktor.getRole().name().equals("MANAGER")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Hanya Admin, Supervisor, atau Bagian Gudang yang dapat menolak memo");
         }
 
@@ -1597,7 +1599,7 @@ public class MemoService {
 
         String role = aktor.getRole().name();
         boolean isMarketing = role.startsWith("MARKETING_") || "MARKETING".equals(role);
-        boolean isAdminOrSpv = "ADMIN".equals(role) || "SPV_MARKETING".equals(role);
+        boolean isAdminOrSpv = "ADMIN".equals(role) || "SPV_MARKETING".equals(role) || "MANAGER".equals(role);
 
         if (!isMarketing && !isAdminOrSpv) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Anda tidak memiliki akses untuk konfirmasi selesai memo ini.");
