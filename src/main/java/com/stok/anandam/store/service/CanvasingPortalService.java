@@ -4,6 +4,8 @@ import com.stok.anandam.store.dto.CanvasVisitRecord;
 import com.stok.anandam.store.dto.PelangganItem;
 import com.stok.anandam.store.dto.PelangganOption;
 import com.stok.anandam.store.exception.ResourceNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
@@ -13,6 +15,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -28,6 +31,8 @@ import java.util.UUID;
  */
 @Service
 public class CanvasingPortalService {
+
+    private static final Logger log = LoggerFactory.getLogger(CanvasingPortalService.class);
 
     private static final String[] MONTHS = {
             "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -114,6 +119,7 @@ public class CanvasingPortalService {
 // ============ CATAT KUNJUNGAN (INSERT ke Canvas) ============
     public String createCanvas(String pelangganId, LocalDate tanggal,
                                String kunjungan, String keterangan, String catatan) {
+        // 1. Validasi pelanggan ada di DB Portal
         Integer exists = portalJdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM \"Pelanggan\" WHERE id = ?", Integer.class, pelangganId);
         if (exists == null || exists == 0) {
@@ -125,10 +131,21 @@ public class CanvasingPortalService {
         String id = UUID.randomUUID().toString();
         Timestamp now = Timestamp.valueOf(LocalDateTime.now());
 
-        portalJdbcTemplate.update(
-                "INSERT INTO \"Canvas\" (id, \"pelangganId\", tanggal, kunjungan, keterangan, catatan, \"createdAt\", \"updatedAt\") "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                id, pelangganId, Timestamp.valueOf(tgl.atStartOfDay()), k, keterangan, catatan, now, now);
+        // 2. Null-safe: empty string → null (agar tidak konflik constraint DB)
+        String ket = (keterangan != null && !keterangan.isBlank()) ? keterangan.trim() : null;
+        String cat = (catatan != null && !catatan.isBlank()) ? catatan.trim() : null;
+
+        // 3. Gunakan java.sql.Date.valueOf(tgl) — kompatibel dengan kolom DATE maupun TIMESTAMPTZ di PostgreSQL
+        try {
+            portalJdbcTemplate.update(
+                    "INSERT INTO \"Canvas\" (id, \"pelangganId\", tanggal, kunjungan, keterangan, catatan, \"createdAt\", \"updatedAt\") "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    id, pelangganId, Date.valueOf(tgl), k, ket, cat, now, now);
+        } catch (Exception e) {
+            log.error("Gagal INSERT ke tabel Canvas. pelangganId={}, tanggal={}, kunjungan={}, error={}",
+                    pelangganId, tgl, k, e.getMessage(), e);
+            throw e;  // re-throw agar GlobalExceptionHandler tetap menangani
+        }
         return id;
     }
 
