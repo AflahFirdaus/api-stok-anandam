@@ -127,6 +127,20 @@ public class MigrationController {
     }
 
 
+    @PostMapping("/distributor")
+    @LogActivity("MELAKUKAN MIGRASI DATA DISTRIBUTOR & UPDATE is_ppn STOK")
+    public ResponseEntity<WebResponse<String>> startDistributorMigration() {
+        if (migrationService == null)
+            return migrationDisabled();
+        migrationService.migrateDistributorData();
+        return ResponseEntity.ok(WebResponse.<String>builder()
+                .status(200)
+                .message("Migrasi Distributor (dari CSV) & update is_ppn stok berjalan di background...")
+                .data("Processing...")
+                .paging(null)
+                .build());
+    }
+
     @PostMapping("/pricelist")
     @LogActivity("MELAKUKAN MIGRASI DATA PRICELIST DARI SPREADSHEET")
     public ResponseEntity<WebResponse<String>> startPricelistMigration() {

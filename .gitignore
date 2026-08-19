@@ -59,3 +59,6 @@ uploads/
 
 docs
 scripts
+
+# Berkas sumber data input (tidak perlu di-push / sudah dikonversi ke distributor.csv)
+data_ppn_dan_non_ppn.xlsx

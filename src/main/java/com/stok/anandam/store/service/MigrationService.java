@@ -55,6 +55,9 @@ public class MigrationService {
     @Autowired
     private PelangganMybizRepository pelangganMybizRepository;
 
+    @Autowired
+    private DistributorRepository distributorRepository;
+
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -858,6 +861,158 @@ public class MigrationService {
                 + " detik.";
         log.info("{}", result);
         return CompletableFuture.completedFuture(result);
+    }
+
+// ─── MIGRASI DISTRIBUTOR (dari CSV) → set is_ppn di stok ─────────────────
+    @Async
+    public CompletableFuture<String> migrateDistributorData() {
+        long startTime = System.currentTimeMillis();
+        log.info("=== START MIGRASI DISTRIBUTOR ===");
+        try {
+            ClassPathResource resource = new ClassPathResource("distributor.csv");
+            if (!resource.exists()) {
+                return CompletableFuture.completedFuture("ERROR: File distributor.csv tidak ditemukan!");
+            }
+
+            // Hapus data lama sekaligus reset id
+            distributorRepository.truncateTable();
+
+            List<Distributor> batch = new ArrayList<>();
+            int total = 0;
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(resource.getInputStream()))) {
+                String line;
+                boolean skipHeader = true;
+                while ((line = reader.readLine()) != null) {
+                    if (skipHeader) { skipHeader = false; continue; } // lewati baris header
+                    if (line.trim().isEmpty()) continue;
+
+                    List<String> cols = parseCsvLine(line);
+                    if (cols.size() < 2) continue;
+
+                    String namaDistributor = cols.get(0).replace("\"", "").trim();
+                    String tipePajak = cols.get(1).replace("\"", "").trim();
+                    if (namaDistributor.isEmpty()) continue;
+
+                    batch.add(Distributor.builder()
+                            .namaDistributor(namaDistributor)
+                            .tipePajak(tipePajak)
+                            .build());
+
+                    if (batch.size() >= BATCH_SIZE) {
+                        total += batch.size();
+                        self.saveDistributorBatch(batch);
+                        log.info("Distributor imported: {}...", total);
+                    }
+                }
+            }
+
+            if (!batch.isEmpty()) {
+                total += batch.size();
+                self.saveDistributorBatch(batch);
+            }
+            log.info("Distributor total imported: {}", total);
+
+            // Set is_ppn tiap item stok berdasarkan pembelian TERAKHIR item tsb
+            int updated = computeStokIsPpn();
+            int filled = pgJdbcTemplate.update("UPDATE stok SET is_ppn = FALSE WHERE is_ppn IS NULL");
+
+            long duration = System.currentTimeMillis() - startTime;
+            String result = "=== DISTRIBUTOR SELESAI === Import: " + total
+                    + ", stok computed is_ppn: " + updated + ", defaulted false: " + filled
+                    + ". Waktu: " + (duration / 1000) + " detik.";
+            log.info("{}", result);
+            return CompletableFuture.completedFuture(result);
+        } catch (Exception e) {
+            log.error("Error during Distributor migration: {}", e.getMessage(), e);
+            return CompletableFuture.completedFuture("ERROR: " + e.getMessage());
+        }
+    }
+
+    // Batch insert/upsert data distributor
+    @Transactional
+    public void saveDistributorBatch(List<Distributor> list) {
+        String sql = """
+                    INSERT INTO distributor (id, nama_distributor, tipe_pajak, last_synced)
+                    VALUES (nextval('distributor_seq'), ?, ?, ?)
+                    ON CONFLICT (nama_distributor) DO UPDATE SET
+                        tipe_pajak = EXCLUDED.tipe_pajak,
+                        last_synced = EXCLUDED.last_synced
+                """;
+
+        try {
+            pgJdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+                @Override
+                public void setValues(java.sql.PreparedStatement ps, int i) throws SQLException {
+                    Distributor d = list.get(i);
+                    ps.setString(1, d.getNamaDistributor());
+                    ps.setString(2, d.getTipePajak());
+                    ps.setTimestamp(3, java.sql.Timestamp.valueOf(LocalDateTime.now()));
+                }
+
+                @Override
+                public int getBatchSize() {
+                    return list.size();
+                }
+            });
+        } catch (BadSqlGrammarException e) {
+            log.error("CRITICAL SQL ERROR in Distributor Migration: {}", e.getSQLException().getMessage());
+            log.warn("Pastikan UNIQUE CONSTRAINT (nama_distributor) tersedia di tabel distributor.");
+            throw e;
+        } finally {
+            list.clear(); // Kosongkan buffer
+        }
+    }
+
+    // Hitung is_ppn di stok: pembelian terakhir item → par_name → distributor.tipe_pajak
+    @Transactional
+    public int computeStokIsPpn() {
+        String sql = """
+                    UPDATE stok s
+                    SET is_ppn = COALESCE((d.tipe_pajak = 'PPN'), FALSE)
+                    FROM (
+                        SELECT DISTINCT ON (TRIM(LOWER(p.item_name)))
+                            TRIM(LOWER(p.item_name)) AS item_name,
+                            TRIM(LOWER(p.par_name))  AS par_name
+                        FROM purchases p
+                        ORDER BY TRIM(LOWER(p.item_name)), p.doc_date DESC NULLS LAST, p.id DESC
+                    ) latest
+                    LEFT JOIN distributor d
+                        ON TRIM(LOWER(d.nama_distributor)) = latest.par_name
+                    WHERE TRIM(LOWER(s.item_name)) = latest.item_name
+                """;
+        return pgJdbcTemplate.update(sql);
+    }
+    // Parser CSV sederhana yang menangani field ber-quote ganda (") supaya aman
+    private List<String> parseCsvLine(String line) {
+        List<String> result = new ArrayList<>();
+        StringBuilder cur = new StringBuilder();
+        boolean inQuotes = false;
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (inQuotes) {
+                if (c == '"') {
+                    if (i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                        cur.append('"');
+                        i++;
+                    } else {
+                        inQuotes = false;
+                    }
+                } else {
+                    cur.append(c);
+                }
+            } else {
+                if (c == '"') {
+                    inQuotes = true;
+                } else if (c == ',') {
+                    result.add(cur.toString());
+                    cur.setLength(0);
+                } else {
+                    cur.append(c);
+                }
+            }
+        }
+        result.add(cur.toString());
+        return result;
     }
 
     // Helper sederhana untuk ambil data CSV aman

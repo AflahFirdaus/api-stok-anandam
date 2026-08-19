@@ -61,7 +61,7 @@ public class CanvasingPortalService {
 
     // ============ DAFTAR PELANGGAN (paginasi) ============
     public Page<PelangganItem> getAllPelanggan(int page, int size, String sortBy, String direction,
-                                               String search, String kategori, String provinsi) {
+                                            String search, String kategori, String provinsi) {
         String orderCol = switch (sortBy == null || sortBy.isBlank() ? "namaInstansi" : sortBy) {
             case "kategori" -> "\"kategori\"";
             case "provinsi" -> "\"provinsi\"";

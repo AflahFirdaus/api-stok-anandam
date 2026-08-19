@@ -28,6 +28,7 @@ public class StockGroupedResponse {
     private LocalDate lastSalesDate;
     private LocalDate lastPurchaseDate;
     private BigDecimal lastPurchasePrice;
+    private Boolean isPpn;
     private String parName;
     private List<WarehouseStockDTO> warehouses;
     private Integer totalPending;

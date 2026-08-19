@@ -57,6 +57,9 @@ public class Stock {
     @Column(name = "last_synced")
     private LocalDateTime lastSynced;
 
+    @Column(name = "is_ppn")
+    private Boolean isPpn;
+
     @Transient
     private LocalDate lastSalesDate;
 

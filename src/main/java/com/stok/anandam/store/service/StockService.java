@@ -224,6 +224,7 @@ public class StockService {
                                         .lastPurchaseDate(lastPurchaseDates.get(trimmedName))
                                          .lastPurchasePrice(lastPurchasePrice.get(trimmedName))
                                          .parName(lastPurchasePartners.get(trimmedName))
+                                         .isPpn(displayStock.getIsPpn())
                                          .warehouses(warehouses)
                                          .totalPending(0) // Default
                                          .pendingDetails(new ArrayList<>()) // Default
