@@ -43,6 +43,9 @@ public class StockService {
         @Autowired
         private UserRepository userRepository;
 
+        @Autowired
+        private DistributorRepository distributorRepository;
+
         public Page<StockGroupedResponse> getGroupedStocks(int page, int size, String sortBy, String direction,
                         String search, List<String> categories, String username) {
                 User user = userRepository.findByUsername(username)
@@ -53,6 +56,9 @@ public class StockService {
                                 role == Role.MARKETING_PROJECT ||
                                 role == Role.MARKETING_DISTRIBUSI ||
                                 role == Role.MARKETING_ONLINE;
+
+                // Map nama distributor -> entitas distributor (untuk menentukan PPN / NON PPN)
+                Map<String, Distributor> distributorByName = buildDistributorMap();
 
                 Sort.Direction sortDirection = direction.equalsIgnoreCase("desc") ? Sort.Direction.DESC
                                 : Sort.Direction.ASC;
@@ -224,7 +230,7 @@ public class StockService {
                                         .lastPurchaseDate(lastPurchaseDates.get(trimmedName))
                                          .lastPurchasePrice(lastPurchasePrice.get(trimmedName))
                                          .parName(lastPurchasePartners.get(trimmedName))
-                                         .isPpn(displayStock.getIsPpn())
+                                         .isPpn(resolveIsPpn(lastPurchasePartners.get(trimmedName), distributorByName, displayStock.getIsPpn()))
                                          .warehouses(warehouses)
                                          .totalPending(0) // Default
                                          .pendingDetails(new ArrayList<>()) // Default
@@ -450,6 +456,9 @@ public class StockService {
                         stock.setHargaHpp(null);
                 }
 
+                // Tentukan PPN / NON PPN dari distributor pembelian terakhir item ini
+                stock.setIsPpn(resolveIsPpn(stock.getParName(), buildDistributorMap(), stock.getIsPpn()));
+
                 return stock;
         }
 
@@ -459,5 +468,34 @@ public class StockService {
                 Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
 
                 return stockRepository.findByFilters(search, null, null, pageable);
+        }
+
+        // ─── Helper PPN / NON PPN ─────────────────────────────────────────
+        // Map nama distributor (ternormalisasi) -> entitas distributor
+        private Map<String, Distributor> buildDistributorMap() {
+                Map<String, Distributor> map = new HashMap<>();
+                for (Distributor d : distributorRepository.findAll()) {
+                        if (d != null && d.getNamaDistributor() != null) {
+                                map.put(normalizeForMatch(d.getNamaDistributor()), d);
+                        }
+                }
+                return map;
+        }
+
+        private String normalizeForMatch(String s) {
+                return s == null ? "" : s.trim().toLowerCase();
+        }
+
+        // Tentukan is_ppn item:
+        //  - cocokkan par_name pembelian terakhir item -> distributor.tipe_pajak
+        //  - jika tidak ada kecocokan, pakai nilai tersimpan; bila masih null default false (NON PPN)
+        private Boolean resolveIsPpn(String parName, Map<String, Distributor> distributorByName, Boolean stored) {
+                if (parName != null) {
+                        Distributor d = distributorByName.get(normalizeForMatch(parName));
+                        if (d != null) {
+                                return "PPN".equalsIgnoreCase(d.getTipePajak());
+                        }
+                }
+                return stored != null ? stored : Boolean.FALSE;
         }
 }
