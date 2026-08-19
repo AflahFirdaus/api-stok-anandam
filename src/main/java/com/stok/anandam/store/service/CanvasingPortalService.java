@@ -139,7 +139,7 @@ public class CanvasingPortalService {
         try {
             portalJdbcTemplate.update(
                     "INSERT INTO \"Canvas\" (id, \"pelangganId\", tanggal, kunjungan, keterangan, catatan, \"createdAt\", \"updatedAt\") "
-                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                            + "VALUES (?, ?, ?, ?::\"KunjunganCanvas\", ?, ?, ?, ?)",
                     id, pelangganId, Date.valueOf(tgl), k, ket, cat, now, now);
         } catch (Exception e) {
             log.error("Gagal INSERT ke tabel Canvas. pelangganId={}, tanggal={}, kunjungan={}, error={}",
