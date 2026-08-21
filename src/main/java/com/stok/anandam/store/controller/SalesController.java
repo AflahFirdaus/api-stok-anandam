@@ -168,11 +168,15 @@ public class SalesController {
         public ResponseEntity<WebResponse<MarketingSalesSummaryResponse>> getMarketingSalesOverview(
                         @RequestParam(name = "period", defaultValue = "DAY") String period,
                         @RequestParam(name = "date", required = false) String date,
+                        @RequestParam(name = "startDate", required = false) String startDate,
+                        @RequestParam(name = "endDate", required = false) String endDate,
                         @RequestParam(name = "empCode", required = false) String empCode) {
 
                 MarketingSalesSummaryResponse data = salesService.getMarketingSalesSummary(
                                 period,
                                 parseDate(date),
+                                parseDate(startDate),
+                                parseDate(endDate),
                                 splitEmpCodes(empCode));
 
                 return ResponseEntity.ok(WebResponse.<MarketingSalesSummaryResponse>builder()
@@ -190,10 +194,13 @@ public class SalesController {
         public ResponseEntity<WebResponse<MarketingNotaDetailResponse>> getMarketingSalesNotas(
                         @RequestParam(name = "period", defaultValue = "DAY") String period,
                         @RequestParam(name = "date", required = false) String date,
+                        @RequestParam(name = "startDate", required = false) String startDate,
+                        @RequestParam(name = "endDate", required = false) String endDate,
                         @RequestParam(name = "empCode", required = false) String empCode) {
 
                 MarketingNotaDetailResponse data = salesService.getMarketingSalesNotaDetail(
-                                period, parseDate(date), empCode);
+                                period, parseDate(date), parseDate(startDate),
+                                parseDate(endDate), empCode);
 
                 return ResponseEntity.ok(WebResponse.<MarketingNotaDetailResponse>builder()
                                 .status(200)
@@ -210,10 +217,13 @@ public class SalesController {
         public ResponseEntity<WebResponse<MarketingItemDetailResponse>> getMarketingSalesItems(
                         @RequestParam(name = "period", defaultValue = "DAY") String period,
                         @RequestParam(name = "date", required = false) String date,
+                        @RequestParam(name = "startDate", required = false) String startDate,
+                        @RequestParam(name = "endDate", required = false) String endDate,
                         @RequestParam(name = "empCode", required = false) String empCode) {
 
                 MarketingItemDetailResponse data = salesService.getMarketingSalesItemDetail(
-                                period, parseDate(date), empCode);
+                                period, parseDate(date), parseDate(startDate),
+                                parseDate(endDate), empCode);
 
                 return ResponseEntity.ok(WebResponse.<MarketingItemDetailResponse>builder()
                                 .status(200)

@@ -192,7 +192,12 @@ public class SalesService {
          * @param empCodes daftar kode marketing (opsional). Jika null/empty -> semua marketing.
          */
         public MarketingSalesSummaryResponse getMarketingSalesSummary(String period, LocalDate date, List<String> empCodes) {
-                PeriodRange range = resolveRange(period, date);
+                return getMarketingSalesSummary(period, date, null, null, empCodes);
+        }
+
+        /** Overload dgn rentang eksplisit (lightweight): jika start/end diberikan, dipakai langsung. */
+        public MarketingSalesSummaryResponse getMarketingSalesSummary(String period, LocalDate date, LocalDate startDate, LocalDate endDate, List<String> empCodes) {
+                PeriodRange range = resolveRange(period, date, startDate, endDate);
                 List<String> filter = normalizeEmpCodes(empCodes);
 
                 List<MarketingSalesRow> content = salesRepository
@@ -241,6 +246,18 @@ public class SalesService {
          * WEEK dimulai Senin. Range inklusif (start..end).
          */
         private PeriodRange resolveRange(String period, LocalDate date) {
+                return resolveRange(period, date, null, null);
+        }
+
+        /**
+         * Menentukan rentang tanggal untuk filter periode (DAY/WEEK/MONTH/YEAR).
+         * Jika startDate &amp; endDate diberikan (lightweight/range penuh), dipakai langsung;
+         * jika tidak, dihitung dari period + date (WEEK mulai Senin, range inklusif).
+         */
+        private PeriodRange resolveRange(String period, LocalDate date, LocalDate startDate, LocalDate endDate) {
+                if (startDate != null && endDate != null) {
+                        return new PeriodRange(startDate, endDate);
+                }
                 LocalDate ref = date != null ? date : LocalDate.now();
                 String p = period == null ? "" : period.toUpperCase();
 
@@ -265,7 +282,12 @@ public class SalesService {
          * @param empCode kode marketing. Jika null -> semua marketing (ringkasan nota).
          */
         public MarketingNotaDetailResponse getMarketingSalesNotaDetail(String period, LocalDate date, String empCode) {
-                PeriodRange range = resolveRange(period, date);
+                return getMarketingSalesNotaDetail(period, date, null, null, empCode);
+        }
+
+        /** Overload dgn rentang eksplisit (lightweight). */
+        public MarketingNotaDetailResponse getMarketingSalesNotaDetail(String period, LocalDate date, LocalDate startDate, LocalDate endDate, String empCode) {
+                PeriodRange range = resolveRange(period, date, startDate, endDate);
                 List<String> filter = normalizeEmpCodes(empCode == null ? null : Collections.singletonList(empCode));
 
                 List<MarketingNotaRow> content = salesRepository
@@ -325,7 +347,12 @@ public class SalesService {
          * @param empCode kode marketing. Jika null -> semua marketing (ringkasan barang).
          */
         public MarketingItemDetailResponse getMarketingSalesItemDetail(String period, LocalDate date, String empCode) {
-                PeriodRange range = resolveRange(period, date);
+                return getMarketingSalesItemDetail(period, date, null, null, empCode);
+        }
+
+        /** Overload dgn rentang eksplisit (lightweight). */
+        public MarketingItemDetailResponse getMarketingSalesItemDetail(String period, LocalDate date, LocalDate startDate, LocalDate endDate, String empCode) {
+                PeriodRange range = resolveRange(period, date, startDate, endDate);
                 List<String> filter = normalizeEmpCodes(empCode == null ? null : Collections.singletonList(empCode));
 
                 List<MarketingItemRow> content = salesRepository
