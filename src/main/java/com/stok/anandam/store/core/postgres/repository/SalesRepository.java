@@ -234,13 +234,13 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
         // jadi agregasi cukup menjumlahkan kolom yang sudah ada.
         // empCodes nullable -> jika diisi hanya satu marketing (untuk drill-down),
         // jika null -> mencakup semua marketing (untuk ringkasan).
-        @Query("SELECT s.empCode, MIN(s.empName), " +
+        @Query("SELECT UPPER(TRIM(s.empCode)), MIN(s.empName), " +
                         "COALESCE(SUM(s.qty), 0), COALESCE(SUM(s.grandTotal), 0), " +
                         "COALESCE(SUM(s.totalHpp), 0), COALESCE(SUM(s.labaKotor), 0) " +
                         "FROM Sales s WHERE " +
                         "(s.docDate BETWEEN :startDate AND :endDate) AND " +
-                        "(:empCodes IS NULL OR s.empCode IN :empCodes) " +
-                        "GROUP BY s.empCode " +
+                        "(:empCodes IS NULL OR UPPER(TRIM(s.empCode)) IN :empCodes) " +
+                        "GROUP BY UPPER(TRIM(s.empCode)) " +
                         "ORDER BY COALESCE(SUM(s.grandTotal), 0) DESC")
         java.util.List<Object[]> sumMarketingSalesByFilters(
                         @Param("startDate") LocalDate startDate,
@@ -251,10 +251,10 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
         @Query("SELECT s.docNo, MAX(s.docDate), MAX(s.code), MAX(s.parName), " +
                         "COALESCE(SUM(s.qty), 0), COALESCE(SUM(s.grandTotal), 0), " +
                         "COALESCE(SUM(s.totalHpp), 0), COALESCE(SUM(s.labaKotor), 0), " +
-                        "MAX(s.empCode), MAX(s.empName) " +
+                        "MAX(UPPER(TRIM(s.empCode))), MAX(s.empName) " +
                         "FROM Sales s WHERE " +
                         "(s.docDate BETWEEN :startDate AND :endDate) AND " +
-                        "(:empCodes IS NULL OR s.empCode IN :empCodes) " +
+                        "(:empCodes IS NULL OR UPPER(TRIM(s.empCode)) IN :empCodes) " +
                         "GROUP BY s.docNo " +
                         "ORDER BY MAX(s.docDate) DESC")
         java.util.List<Object[]> findNotaByFilters(
@@ -266,10 +266,10 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
         @Query("SELECT s.iteCode, MIN(s.itemName), MAX(s.depCode), MAX(s.depName), " +
                         "COALESCE(SUM(s.qty), 0), COALESCE(SUM(s.grandTotal), 0), " +
                         "COALESCE(SUM(s.totalHpp), 0), COALESCE(SUM(s.labaKotor), 0), " +
-                        "MAX(s.empCode), MAX(s.empName) " +
+                        "MAX(UPPER(TRIM(s.empCode))), MAX(s.empName) " +
                         "FROM Sales s WHERE " +
                         "(s.docDate BETWEEN :startDate AND :endDate) AND " +
-                        "(:empCodes IS NULL OR s.empCode IN :empCodes) " +
+                        "(:empCodes IS NULL OR UPPER(TRIM(s.empCode)) IN :empCodes) " +
                         "GROUP BY s.iteCode " +
                         "ORDER BY COALESCE(SUM(s.grandTotal), 0) DESC")
         java.util.List<Object[]> findItemByFilters(

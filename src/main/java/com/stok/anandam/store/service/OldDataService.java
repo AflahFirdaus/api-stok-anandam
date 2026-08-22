@@ -329,6 +329,7 @@ public class OldDataService {
                 if (empCodes == null || empCodes.isEmpty()) return null;
                 List<String> cleaned = empCodes.stream()
                                 .filter(e -> e != null && !e.trim().isEmpty())
+                                .map(e -> e.trim().toUpperCase())
                                 .collect(Collectors.toList());
                 return cleaned.isEmpty() ? null : cleaned;
         }

@@ -62,14 +62,16 @@ public interface OldSalesRepository extends JpaRepository<OldSales, Long> {
 
         // ==================== LAPORAN OMSET PER MARKETING (OLD SALES) ====================
 
-        /** Ringkasan per marketing: qty, omset, hpp, laba dari old_sales. */
-        @Query("SELECT s.empCode, MIN(s.empName), " +
+        /** Ringkasan per marketing: qty, omset, hpp, laba dari old_sales.
+         *  Normalisasi: spasi pada empCode lama diganti '_' agar cocok dengan kode baru.
+         *  Contoh: 'MKT PROJECT' → 'MKT_PROJECT' */
+        @Query("SELECT REPLACE(UPPER(TRIM(s.empCode)), ' ', '_'), MIN(s.empName), " +
                         "COALESCE(SUM(s.qty), 0), COALESCE(SUM(s.grandTotal), 0), " +
                         "COALESCE(SUM(s.totalHpp), 0), COALESCE(SUM(s.labaKotor), 0) " +
                         "FROM OldSales s WHERE " +
                         "(s.docDate BETWEEN :startDate AND :endDate) AND " +
-                        "(:empCodes IS NULL OR s.empCode IN :empCodes) " +
-                        "GROUP BY s.empCode " +
+                        "(:empCodes IS NULL OR REPLACE(UPPER(TRIM(s.empCode)), ' ', '_') IN :empCodes) " +
+                        "GROUP BY REPLACE(UPPER(TRIM(s.empCode)), ' ', '_') " +
                         "ORDER BY COALESCE(SUM(s.grandTotal), 0) DESC")
         java.util.List<Object[]> sumMarketingSalesByFilters(
                         @Param("startDate") LocalDate startDate,
@@ -80,10 +82,10 @@ public interface OldSalesRepository extends JpaRepository<OldSales, Long> {
         @Query("SELECT s.docNo, MAX(s.docDate), MAX(s.code), MAX(s.parName), " +
                         "COALESCE(SUM(s.qty), 0), COALESCE(SUM(s.grandTotal), 0), " +
                         "COALESCE(SUM(s.totalHpp), 0), COALESCE(SUM(s.labaKotor), 0), " +
-                        "MAX(s.empCode), MAX(s.empName) " +
+                        "MAX(REPLACE(UPPER(TRIM(s.empCode)), ' ', '_')), MAX(s.empName) " +
                         "FROM OldSales s WHERE " +
                         "(s.docDate BETWEEN :startDate AND :endDate) AND " +
-                        "(:empCodes IS NULL OR s.empCode IN :empCodes) " +
+                        "(:empCodes IS NULL OR REPLACE(UPPER(TRIM(s.empCode)), ' ', '_') IN :empCodes) " +
                         "GROUP BY s.docNo " +
                         "ORDER BY MAX(s.docDate) DESC")
         java.util.List<Object[]> findNotaByFilters(
@@ -95,10 +97,10 @@ public interface OldSalesRepository extends JpaRepository<OldSales, Long> {
         @Query("SELECT s.itemName, " +
                         "COALESCE(SUM(s.qty), 0), COALESCE(SUM(s.grandTotal), 0), " +
                         "COALESCE(SUM(s.totalHpp), 0), COALESCE(SUM(s.labaKotor), 0), " +
-                        "MAX(s.empCode), MAX(s.empName) " +
+                        "MAX(REPLACE(UPPER(TRIM(s.empCode)), ' ', '_')), MAX(s.empName) " +
                         "FROM OldSales s WHERE " +
                         "(s.docDate BETWEEN :startDate AND :endDate) AND " +
-                        "(:empCodes IS NULL OR s.empCode IN :empCodes) " +
+                        "(:empCodes IS NULL OR REPLACE(UPPER(TRIM(s.empCode)), ' ', '_') IN :empCodes) " +
                         "GROUP BY s.itemName " +
                         "ORDER BY COALESCE(SUM(s.grandTotal), 0) DESC")
         java.util.List<Object[]> findItemByFilters(
@@ -106,7 +108,9 @@ public interface OldSalesRepository extends JpaRepository<OldSales, Long> {
                         @Param("endDate") LocalDate endDate,
                         @Param("empCodes") java.util.List<String> empCodes);
 
-        /** Ambil distinct kode marketing beserta namanya */
-        @Query("SELECT DISTINCT s.empCode, s.empName FROM OldSales s WHERE s.empCode IS NOT NULL AND TRIM(s.empCode) <> '' ORDER BY s.empCode")
+        /** Ambil distinct kode marketing beserta namanya — dinormalisasi spasi→'_' */
+        @Query("SELECT DISTINCT REPLACE(UPPER(TRIM(s.empCode)), ' ', '_'), MAX(s.empName) " +
+                        "FROM OldSales s WHERE s.empCode IS NOT NULL AND TRIM(s.empCode) <> '' " +
+                        "GROUP BY REPLACE(UPPER(TRIM(s.empCode)), ' ', '_') ORDER BY REPLACE(UPPER(TRIM(s.empCode)), ' ', '_')")
         java.util.List<Object[]> findDistinctEmpCodeAndName();
 }
