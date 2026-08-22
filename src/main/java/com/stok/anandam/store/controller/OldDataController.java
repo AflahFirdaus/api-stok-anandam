@@ -3,6 +3,9 @@ package com.stok.anandam.store.controller;
 import com.stok.anandam.store.core.postgres.model.OldItemSerialNumber;
 import com.stok.anandam.store.core.postgres.model.OldPurchase;
 import com.stok.anandam.store.core.postgres.model.OldSales;
+import com.stok.anandam.store.dto.MarketingItemDetailResponse;
+import com.stok.anandam.store.dto.MarketingNotaDetailResponse;
+import com.stok.anandam.store.dto.MarketingSalesSummaryResponse;
 import com.stok.anandam.store.dto.PagingResponse;
 import com.stok.anandam.store.dto.SalesSummaryResponse;
 import com.stok.anandam.store.dto.WebResponse;
@@ -123,4 +126,74 @@ public class OldDataController {
                                 .data(meta)
                                 .build());
         }
-}
+
+        // ==================== LAPORAN OMSET PER MARKETING (OLD SALES) ====================
+
+        @GetMapping("/reports/marketing/overview")
+        public ResponseEntity<WebResponse<MarketingSalesSummaryResponse>> getMarketingOverview(
+                        @RequestParam(name = "period", defaultValue = "DAY") String period,
+                        @RequestParam(name = "date", required = false) String date,
+                        @RequestParam(name = "startDate", required = false) String startDate,
+                        @RequestParam(name = "endDate", required = false) String endDate,
+                        @RequestParam(name = "empCode", required = false) String empCode) {
+
+                java.util.List<String> empCodes = splitEmpCodes(empCode);
+                MarketingSalesSummaryResponse data = oldDataService.getMarketingSalesSummary(
+                                period, parseDate(date), parseDate(startDate), parseDate(endDate), empCodes);
+
+                return ResponseEntity.ok(WebResponse.<MarketingSalesSummaryResponse>builder()
+                                .status(200)
+                                .message("Success fetch old marketing sales report")
+                                .data(data)
+                                .paging(null)
+                                .build());
+        }
+
+        @GetMapping("/reports/marketing/notas")
+        public ResponseEntity<WebResponse<MarketingNotaDetailResponse>> getMarketingNotas(
+                        @RequestParam(name = "period", defaultValue = "DAY") String period,
+                        @RequestParam(name = "date", required = false) String date,
+                        @RequestParam(name = "startDate", required = false) String startDate,
+                        @RequestParam(name = "endDate", required = false) String endDate,
+                        @RequestParam(name = "empCode", required = false) String empCode) {
+
+                MarketingNotaDetailResponse data = oldDataService.getMarketingSalesNotaDetail(
+                                period, parseDate(date), parseDate(startDate), parseDate(endDate), empCode);
+
+                return ResponseEntity.ok(WebResponse.<MarketingNotaDetailResponse>builder()
+                                .status(200)
+                                .message("Success fetch old marketing nota detail")
+                                .data(data)
+                                .paging(null)
+                                .build());
+        }
+
+        @GetMapping("/reports/marketing/items")
+        public ResponseEntity<WebResponse<MarketingItemDetailResponse>> getMarketingItems(
+                        @RequestParam(name = "period", defaultValue = "DAY") String period,
+                        @RequestParam(name = "date", required = false) String date,
+                        @RequestParam(name = "startDate", required = false) String startDate,
+                        @RequestParam(name = "endDate", required = false) String endDate,
+                        @RequestParam(name = "empCode", required = false) String empCode) {
+
+                MarketingItemDetailResponse data = oldDataService.getMarketingSalesItemDetail(
+                                period, parseDate(date), parseDate(startDate), parseDate(endDate), empCode);
+
+                return ResponseEntity.ok(WebResponse.<MarketingItemDetailResponse>builder()
+                                .status(200)
+                                .message("Success fetch old marketing item detail")
+                                .data(data)
+                                .paging(null)
+                                .build());
+        }
+
+        private java.time.LocalDate parseDate(String date) {
+                return (date == null || date.isBlank()) ? null : java.time.LocalDate.parse(date);
+        }
+
+        private java.util.List<String> splitEmpCodes(String empCode) {
+                if (empCode == null || empCode.trim().isEmpty()) return null;
+                return java.util.Arrays.stream(empCode.trim().split("\\s*,\\s*"))
+                                .filter(s -> !s.isEmpty())
+                                .collect(java.util.stream.Collectors.toList());
+        }

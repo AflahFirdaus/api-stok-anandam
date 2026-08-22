@@ -53,4 +53,13 @@ public class OldSales {
 
     @Column(name = "dep_code", length = 50)
     private String depCode;
+
+    @Column(name = "hpp_satuan")
+    private BigDecimal hppSatuan;
+
+    @Column(name = "total_hpp")
+    private BigDecimal totalHpp;
+
+    @Column(name = "laba_kotor")
+    private BigDecimal labaKotor;
 }
