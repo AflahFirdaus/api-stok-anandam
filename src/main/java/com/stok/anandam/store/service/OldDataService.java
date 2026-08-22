@@ -195,8 +195,7 @@ public class OldDataService {
                                         BigDecimal laba = num(row[7]);
                                         return MarketingNotaRow.builder()
                                                         .docNo((String) row[0])
-                                                        .docDate((java.sql.Date) row[1] != null
-                                                                        ? ((java.sql.Date) row[1]).toLocalDate() : null)
+                                                        .docDate(toLocalDate(row[1]))
                                                         .code((String) row[2])
                                                         .parName((String) row[3])
                                                         .qty(num(row[4]))
@@ -310,6 +309,20 @@ public class OldDataService {
 
         private BigDecimal val(BigDecimal v) {
                 return v == null ? BigDecimal.ZERO : v;
+        }
+
+        private LocalDate toLocalDate(Object o) {
+                if (o == null) return null;
+                if (o instanceof LocalDate ld) return ld;
+                if (o instanceof java.sql.Date sd) return sd.toLocalDate();
+                if (o instanceof java.sql.Timestamp ts) return ts.toLocalDateTime().toLocalDate();
+                if (o instanceof java.util.Date ud) return new java.sql.Date(ud.getTime()).toLocalDate();
+                if (o instanceof String s && !s.isBlank()) {
+                        try {
+                                return LocalDate.parse(s);
+                        } catch (Exception ignored) {}
+                }
+                return null;
         }
 
         private List<String> normalizeEmpCodes(List<String> empCodes) {
