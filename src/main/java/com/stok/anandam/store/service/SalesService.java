@@ -297,7 +297,7 @@ public class SalesService {
                                         BigDecimal laba = num(row[7]);
                                         return MarketingNotaRow.builder()
                                                         .docNo(((Object) row[0]) == null ? null : (String) row[0])
-                                                        .docDate(((Object) row[1]) == null ? null : (LocalDate) row[1])
+                                                        .docDate(toLocalDate(row[1]))
                                                         .code(((Object) row[2]) == null ? null : (String) row[2])
                                                         .parName(((Object) row[3]) == null ? null : (String) row[3])
                                                         .qty(num(row[4]))
@@ -403,6 +403,20 @@ public class SalesService {
                                 .totalLabaKotor(totalLaba)
                                 .marginPct(marginPct(totalOmset, totalLaba))
                                 .build();
+        }
+
+        private LocalDate toLocalDate(Object o) {
+                if (o == null) return null;
+                if (o instanceof LocalDate ld) return ld;
+                if (o instanceof java.sql.Date sd) return sd.toLocalDate();
+                if (o instanceof java.sql.Timestamp ts) return ts.toLocalDateTime().toLocalDate();
+                if (o instanceof java.util.Date ud) return new java.sql.Date(ud.getTime()).toLocalDate();
+                if (o instanceof String s && !s.isBlank()) {
+                        try {
+                                return LocalDate.parse(s);
+                        } catch (Exception ignored) {}
+                }
+                return null;
         }
 
         /** Normalisasi list kode marketing: blank/null menjadi null (semua), else list non-empty. */
