@@ -50,4 +50,7 @@ public class OldSales {
 
     @Column(name = "emp_name")
     private String empName;
+
+    @Column(name = "dep_code", length = 50)
+    private String depCode;
 }
