@@ -2,6 +2,7 @@ package com.stok.anandam.store.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -18,6 +19,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 
@@ -50,8 +52,30 @@ public class SecurityConfig {
                 return authConfig.getAuthenticationManager();
         }
 
+        /**
+         * Helper: Memeriksa apakah IP client ada di whitelist (localhost / internal kantor).
+         * Mendukung X-Forwarded-For untuk akses dibalik reverse proxy (Nginx).
+         */
+        private boolean isIpWhitelisted(HttpServletRequest request) {
+                String ip = getClientIp(request);
+                if (ip == null) return false;
+                return "127.0.0.1".equals(ip) || "0:0:0:0:0:0:0:1".equals(ip) || ip.startsWith("192.168.1.");
+        }
+
+        /**
+         * Helper: Mendapatkan IP asli client dengan dukungan X-Forwarded-For.
+         */
+        private String getClientIp(HttpServletRequest request) {
+                String xff = request.getHeader("X-Forwarded-For");
+                if (xff != null && !xff.isBlank()) {
+                        return xff.split(",")[0].trim();
+                }
+                return request.getRemoteAddr();
+        }
+
         /** Actuator: health & info (Tanpa Auth), lainnya butuh ADMIN */
         @Bean
+        @Order(1)
         public SecurityFilterChain actuatorSecurityFilterChain(HttpSecurity http) throws Exception {
                 http
                                 .securityMatcher("/actuator/**")
@@ -64,9 +88,10 @@ public class SecurityConfig {
 
         /** API (JWT Based) dengan penanganan 401 & 403 yang benar */
         @Bean
+        @Order(2)
         public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
                 http
-                                .securityMatcher("/api/**", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**")
+                                .securityMatcher("/api/**")
                                 .cors(Customizer.withDefaults())
                                 .csrf(csrf -> csrf.disable())
 
@@ -142,9 +167,51 @@ public class SecurityConfig {
 
                 return http.build();
         }
+/** Uploads: Hanya bisa diakses dari localhost / IP Internal Kantor (melindungi foto memo rahasia) */
+        @Bean
+        @Order(3)
+        public SecurityFilterChain uploadsSecurityFilterChain(HttpSecurity http) throws Exception {
+                http
+                                .securityMatcher("/uploads/**")
+                                .csrf(csrf -> csrf.disable())
+                                .authorizeHttpRequests(auth -> auth
+                                                .anyRequest().access((authentication, context) -> {
+                                                        if (isIpWhitelisted(context.getRequest())) {
+                                                                return new org.springframework.security.authorization.AuthorizationDecision(true);
+                                                        }
+                                                        return new org.springframework.security.authorization.AuthorizationDecision(false);
+                                                }))
+                                .anonymous(anonymous -> anonymous.disable())
+                                .formLogin(login -> login.disable())
+                                .httpBasic(basic -> basic.disable());
+                return http.build();
+        }
+
+        /** Swagger: Hanya bisa diakses dari localhost / IP Internal Kantor (192.168.1.x) */
+        @Bean
+        @Order(4)
+        public SecurityFilterChain swaggerSecurityFilterChain(HttpSecurity http) throws Exception {
+                http
+                                .securityMatcher("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**")
+                                .cors(Customizer.withDefaults())
+                                .csrf(csrf -> csrf.disable())
+                                .authorizeHttpRequests(auth -> auth
+                                                .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**")
+                                                .access((authentication, context) -> {
+                                                        if (isIpWhitelisted(context.getRequest())) {
+                                                                return new org.springframework.security.authorization.AuthorizationDecision(true);
+                                                        }
+                                                        return new org.springframework.security.authorization.AuthorizationDecision(false);
+                                                }))
+                                .anonymous(anonymous -> anonymous.disable())
+                                .formLogin(login -> login.disable())
+                                .httpBasic(basic -> basic.disable());
+                return http.build();
+        }
 
         /** Web Dashboard (Session/Form Based) */
         @Bean
+        @Order(5)
         public SecurityFilterChain webSecurityFilterChain(HttpSecurity http) throws Exception {
                 http
                                 .securityMatcher("/", "/check-db", "/login", "/logout", "/dashboard", "/login.html")
@@ -163,6 +230,23 @@ public class SecurityConfig {
                 return http.build();
         }
 
+/**
+         * Catch-all security: Jaring pengaman terakhir.
+         * SEMUA request yang tidak cocok dengan chain di atas (Order 1-5) akan DITOLAK (403).
+         * Contoh: path tak dikenal, plugin scanner, bot, dsb.
+         */
+        @Bean
+        @Order(6)
+        public SecurityFilterChain catchAllSecurityFilterChain(HttpSecurity http) throws Exception {
+                http
+                                .securityMatcher("/**")
+                                .authorizeHttpRequests(auth -> auth
+                                                .anyRequest().denyAll())
+                                .csrf(csrf -> csrf.disable())
+                                .formLogin(login -> login.disable())
+                                .httpBasic(basic -> basic.disable());
+                return http.build();
+        }
         @Bean
         public CorsConfigurationSource corsConfigurationSource() {
                 CorsConfiguration configuration = new CorsConfiguration();

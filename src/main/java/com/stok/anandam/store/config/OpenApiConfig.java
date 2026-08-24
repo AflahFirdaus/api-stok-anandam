@@ -18,24 +18,23 @@ public class OpenApiConfig {
     @Bean
     public OpenAPI customOpenAPI() {
         final String bearerAuth = "bearerAuth";
-        
-        // 1. Tambahkan Local Server
+
+        // Server Local untuk development
         Server localServer = new Server()
                 .url("http://localhost:9090")
-                .description("Local Server (HTTP)");
+                .description("Local Server (Development)");
 
-        // 2. Server Production kamu
-        Server httpsServer = new Server()
-                .url("https://api.anandamcomputer.com")
-                .description("Production Server (HTTPS)");
+        // Server Internal Kantor (IP Local)
+        Server internalServer = new Server()
+                .url("http://192.168.1.176:9090")
+                .description("Internal Server (Kantor)");
 
         return new OpenAPI()
-                // 3. Masukkan KEDUA server tersebut ke dalam List
-                .servers(List.of(localServer, httpsServer))
+                .servers(List.of(localServer, internalServer))
                 .info(new Info()
                         .title("Store Anandam API")
                         .version("1.0")
-                        .description("API untuk aplikasi Stok Anandam...")
+                        .description("API untuk aplikasi Stok Anandam - Hanya akses localhost / IP Internal Kantor")
                         .contact(new Contact().name("Store Anandam")))
                 .addSecurityItem(new SecurityRequirement().addList(bearerAuth))
                 .components(new Components()
