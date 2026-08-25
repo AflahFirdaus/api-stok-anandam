@@ -327,10 +327,15 @@ public class OldDataService {
 
         private List<String> normalizeEmpCodes(List<String> empCodes) {
                 if (empCodes == null || empCodes.isEmpty()) return null;
-                List<String> cleaned = empCodes.stream()
-                                .filter(e -> e != null && !e.trim().isEmpty())
-                                .map(e -> e.trim().toUpperCase())
-                                .collect(Collectors.toList());
+                List<String> cleaned = new java.util.ArrayList<>();
+                for (String e : empCodes) {
+                        if (e != null && !e.trim().isEmpty()) {
+                                String upper = e.trim().toUpperCase();
+                                String underscored = upper.replace(" ", "_");
+                                if (!cleaned.contains(underscored)) cleaned.add(underscored);
+                                if (!cleaned.contains(upper)) cleaned.add(upper);
+                        }
+                }
                 return cleaned.isEmpty() ? null : cleaned;
         }
 
