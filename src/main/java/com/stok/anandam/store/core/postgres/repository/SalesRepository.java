@@ -279,43 +279,43 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
 
         // ==================== TIMELINE / CHART AGGREGATION ====================
 
-        @Query(value = "SELECT EXTRACT(YEAR FROM s.doc_date)::text AS period_key, " +
-                        "COALESCE(SUM(s.grand_total), 0) AS omset, " +
-                        "COALESCE(SUM(s.total_hpp), 0) AS hpp, " +
-                        "COALESCE(SUM(s.laba_kotor), 0) AS laba " +
-                        "FROM sales s WHERE " +
-                        "(s.doc_date BETWEEN :startDate AND :endDate) AND " +
-                        "(:empCodes IS NULL OR UPPER(TRIM(s.emp_code)) IN :empCodes) " +
-                        "GROUP BY EXTRACT(YEAR FROM s.doc_date) " +
-                        "ORDER BY EXTRACT(YEAR FROM s.doc_date) ASC", nativeQuery = true)
+        @Query("SELECT FUNCTION('to_char', s.docDate, 'YYYY'), " +
+                        "COALESCE(SUM(s.grandTotal), 0), " +
+                        "COALESCE(SUM(s.totalHpp), 0), " +
+                        "COALESCE(SUM(s.labaKotor), 0) " +
+                        "FROM Sales s WHERE " +
+                        "(s.docDate BETWEEN :startDate AND :endDate) AND " +
+                        "(:empCodes IS NULL OR UPPER(TRIM(s.empCode)) IN :empCodes) " +
+                        "GROUP BY FUNCTION('to_char', s.docDate, 'YYYY') " +
+                        "ORDER BY FUNCTION('to_char', s.docDate, 'YYYY') ASC")
         java.util.List<Object[]> sumTimelineYear(
                         @Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate,
                         @Param("empCodes") java.util.List<String> empCodes);
 
-        @Query(value = "SELECT to_char(s.doc_date, 'YYYY-MM') AS period_key, " +
-                        "COALESCE(SUM(s.grand_total), 0) AS omset, " +
-                        "COALESCE(SUM(s.total_hpp), 0) AS hpp, " +
-                        "COALESCE(SUM(s.laba_kotor), 0) AS laba " +
-                        "FROM sales s WHERE " +
-                        "(s.doc_date BETWEEN :startDate AND :endDate) AND " +
-                        "(:empCodes IS NULL OR UPPER(TRIM(s.emp_code)) IN :empCodes) " +
-                        "GROUP BY to_char(s.doc_date, 'YYYY-MM') " +
-                        "ORDER BY period_key ASC", nativeQuery = true)
+        @Query("SELECT FUNCTION('to_char', s.docDate, 'YYYY-MM'), " +
+                        "COALESCE(SUM(s.grandTotal), 0), " +
+                        "COALESCE(SUM(s.totalHpp), 0), " +
+                        "COALESCE(SUM(s.labaKotor), 0) " +
+                        "FROM Sales s WHERE " +
+                        "(s.docDate BETWEEN :startDate AND :endDate) AND " +
+                        "(:empCodes IS NULL OR UPPER(TRIM(s.empCode)) IN :empCodes) " +
+                        "GROUP BY FUNCTION('to_char', s.docDate, 'YYYY-MM') " +
+                        "ORDER BY FUNCTION('to_char', s.docDate, 'YYYY-MM') ASC")
         java.util.List<Object[]> sumTimelineMonth(
                         @Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate,
                         @Param("empCodes") java.util.List<String> empCodes);
 
-        @Query(value = "SELECT to_char(s.doc_date, 'YYYY-MM-DD') AS period_key, " +
-                        "COALESCE(SUM(s.grand_total), 0) AS omset, " +
-                        "COALESCE(SUM(s.total_hpp), 0) AS hpp, " +
-                        "COALESCE(SUM(s.laba_kotor), 0) AS laba " +
-                        "FROM sales s WHERE " +
-                        "(s.doc_date BETWEEN :startDate AND :endDate) AND " +
-                        "(:empCodes IS NULL OR UPPER(TRIM(s.emp_code)) IN :empCodes) " +
-                        "GROUP BY to_char(s.doc_date, 'YYYY-MM-DD') " +
-                        "ORDER BY period_key ASC", nativeQuery = true)
+        @Query("SELECT FUNCTION('to_char', s.docDate, 'YYYY-MM-DD'), " +
+                        "COALESCE(SUM(s.grandTotal), 0), " +
+                        "COALESCE(SUM(s.totalHpp), 0), " +
+                        "COALESCE(SUM(s.labaKotor), 0) " +
+                        "FROM Sales s WHERE " +
+                        "(s.docDate BETWEEN :startDate AND :endDate) AND " +
+                        "(:empCodes IS NULL OR UPPER(TRIM(s.empCode)) IN :empCodes) " +
+                        "GROUP BY FUNCTION('to_char', s.docDate, 'YYYY-MM-DD') " +
+                        "ORDER BY FUNCTION('to_char', s.docDate, 'YYYY-MM-DD') ASC")
         java.util.List<Object[]> sumTimelineDay(
                         @Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate,
