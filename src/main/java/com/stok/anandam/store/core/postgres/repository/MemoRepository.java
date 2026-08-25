@@ -1,6 +1,7 @@
 package com.stok.anandam.store.core.postgres.repository;
 
 import com.stok.anandam.store.core.postgres.model.Memo;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -25,9 +26,11 @@ public interface MemoRepository extends JpaRepository<Memo, UUID> {
     // Ambil 1 data terbaru berdasarkan waktu pembuatan
     Optional<Memo> findTopByOrderByCreatedAtDesc();
 
+    @EntityGraph(attributePaths = {"customer", "pelangganMybiz", "marketing", "creator"})
     java.util.List<com.stok.anandam.store.core.postgres.model.Memo> findAllByOrderByCreatedAtDesc();
 
     // Untuk Dashboard Gudang / Marketing melihat list berdasarkan status
+    @EntityGraph(attributePaths = {"customer", "pelangganMybiz", "marketing", "creator"})
     java.util.List<com.stok.anandam.store.core.postgres.model.Memo> findByStatusAkhirOrderByCreatedAtDesc(com.stok.anandam.store.core.postgres.model.enums.MemoStatus statusAkhir);
 
     boolean existsByOrderIdMarketplaceAndStatusAkhirNot(String orderIdMarketplace, com.stok.anandam.store.core.postgres.model.enums.MemoStatus statusAkhir);

@@ -292,7 +292,7 @@ public class MemoService {
                 .build();
     }
 
-        private List<MemoDetailResponse> mapToDetailResponses(List<Memo> memos) {
+    private List<MemoDetailResponse> mapToDetailResponses(List<Memo> memos) {
         if (memos.isEmpty()) {
             return new java.util.ArrayList<>();
         }
@@ -304,17 +304,12 @@ public class MemoService {
         java.util.Map<UUID, List<MemoItem>> itemsByMemoId = allItems.stream()
                 .collect(Collectors.groupingBy(item -> item.getMemo().getId()));
 
-        // 2. Bulk fetch all logs in exactly 1 query
-        List<MemoLog> allLogs = memoLogRepository.findByMemoIdInOrderByCreatedAtDesc(memoIds);
-        java.util.Map<UUID, List<MemoLog>> logsByMemoId = allLogs.stream()
-                .collect(Collectors.groupingBy(MemoLog::getMemoId));
-
-        // 3. Bulk fetch all penjadwalans in exactly 1 query
+        // 2. Bulk fetch all penjadwalans in exactly 1 query
         List<PenjadwalanKonfirmasi> allPenjadwalans = penjadwalanRepo.findByMemo_IdInAndDeletedAtIsNull(memoIds);
         java.util.Map<UUID, List<PenjadwalanKonfirmasi>> penjadwalansByMemoId = allPenjadwalans.stream()
                 .collect(Collectors.groupingBy(p -> p.getMemo().getId()));
 
-        // Gather all personel IDs that need to be resolved to avoid N+1 query on UserRepository
+        // 3. Gather all personel IDs to resolve them in 1 bulk query (eliminates N+1 UserRepository)
         List<Long> personelIds = allPenjadwalans.stream()
                 .map(PenjadwalanKonfirmasi::getPersonelId)
                 .filter(java.util.Objects::nonNull)
@@ -327,6 +322,30 @@ public class MemoService {
             for (User p : personels) {
                 personelMap.put(p.getId(), p);
             }
+        }
+
+        // 4. Bulk fetch all revisedFrom memos in exactly 1 query (eliminates N+1 MemoRepository loop)
+        List<UUID> revisedFromIds = memos.stream()
+                .map(Memo::getRevisedFromId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        java.util.Map<UUID, String> revisedFromMap = new java.util.HashMap<>();
+        if (!revisedFromIds.isEmpty()) {
+            memoRepository.findAllById(revisedFromIds)
+                    .forEach(m -> revisedFromMap.put(m.getId(), m.getNomorMemo()));
+        }
+
+        // 5. Bulk fetch all distinct kodepos in exactly 1 query (eliminates N+1 KodeposRepository loop)
+        List<String> distinctKodePosList = memos.stream()
+                .map(Memo::getKodePos)
+                .filter(k -> k != null && !k.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+        java.util.Map<String, com.stok.anandam.store.core.postgres.model.Kodepos> kodeposMap = new java.util.HashMap<>();
+        if (!distinctKodePosList.isEmpty()) {
+            kodeposRepository.findByKodePosIn(distinctKodePosList)
+                    .forEach(kp -> kodeposMap.putIfAbsent(kp.getKodePos(), kp));
         }
 
         List<MemoDetailResponse> responses = new java.util.ArrayList<>();
@@ -345,16 +364,6 @@ public class MemoService {
                             .catatanGudang(item.getCatatanGudang())
                             .itemStatus(item.getItemStatus())
                             .status(item.getStatus())
-                            .build()
-                    ).collect(Collectors.toList());
-
-            List<MemoLog> logs = logsByMemoId.getOrDefault(memo.getId(), new java.util.ArrayList<>());
-            List<MemoLogResponse> logResponses = logs.stream()
-                    .map(log -> MemoLogResponse.builder()
-                            .status(log.getStatus())
-                            .aktorId(log.getAktorId())
-                            .keterangan(log.getKeterangan())
-                            .createdAt(log.getCreatedAt())
                             .build()
                     ).collect(Collectors.toList());
 
@@ -429,9 +438,7 @@ public class MemoService {
                     .revisedFromId(memo.getRevisedFromId())
                     .revisionToId(memo.getRevisionToId())
                     .revisedFromNomorMemo(memo.getRevisedFromId() != null ? 
-                        memoRepository.findById(memo.getRevisedFromId())
-                            .map(Memo::getNomorMemo)
-                            .orElse(null) : null)
+                        revisedFromMap.get(memo.getRevisedFromId()) : null)
                     .isTeknisRequired(java.lang.Boolean.TRUE.equals(memo.getIsTeknisRequired()))
                     .isDeliveryRequired(java.lang.Boolean.TRUE.equals(memo.getIsDeliveryRequired()))
                     .opsiPengiriman(memo.getOpsiPengiriman())
@@ -447,7 +454,7 @@ public class MemoService {
                             .findFirst()
                             .orElse(null)))
                     .items(itemResponses)
-                    .logs(logResponses)
+                    .logs(java.util.Collections.emptyList())
                     .penjadwalanHistory(penjadwalanResponses);
 
             if (!penjadwalanResponses.isEmpty()) {
@@ -456,11 +463,12 @@ public class MemoService {
                        .kecamatan(lastJadwal.getKecamatan())
                        .kabupatenKota(lastJadwal.getKabupatenKota());
             } else if (memo.getKodePos() != null && !memo.getKodePos().isBlank()) {
-                kodeposRepository.findFirstByKodePos(memo.getKodePos()).ifPresent(kp -> {
+                com.stok.anandam.store.core.postgres.model.Kodepos kp = kodeposMap.get(memo.getKodePos());
+                if (kp != null) {
                     builder.desaKelurahan(kp.getDesaKelurahan())
                            .kecamatan(kp.getKecamatan())
                            .kabupatenKota(kp.getKabupatenKota());
-                });
+                }
             }
 
             responses.add(builder.build());

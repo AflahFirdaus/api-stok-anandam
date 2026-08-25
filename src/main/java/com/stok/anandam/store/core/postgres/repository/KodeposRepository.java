@@ -12,4 +12,6 @@ public interface KodeposRepository extends JpaRepository<Kodepos, Integer> {
     List<Kodepos> findByKodePosContainingOrDesaKelurahanContainingIgnoreCase(String kodePos, String desaKelurahan);
     
     Optional<Kodepos> findFirstByKodePos(String kodePos);
+
+    List<Kodepos> findByKodePosIn(List<String> kodePosList);
 }
