@@ -12,8 +12,10 @@ import java.util.UUID;
 @Repository
 public interface PenjadwalanKonfirmasiRepository extends JpaRepository<PenjadwalanKonfirmasi, Long> {
 
-    // Eager-load semua asosiasi dalam 1 JOIN query untuk menghilangkan N+1
-    @EntityGraph(attributePaths = {"memo", "requestDelivery", "kodepos", "manifestMemos", "manifestRequests"})
+    // Eager-load asosiasi utama dalam 1 JOIN query untuk menghilangkan N+1
+    // Catatan: manifestMemos & manifestRequests TIDAK dimasukkan karena Hibernate
+    // tidak bisa JOIN FETCH dua @ManyToMany List (Bag) sekaligus (MultipleBagFetchException)
+    @EntityGraph(attributePaths = {"memo", "requestDelivery", "kodepos"})
     List<PenjadwalanKonfirmasi> findAllByOrderByCreatedAtDesc();
 
     List<PenjadwalanKonfirmasi> findByMemo_Id(UUID memoId);
@@ -29,12 +31,12 @@ public interface PenjadwalanKonfirmasiRepository extends JpaRepository<Penjadwal
     List<PenjadwalanKonfirmasi> findByPersonelIdAndStatusJadwalAndDeletedAtIsNull(Long personelId, String statusJadwal);
 
     // Untuk Dashboard Gudang: Lihat semua yang berstatus 'MENUNGGU KONFIRMASI'
-    // Eager-load asosiasi untuk menghilangkan N+1 pada getListTugas
-    @EntityGraph(attributePaths = {"memo", "requestDelivery", "kodepos", "manifestMemos", "manifestRequests"})
+    // Eager-load asosiasi utama untuk menghilangkan N+1 pada getListTugas
+    @EntityGraph(attributePaths = {"memo", "requestDelivery", "kodepos"})
     List<PenjadwalanKonfirmasi> findByStatusJadwalAndDeletedAtIsNullOrderByCreatedAtDesc(com.stok.anandam.store.core.postgres.model.enums.StatusJadwal statusJadwal);
 
-    // Eager-load asosiasi untuk menghilangkan N+1 pada getListTugas (dengan filter tipe+status)
-    @EntityGraph(attributePaths = {"memo", "requestDelivery", "kodepos", "manifestMemos", "manifestRequests"})
+    // Eager-load asosiasi utama untuk menghilangkan N+1 pada getListTugas (dengan filter tipe+status)
+    @EntityGraph(attributePaths = {"memo", "requestDelivery", "kodepos"})
     java.util.List<PenjadwalanKonfirmasi> findByTipeTugasAndStatusJadwalOrderByCreatedAtDesc(
             com.stok.anandam.store.core.postgres.model.enums.TipeTugas tipeTugas,
             com.stok.anandam.store.core.postgres.model.enums.StatusJadwal statusJadwal
