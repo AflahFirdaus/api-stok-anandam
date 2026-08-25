@@ -4,6 +4,7 @@ import com.stok.anandam.store.core.postgres.model.Sales;
 import com.stok.anandam.store.dto.MarketingItemDetailResponse;
 import com.stok.anandam.store.dto.MarketingNotaDetailResponse;
 import com.stok.anandam.store.dto.MarketingSalesSummaryResponse;
+import com.stok.anandam.store.dto.MarketingTimelineResponse;
 import com.stok.anandam.store.dto.PagingResponse;
 import com.stok.anandam.store.dto.ProfitabilityResponse;
 import com.stok.anandam.store.dto.ProfitabilityRowResponse;
@@ -228,6 +229,32 @@ public class SalesController {
                 return ResponseEntity.ok(WebResponse.<MarketingItemDetailResponse>builder()
                                 .status(200)
                                 .message("Success fetch marketing item detail")
+                                .data(data)
+                                .paging(null)
+                                .build());
+        }
+
+        /**
+         * Titik grafik deret waktu (timeline) agregat untuk marketing pada periode.
+         */
+        @GetMapping("/reports/marketing/timeline")
+        public ResponseEntity<WebResponse<MarketingTimelineResponse>> getMarketingSalesTimeline(
+                        @RequestParam(name = "period", defaultValue = "DAY") String period,
+                        @RequestParam(name = "date", required = false) String date,
+                        @RequestParam(name = "startDate", required = false) String startDate,
+                        @RequestParam(name = "endDate", required = false) String endDate,
+                        @RequestParam(name = "empCode", required = false) String empCode) {
+
+                MarketingTimelineResponse data = salesService.getMarketingSalesTimeline(
+                                period,
+                                parseDate(date),
+                                parseDate(startDate),
+                                parseDate(endDate),
+                                splitEmpCodes(empCode));
+
+                return ResponseEntity.ok(WebResponse.<MarketingTimelineResponse>builder()
+                                .status(200)
+                                .message("Success fetch marketing sales timeline")
                                 .data(data)
                                 .paging(null)
                                 .build());

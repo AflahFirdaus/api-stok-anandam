@@ -8,6 +8,8 @@ import com.stok.anandam.store.dto.MarketingNotaDetailResponse;
 import com.stok.anandam.store.dto.MarketingNotaRow;
 import com.stok.anandam.store.dto.MarketingSalesRow;
 import com.stok.anandam.store.dto.MarketingSalesSummaryResponse;
+import com.stok.anandam.store.dto.MarketingTimelinePoint;
+import com.stok.anandam.store.dto.MarketingTimelineResponse;
 import com.stok.anandam.store.dto.ProfitabilityResponse;
 import com.stok.anandam.store.dto.ProfitabilityRowResponse;
 import com.stok.anandam.store.dto.SalesSummaryResponse;
@@ -403,6 +405,85 @@ public class SalesService {
                                 .totalLabaKotor(totalLaba)
                                 .marginPct(marginPct(totalOmset, totalLaba))
                                 .build();
+        }
+
+        public MarketingTimelineResponse getMarketingSalesTimeline(
+                        String period, LocalDate date, LocalDate startDate, LocalDate endDate, List<String> empCodes) {
+                PeriodRange range = resolveRange(period, date, startDate, endDate);
+                List<String> filter = normalizeEmpCodes(empCodes);
+
+                String p = period == null ? "DAY" : period.toUpperCase();
+                List<Object[]> rawList;
+                if ("YEAR".equals(p)) {
+                        rawList = salesRepository.sumTimelineYear(range.start, range.end, filter);
+                } else if ("MONTH".equals(p)) {
+                        rawList = salesRepository.sumTimelineMonth(range.start, range.end, filter);
+                } else {
+                        rawList = salesRepository.sumTimelineDay(range.start, range.end, filter);
+                }
+
+                List<MarketingTimelinePoint> points = new java.util.ArrayList<>();
+                BigDecimal totalOmset = BigDecimal.ZERO;
+                BigDecimal totalHpp = BigDecimal.ZERO;
+                BigDecimal totalLaba = BigDecimal.ZERO;
+
+                for (Object[] row : rawList) {
+                        String key = row[0] == null ? "" : row[0].toString();
+                        BigDecimal omset = num(row[1]);
+                        BigDecimal hpp = num(row[2]);
+                        BigDecimal laba = num(row[3]);
+                        Double margin = omset.compareTo(BigDecimal.ZERO) > 0
+                                        ? laba.divide(omset, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).doubleValue()
+                                        : 0.0;
+
+                        points.add(MarketingTimelinePoint.builder()
+                                        .key(key)
+                                        .label(formatTimelineLabel(key, p))
+                                        .omset(omset)
+                                        .totalHpp(hpp)
+                                        .labaKotor(laba)
+                                        .marginPct(margin)
+                                        .build());
+
+                        totalOmset = totalOmset.add(omset);
+                        totalHpp = totalHpp.add(hpp);
+                        totalLaba = totalLaba.add(laba);
+                }
+
+                Double totalMargin = totalOmset.compareTo(BigDecimal.ZERO) > 0
+                                ? totalLaba.divide(totalOmset, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).doubleValue()
+                                : 0.0;
+
+                return MarketingTimelineResponse.builder()
+                                .period(p)
+                                .start(range.start)
+                                .end(range.end)
+                                .empCode(empCodes != null && empCodes.size() == 1 ? empCodes.get(0) : null)
+                                .points(points)
+                                .totalOmset(totalOmset)
+                                .totalHpp(totalHpp)
+                                .totalLabaKotor(totalLaba)
+                                .marginPct(totalMargin)
+                                .build();
+        }
+
+        private String formatTimelineLabel(String key, String period) {
+                if (key == null || key.isBlank()) return "";
+                if ("YEAR".equals(period)) return key;
+                if ("MONTH".equals(period)) {
+                        try {
+                                if (key.length() >= 7) {
+                                        int m = Integer.parseInt(key.substring(5, 7));
+                                        String[] months = {"", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"};
+                                        if (m >= 1 && m <= 12) return months[m];
+                                }
+                        } catch (Exception ignored) {}
+                        return key;
+                }
+                if (key.length() >= 10) {
+                        return key.substring(8, 10) + "/" + key.substring(5, 7);
+                }
+                return key;
         }
 
         private LocalDate toLocalDate(Object o) {
