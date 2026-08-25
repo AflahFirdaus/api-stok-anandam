@@ -176,6 +176,67 @@ public class MemoService {
                 .build();
     }
 
+    /**
+     * Mengambil list memo berdasarkan beberapa status sekaligus (1 query IN clause).
+     * Digunakan oleh halaman Pengiriman untuk menghindari fetch semua memo.
+     */
+    @Transactional(readOnly = true)
+    public WebResponse<List<MemoDetailResponse>> getListMemoByStatuses(List<MemoStatus> statuses, String username) {
+        User aktor = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
+
+        List<Memo> memos;
+        if (statuses == null || statuses.isEmpty()) {
+            memos = memoRepository.findAllByOrderByCreatedAtDesc();
+        } else {
+            memos = memoRepository.findByStatusAkhirInOrderByCreatedAtDesc(statuses);
+        }
+
+        // Terapkan role-based filtering yang sama seperti getListMemoByStatus
+        String roleName = aktor.getRole() != null ? aktor.getRole().name() : "";
+        String userEmpCode = aktor.getEmployeeCode();
+
+        if (roleName.startsWith("MARKETING_") || "MARKETING".equals(roleName)) {
+            if (!roleName.startsWith("SPV_")) {
+                List<UUID> assignedMemoIds = penjadwalanRepo.findByPersonelIdAndDeletedAtIsNull(aktor.getId())
+                        .stream()
+                        .filter(t -> t.getMemo() != null)
+                        .map(t -> t.getMemo().getId())
+                        .collect(Collectors.toList());
+
+                memos = memos.stream()
+                        .filter(m -> {
+                            boolean isOwner = m.getMarketingEmpCode() != null && m.getMarketingEmpCode().equals(userEmpCode);
+                            boolean isCreator = m.getCreator() != null && m.getCreator().getId().equals(aktor.getId());
+                            boolean isSameRole = m.getCreator() != null && m.getCreator().getRole() == aktor.getRole();
+                            boolean isAssigned = assignedMemoIds.contains(m.getId());
+                            boolean isCreatedBySpvMarketing = ("MARKETING_TOKO".equals(roleName) || "MARKETING_ONLINE".equals(roleName))
+                                    && m.getCreator() != null
+                                    && "SPV_MARKETING".equals(m.getCreator().getRole().name());
+                            return isOwner || isCreator || isSameRole || isAssigned || isCreatedBySpvMarketing;
+                        })
+                        .collect(Collectors.toList());
+            }
+        } else if ("DELIVERY".equals(roleName)) {
+            List<UUID> assignedMemoIds = penjadwalanRepo.findByPersonelIdAndDeletedAtIsNull(aktor.getId())
+                    .stream()
+                    .filter(t -> t.getMemo() != null)
+                    .map(t -> t.getMemo().getId())
+                    .collect(Collectors.toList());
+            memos = memos.stream()
+                    .filter(m -> assignedMemoIds.contains(m.getId()))
+                    .collect(Collectors.toList());
+        }
+        // ADMIN, MANAGER, GUDANG, dll → tidak ada filter tambahan
+
+        List<MemoDetailResponse> responses = mapToDetailResponses(memos);
+        return WebResponse.<List<MemoDetailResponse>>builder()
+                .status(200)
+                .message("Success")
+                .data(responses)
+                .build();
+    }
+
     @Transactional(readOnly = true)
     public WebResponse<java.util.Map<String, Long>> getMemoCounts(String username) {
         User aktor = userRepository.findByUsername(username)

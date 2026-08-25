@@ -101,14 +101,6 @@ public class PenjadwalanService {
             listTugas = penjadwalanRepo.findAllByOrderByCreatedAtDesc();
         }
         
-        // Filter out deleted items (SQLRestriction is already there but findAll needs care if manual filter)
-        listTugas = listTugas.stream().filter(t -> {
-            try {
-               // Checking if t has deletedAt is handled by Hibernate's @SQLRestriction
-               return true; 
-            } catch (Exception e) { return true; }
-        }).collect(Collectors.toList());
-        
         // ROLE-BASED FILTERING
         // Teknisi, Delivery & Marketing hanya dapat melihat tugas yang di-assign ke diri mereka sendiri
         String roleName = aktor.getRole().name();

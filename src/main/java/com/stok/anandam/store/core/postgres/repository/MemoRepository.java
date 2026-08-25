@@ -33,6 +33,10 @@ public interface MemoRepository extends JpaRepository<Memo, UUID> {
     @EntityGraph(attributePaths = {"customer", "pelangganMybiz", "marketing", "creator"})
     java.util.List<com.stok.anandam.store.core.postgres.model.Memo> findByStatusAkhirOrderByCreatedAtDesc(com.stok.anandam.store.core.postgres.model.enums.MemoStatus statusAkhir);
 
+    // Untuk filter multi-status (e.g., halaman pengiriman) — 1 query dengan IN clause
+    @EntityGraph(attributePaths = {"customer", "pelangganMybiz", "marketing", "creator"})
+    java.util.List<com.stok.anandam.store.core.postgres.model.Memo> findByStatusAkhirInOrderByCreatedAtDesc(java.util.List<com.stok.anandam.store.core.postgres.model.enums.MemoStatus> statuses);
+
     boolean existsByOrderIdMarketplaceAndStatusAkhirNot(String orderIdMarketplace, com.stok.anandam.store.core.postgres.model.enums.MemoStatus statusAkhir);
 
     boolean existsByOrderIdMarketplaceAndStatusAkhirNotAndIdNot(String orderIdMarketplace, com.stok.anandam.store.core.postgres.model.enums.MemoStatus statusAkhir, UUID id);

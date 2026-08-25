@@ -87,8 +87,19 @@ public class MemoController {
     )
     public WebResponse<java.util.List<com.stok.anandam.store.dto.MemoDetailResponse>> getListMemo(
             @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "statuses", required = false) java.util.List<String> statuses,
             java.security.Principal principal) {
-        
+
+        // Multi-status filter (digunakan oleh halaman pengiriman agar tidak tarik semua memo)
+        if (statuses != null && !statuses.isEmpty()) {
+            java.util.List<com.stok.anandam.store.core.postgres.model.enums.MemoStatus> memoStatuses =
+                statuses.stream()
+                    .map(s -> com.stok.anandam.store.core.postgres.model.enums.MemoStatus.fromName(s))
+                    .filter(s -> s != null)
+                    .collect(java.util.stream.Collectors.toList());
+            return memoService.getListMemoByStatuses(memoStatuses, principal.getName());
+        }
+
         com.stok.anandam.store.core.postgres.model.enums.MemoStatus memoStatus = 
             com.stok.anandam.store.core.postgres.model.enums.MemoStatus.fromName(status);
             
