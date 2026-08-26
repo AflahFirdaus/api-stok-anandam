@@ -552,14 +552,20 @@ public class StockService {
 
         // Tentukan is_ppn item:
         //  - cocokkan par_name pembelian terakhir item -> distributor.tipe_pajak
-        //  - jika tidak ada kecocokan, pakai nilai tersimpan; bila masih null default false (NON PPN)
+        //  - jika distributor tidak ditemukan atau tipe_pajaknya null, biarkan tetap null
+        //    agar frontend bisa menampilkan "?" (belum diketahui)
         private Boolean resolveIsPpn(String parName, Map<String, Distributor> distributorByName, Boolean stored) {
                 if (parName != null) {
                         Distributor d = distributorByName.get(normalizeForMatch(parName));
-                        if (d != null) {
+                        if (d != null && d.getTipePajak() != null) {
                                 return "PPN".equalsIgnoreCase(d.getTipePajak());
                         }
+                        // Distributor ditemukan tapi tipe_pajak null -> return null (belum diketahui)
+                        if (d != null && d.getTipePajak() == null) {
+                                return null;
+                        }
                 }
-                return stored != null ? stored : Boolean.FALSE;
+                // Jika stored (is_ppn dari DB) sudah terisi, pakai itu; jika belum, null (tidak diketahui)
+                return stored;
         }
 }
