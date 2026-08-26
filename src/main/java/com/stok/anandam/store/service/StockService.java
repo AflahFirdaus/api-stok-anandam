@@ -159,9 +159,10 @@ public class StockService {
                                 }
 
                                 if (name != null) {
-                                        // key map pakai lowercase agar match dengan lookup di bawah (case insensitive)
+                                        // Bersihkan prefix distributor dan key map pakai lowercase
+                                        String cleanedPartner = MigrationService.cleanDistributorName(partner);
                                         lastPurchaseDates.put(name.trim().toLowerCase(), date);
-                                        lastPurchasePartners.put(name.trim().toLowerCase(), partner);
+                                        lastPurchasePartners.put(name.trim().toLowerCase(), cleanedPartner);
                                         lastPurchasePrice.put(name.trim().toLowerCase(), price);
                                 }
                         }
@@ -206,9 +207,10 @@ public class StockService {
                                         }
 
                                         if (name != null) {
-                                                // key pakai lowercase agar match dengan lookup di response
+                                                // Bersihkan prefix distributor dan key pakai lowercase
+                                                String cleanedPartner = MigrationService.cleanDistributorName(partner);
                                                 lastPurchaseDates.put(name.trim().toLowerCase(), date);
-                                                lastPurchasePartners.put(name.trim().toLowerCase(), partner);
+                                                lastPurchasePartners.put(name.trim().toLowerCase(), cleanedPartner);
                                                 lastPurchasePrice.put(name.trim().toLowerCase(), price);
                                         }
                                 }
@@ -491,7 +493,7 @@ public class StockService {
                 purchaseRepository.findLatestPurchaseByItemName(stock.getItemName()).ifPresent(p -> {
                         stock.setLastPurchaseDate(p.getDocDate());
                         stock.setLastPurchasePrice(p.getPrice());
-                        stock.setParName(p.getParName());
+                        stock.setParName(MigrationService.cleanDistributorName(p.getParName()));
                 });
 
                 // Fallback: jika tidak ditemukan di purchases atau masih "PERSEDIAAN AWAL", coba cari di old_purchase
@@ -499,7 +501,7 @@ public class StockService {
                         oldPurchaseRepository.findLatestPurchaseByItemName(stock.getItemName()).ifPresent(op -> {
                                 stock.setLastPurchaseDate(op.getDocDate());
                                 stock.setLastPurchasePrice(op.getPrice());
-                                stock.setParName(op.getParName());
+                                stock.setParName(MigrationService.cleanDistributorName(op.getParName()));
                         });
                 }
 
@@ -543,7 +545,9 @@ public class StockService {
         }
 
         private String normalizeForMatch(String s) {
-                return s == null ? "" : s.trim().toLowerCase();
+                if (s == null) return "";
+                String cleaned = MigrationService.cleanDistributorName(s.trim().toLowerCase());
+                return cleaned;
         }
 
         // Tentukan is_ppn item:

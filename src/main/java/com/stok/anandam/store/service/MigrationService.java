@@ -893,8 +893,8 @@ public class MigrationService {
                     String namaDistributor = cols.get(0).replace("\"", "").trim();
                     String tipePajak = cols.get(1).replace("\"", "").trim();
                     if (namaDistributor.isEmpty()) continue;
-                    // Konversi "NAN" (case-insensitive) menjadi null agar disimpan sebagai NULL di database
-                    if ("NAN".equalsIgnoreCase(tipePajak)) {
+                    // Konversi "NAN" atau empty string menjadi null agar disimpan sebagai NULL di database
+                    if ("NAN".equalsIgnoreCase(tipePajak) || tipePajak.isEmpty()) {
                         tipePajak = null;
                     }
 
@@ -1040,7 +1040,22 @@ public class MigrationService {
     }
 
 
-// ─── SYNC DISTRIBUTOR NAMES FROM PURCHASES & OLD_PURCHASES ────────────────
+// ─── CLEAN DISTRIBUTOR NAME ────────────────────────────────────────────
+    // Hapus prefix kode department/cabang (SSS-, MGC-, GBH-, SGI-, PDB-, dll)
+    // dari nama distributor agar tidak terjadi duplikasi.
+    // Contoh: "SSS-PT INFOKOM PUTRA KENCANA" -> "PT INFOKOM PUTRA KENCANA"
+    static String cleanDistributorName(String raw) {
+        if (raw == null || raw.isBlank()) return raw;
+        String cleaned = raw.trim();
+        // Hapus prefix 3 huruf kapital + "-" di awal
+        cleaned = cleaned.replaceAll("^[A-Za-z]{3}\\s*-\\s*", "");
+        // Hapus prefix 4 huruf kapital + "-" di awal (jika ada)
+        cleaned = cleaned.replaceAll("^[A-Za-z]{4}\\s*-\\s*", "");
+        return cleaned.trim();
+    }
+    // ─── END CLEAN DISTRIBUTOR NAME ────────────────────────────────────────
+
+    // ─── SYNC DISTRIBUTOR NAMES FROM PURCHASES & OLD_PURCHASES ────────────────
     // Cari semua par_name unik dari purchases dan old_purchase,
     // lalu insert yang belum ada di tabel distributor dengan tipe_pajak = NULL.
     @Transactional
@@ -1067,10 +1082,20 @@ public class MigrationService {
         List<String> oldPurchaseNames = pgJdbcTemplate.query(sqlOldPurchase,
                         (ResultSet rs, int rowNum) -> rs.getString("par_name"));
 
-        // 3. Gabung semua nama unik
+        // 3. Gabung semua nama unik dan bersihkan prefix
         Set<String> allNames = new HashSet<>();
-        if (purchaseNames != null) allNames.addAll(purchaseNames);
-        if (oldPurchaseNames != null) allNames.addAll(oldPurchaseNames);
+        if (purchaseNames != null) {
+            purchaseNames.stream()
+                .map(MigrationService::cleanDistributorName)
+                .filter(n -> n != null && !n.isEmpty())
+                .forEach(allNames::add);
+        }
+        if (oldPurchaseNames != null) {
+            oldPurchaseNames.stream()
+                .map(MigrationService::cleanDistributorName)
+                .filter(n -> n != null && !n.isEmpty())
+                .forEach(allNames::add);
+        }
 
         // 4. Ambil nama distributor yang sudah ada di tabel distributor
         String sqlExisting = """
