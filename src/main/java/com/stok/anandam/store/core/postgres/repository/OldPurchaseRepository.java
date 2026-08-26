@@ -52,7 +52,7 @@ public interface OldPurchaseRepository extends JpaRepository<OldPurchase, Long> 
         @Query("SELECT MAX(p.docDate) FROM OldPurchase p")
         java.util.Optional<LocalDate> findMaxDocDate();
 
-        @Query(value = "SELECT * FROM old_purchase WHERE TRIM(LOWER(item_name)) = TRIM(LOWER(:itemName)) ORDER BY doc_date DESC LIMIT 1", nativeQuery = true)
+        @Query(value = "SELECT * FROM old_purchase WHERE TRIM(LOWER(item_name)) = TRIM(LOWER(:itemName)) AND TRIM(LOWER(par_name)) != 'persediaan awal' ORDER BY doc_date DESC LIMIT 1", nativeQuery = true)
         java.util.Optional<OldPurchase> findLatestPurchaseByItemName(@Param("itemName") String itemName);
 
         @Query(value = "SELECT DISTINCT ON (TRIM(LOWER(op.item_name))) " +
@@ -62,6 +62,7 @@ public interface OldPurchaseRepository extends JpaRepository<OldPurchase, Long> 
                         "op.price AS price " +
                         "FROM old_purchase op " +
                         "WHERE TRIM(LOWER(op.item_name)) IN (:itemNames) " +
+                        "AND TRIM(LOWER(op.par_name)) != 'persediaan awal' " +
                         "ORDER BY TRIM(LOWER(op.item_name)), op.doc_date DESC NULLS LAST, op.id DESC",
                         nativeQuery = true)
         List<Object[]> findLatestPurchaseDetailsByItemNames(@Param("itemNames") List<String> itemNames);
