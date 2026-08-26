@@ -166,10 +166,10 @@ public class StockService {
                                 }
                         }
 
-                        // Fallback: untuk item yang tidak ditemukan di purchases, cari di old_purchase
+                        // Fallback: untuk item yang tidak ditemukan di purchases ATAU parName-nya "PERSEDIAAN AWAL", cari di old_purchase
                         List<String> missingItemNames = itemNames.stream()
                                 .map(n -> n.trim().toLowerCase())
-                                .filter(n -> !lastPurchasePartners.containsKey(n))
+                                .filter(n -> !lastPurchasePartners.containsKey(n) || "PERSEDIAAN AWAL".equalsIgnoreCase(lastPurchasePartners.get(n)))
                                 .distinct()
                                 .collect(Collectors.toList());
 
@@ -494,8 +494,8 @@ public class StockService {
                         stock.setParName(p.getParName());
                 });
 
-                // Fallback: jika tidak ditemukan di purchases, coba cari di old_purchase
-                if (stock.getParName() == null) {
+                // Fallback: jika tidak ditemukan di purchases atau masih "PERSEDIAAN AWAL", coba cari di old_purchase
+                if (stock.getParName() == null || "PERSEDIAAN AWAL".equalsIgnoreCase(stock.getParName())) {
                         oldPurchaseRepository.findLatestPurchaseByItemName(stock.getItemName()).ifPresent(op -> {
                                 stock.setLastPurchaseDate(op.getDocDate());
                                 stock.setLastPurchasePrice(op.getPrice());
