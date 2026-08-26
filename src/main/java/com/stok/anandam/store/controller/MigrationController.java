@@ -155,6 +155,20 @@ public class MigrationController {
                 .build());
     }
 
+    @PostMapping("/sync-distributor-names")
+    @LogActivity("SINKRONISASI NAMA DISTRIBUTOR DARI purchases & old_purchase")
+    public ResponseEntity<WebResponse<String>> syncDistributorNames() {
+        if (migrationService == null)
+            return migrationDisabled();
+        int added = migrationService.syncDistributorNamesFromPurchases();
+        return ResponseEntity.ok(WebResponse.<String>builder()
+                .status(200)
+                .message("Sinkronisasi nama distributor selesai. " + added + " distributor baru ditambahkan.")
+                .data("Added: " + added + " distributors")
+                .paging(null)
+                .build());
+    }
+
     @PostMapping("/fix-stok-ppn-old")
     @LogActivity("MEMPERBAIKI is_ppn STOK DARI old_purchase")
     public ResponseEntity<WebResponse<String>> fixStokPpnFromOldPurchases() {

@@ -33,6 +33,7 @@ import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @Service
 public class MigrationService {
@@ -1039,6 +1040,108 @@ public class MigrationService {
     }
 
 
+// ─── SYNC DISTRIBUTOR NAMES FROM PURCHASES & OLD_PURCHASES ────────────────
+    // Cari semua par_name unik dari purchases dan old_purchase,
+    // lalu insert yang belum ada di tabel distributor dengan tipe_pajak = NULL.
+    @Transactional
+    public int syncDistributorNamesFromPurchases() {
+        // 1. Ambil semua par_name unik dari purchases (kecuali PERSEDIAAN AWAL dan NULL)
+        String sqlPurchases = """
+                    SELECT DISTINCT TRIM(p.par_name) AS par_name
+                    FROM purchases p
+                    WHERE p.par_name IS NOT NULL
+                    AND TRIM(LOWER(p.par_name)) != 'persediaan awal'
+                    AND TRIM(p.par_name) != ''
+                """;
+        List<String> purchaseNames = pgJdbcTemplate.query(sqlPurchases,
+                        (ResultSet rs, int rowNum) -> rs.getString("par_name"));
+
+        // 2. Ambil semua par_name unik dari old_purchase (kecuali PERSEDIAAN AWAL dan NULL)
+        String sqlOldPurchase = """
+                    SELECT DISTINCT TRIM(op.par_name) AS par_name
+                    FROM old_purchase op
+                    WHERE op.par_name IS NOT NULL
+                    AND TRIM(LOWER(op.par_name)) != 'persediaan awal'
+                    AND TRIM(op.par_name) != ''
+                """;
+        List<String> oldPurchaseNames = pgJdbcTemplate.query(sqlOldPurchase,
+                        (ResultSet rs, int rowNum) -> rs.getString("par_name"));
+
+        // 3. Gabung semua nama unik
+        Set<String> allNames = new HashSet<>();
+        if (purchaseNames != null) allNames.addAll(purchaseNames);
+        if (oldPurchaseNames != null) allNames.addAll(oldPurchaseNames);
+
+        // 4. Ambil nama distributor yang sudah ada di tabel distributor
+        String sqlExisting = """
+                    SELECT DISTINCT TRIM(LOWER(d.nama_distributor)) AS nama_lower
+                    FROM distributor d
+                """;
+        Set<String> existingNames = new HashSet<>(pgJdbcTemplate.query(sqlExisting,
+                        (ResultSet rs, int rowNum) -> rs.getString("nama_lower")));
+
+        // 5. Filter yang belum ada (case-insensitive)
+        List<Distributor> newDistributors = allNames.stream()
+                .filter(name -> name != null && !name.trim().isEmpty())
+                .filter(name -> !existingNames.contains(name.trim().toLowerCase()))
+                .map(name -> Distributor.builder()
+                        .namaDistributor(name.trim())
+                        .tipePajak(null) // NULL biar bisa diisi manual
+                        .build()
+                )
+                .collect(Collectors.toList());
+
+        if (newDistributors.isEmpty()) {
+            log.info("syncDistributorNames: Tidak ada distributor baru yang ditemukan.");
+            return 0;
+        }
+
+        // 6. Insert batch: hanya insert nama yang belum ada (ON CONFLICT DO NOTHING)
+        //    Tidak menggunakan saveDistributorBatch karena method itu pakai DO UPDATE (overwrite tipe_pajak)
+        String sqlInsert = """
+                    INSERT INTO distributor (id, nama_distributor, tipe_pajak, last_synced)
+                    VALUES (nextval('distributor_seq'), ?, ?, ?)
+                    ON CONFLICT (nama_distributor) DO NOTHING
+                """;
+        List<Distributor> batch = new ArrayList<>();
+        for (Distributor d : newDistributors) {
+            batch.add(d);
+            if (batch.size() >= BATCH_SIZE) {
+                insertDistributorBatch(batch, sqlInsert);
+            }
+        }
+        if (!batch.isEmpty()) {
+            insertDistributorBatch(batch, sqlInsert);
+        }
+
+        log.info("syncDistributorNames: {} distributor baru ditambahkan.", newDistributors.size());
+        return newDistributors.size();
+    }
+
+    // Batch insert distributor dengan ON CONFLICT DO NOTHING (untuk sync dari purchases)
+    private void insertDistributorBatch(List<Distributor> list, String sql) {
+        try {
+            pgJdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+                @Override
+                public void setValues(java.sql.PreparedStatement ps, int i) throws SQLException {
+                    Distributor d = list.get(i);
+                    ps.setString(1, d.getNamaDistributor());
+                    ps.setString(2, d.getTipePajak()); // null
+                    ps.setTimestamp(3, java.sql.Timestamp.valueOf(LocalDateTime.now()));
+                }
+                @Override
+                public int getBatchSize() {
+                    return list.size();
+                }
+            });
+        } catch (BadSqlGrammarException e) {
+            log.error("SQL ERROR in insertDistributorBatch: {}", e.getSQLException().getMessage());
+            throw e;
+        } finally {
+            list.clear();
+        }
+    }
+    // ─── END SYNC DISTRIBUTOR NAMES ────────────────────────────────────────────
     private List<String> parseCsvLine(String line) {
         List<String> result = new ArrayList<>();
         StringBuilder cur = new StringBuilder();
