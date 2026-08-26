@@ -29,17 +29,16 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOrigins(
-                        "http://localhost:3000",
-                        "http://localhost:4200",
-                        "http://localhost:5173",
-                        "http://127.0.0.1:3000",
-                        "http://127.0.0.1:4200",
-                        "http://127.0.0.1:5173"
+                .allowedOriginPatterns(
+                    "https://api.anandamcomputer.com",
+                    "https://anandam.id",
+                    "http://localhost:*",
+                    "http://127.0.0.1:*",
+                    "http://192.168.*.*:*"
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
                 .allowedHeaders("*")
-                .exposedHeaders("Authorization")
+                .exposedHeaders("Authorization", "Content-Disposition", "Content-Type")
                 .allowCredentials(true)
                 .maxAge(3600);
     }

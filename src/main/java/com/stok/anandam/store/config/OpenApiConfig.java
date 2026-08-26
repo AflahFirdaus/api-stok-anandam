@@ -21,12 +21,12 @@ public class OpenApiConfig {
 
         // Server Local untuk development
         Server localServer = new Server()
-                .url("http://localhost:9090")
+                .url("http://localhost:9099")
                 .description("Local Server (Development)");
 
         // Server Internal Kantor (IP Local)
         Server internalServer = new Server()
-                .url("http://192.168.1.176:9090")
+                .url("http://192.168.1.176:9099")
                 .description("Internal Server (Kantor)");
 
         return new OpenAPI()

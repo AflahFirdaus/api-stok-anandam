@@ -116,7 +116,7 @@ public class StockService {
                         for (Object[] res : results) {
                                 String name = (String) res[0];
                                 if (name != null) {
-                                        lastSalesDates.put(name.trim(), (LocalDate) res[1]);
+                                        lastSalesDates.put(name.trim().toLowerCase(), (LocalDate) res[1]);
                                 }
                         }
                 }
@@ -159,17 +159,16 @@ public class StockService {
                                 }
 
                                 if (name != null) {
-                                        // key map pakai trimmedName (asli) agar cocok dengan lookup di bawah
-                                        String trimmedName = name.trim();
-                                        lastPurchaseDates.put(trimmedName, date);
-                                        lastPurchasePartners.put(trimmedName, partner);
-                                        lastPurchasePrice.put(trimmedName, price);
+                                        // key map pakai lowercase agar match dengan lookup di bawah (case insensitive)
+                                        lastPurchaseDates.put(name.trim().toLowerCase(), date);
+                                        lastPurchasePartners.put(name.trim().toLowerCase(), partner);
+                                        lastPurchasePrice.put(name.trim().toLowerCase(), price);
                                 }
                         }
 
                         // Fallback: untuk item yang tidak ditemukan di purchases, cari di old_purchase
                         List<String> missingItemNames = itemNames.stream()
-                                .map(String::trim)
+                                .map(n -> n.trim().toLowerCase())
                                 .filter(n -> !lastPurchasePartners.containsKey(n))
                                 .distinct()
                                 .collect(Collectors.toList());
@@ -207,10 +206,10 @@ public class StockService {
                                         }
 
                                         if (name != null) {
-                                                String trimmedName = name.trim();
-                                                lastPurchaseDates.put(trimmedName, date);
-                                                lastPurchasePartners.put(trimmedName, partner);
-                                                lastPurchasePrice.put(trimmedName, price);
+                                                // key pakai lowercase agar match dengan lookup di response
+                                                lastPurchaseDates.put(name.trim().toLowerCase(), date);
+                                                lastPurchasePartners.put(name.trim().toLowerCase(), partner);
+                                                lastPurchasePrice.put(name.trim().toLowerCase(), price);
                                         }
                                 }
                         }
@@ -248,6 +247,7 @@ public class StockService {
                         }
                         
                         String trimmedName = displayStock.getItemName() != null ? displayStock.getItemName().trim() : "";
+                        String lookupKey = trimmedName.toLowerCase();
 
                         List<WarehouseStockDTO> warehouses = stocks.stream()
                                         .map(s -> WarehouseStockDTO.builder()
@@ -277,11 +277,11 @@ public class StockService {
                                         .spesifikasi(priceInfo != null ? priceInfo.getSpesifikasi() : null)
                                         .modal(priceInfo != null ? priceInfo.getModal() : null)
                                         .finalPricelist(priceInfo != null ? priceInfo.getFinalPricelist() : null)
-                                        .lastSalesDate(lastSalesDates.get(trimmedName))
-                                        .lastPurchaseDate(lastPurchaseDates.get(trimmedName))
-                                         .lastPurchasePrice(lastPurchasePrice.get(trimmedName))
-                                         .parName(lastPurchasePartners.get(trimmedName))
-                                         .isPpn(resolveIsPpn(lastPurchasePartners.get(trimmedName), distributorByName, displayStock.getIsPpn()))
+                                        .lastSalesDate(lastSalesDates.get(lookupKey))
+                                        .lastPurchaseDate(lastPurchaseDates.get(lookupKey))
+                                         .lastPurchasePrice(lastPurchasePrice.get(lookupKey))
+                                         .parName(lastPurchasePartners.get(lookupKey))
+                                         .isPpn(resolveIsPpn(lastPurchasePartners.get(lookupKey), distributorByName, displayStock.getIsPpn()))
                                          .warehouses(warehouses)
                                          .totalPending(0) // Default
                                          .pendingDetails(new ArrayList<>()) // Default
