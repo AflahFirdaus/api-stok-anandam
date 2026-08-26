@@ -46,6 +46,9 @@ public class StockService {
         @Autowired
         private DistributorRepository distributorRepository;
 
+        @Autowired
+        private OldPurchaseRepository oldPurchaseRepository;
+
         public Page<StockGroupedResponse> getGroupedStocks(int page, int size, String sortBy, String direction,
                         String search, List<String> categories, String username) {
                 User user = userRepository.findByUsername(username)
@@ -161,6 +164,54 @@ public class StockService {
                                         lastPurchaseDates.put(trimmedName, date);
                                         lastPurchasePartners.put(trimmedName, partner);
                                         lastPurchasePrice.put(trimmedName, price);
+                                }
+                        }
+
+                        // Fallback: untuk item yang tidak ditemukan di purchases, cari di old_purchase
+                        List<String> missingItemNames = itemNames.stream()
+                                .map(String::trim)
+                                .filter(n -> !lastPurchasePartners.containsKey(n))
+                                .distinct()
+                                .collect(Collectors.toList());
+
+                        if (!missingItemNames.isEmpty()) {
+                                List<String> normalizedOldNames = missingItemNames.stream()
+                                        .map(n -> n.trim().toLowerCase())
+                                        .distinct()
+                                        .collect(Collectors.toList());
+
+                                List<Object[]> oldResults = oldPurchaseRepository
+                                                .findLatestPurchaseDetailsByItemNames(normalizedOldNames);
+                                for (Object[] res : oldResults) {
+                                        String name = (String) res[0];
+
+                                        LocalDate date = null;
+                                        if (res[1] != null) {
+                                                if (res[1] instanceof LocalDate) {
+                                                        date = (LocalDate) res[1];
+                                                } else if (res[1] instanceof java.sql.Date) {
+                                                        date = ((java.sql.Date) res[1]).toLocalDate();
+                                                } else {
+                                                        date = java.sql.Date.valueOf(res[1].toString()).toLocalDate();
+                                                }
+                                        }
+
+                                        String partner = (String) res[2];
+                                        BigDecimal price = null;
+                                        if (res[3] != null) {
+                                                if (res[3] instanceof BigDecimal) {
+                                                        price = (BigDecimal) res[3];
+                                                } else {
+                                                        price = new BigDecimal(res[3].toString());
+                                                }
+                                        }
+
+                                        if (name != null) {
+                                                String trimmedName = name.trim();
+                                                lastPurchaseDates.put(trimmedName, date);
+                                                lastPurchasePartners.put(trimmedName, partner);
+                                                lastPurchasePrice.put(trimmedName, price);
+                                        }
                                 }
                         }
                 }
@@ -442,6 +493,15 @@ public class StockService {
                         stock.setLastPurchasePrice(p.getPrice());
                         stock.setParName(p.getParName());
                 });
+
+                // Fallback: jika tidak ditemukan di purchases, coba cari di old_purchase
+                if (stock.getParName() == null) {
+                        oldPurchaseRepository.findLatestPurchaseByItemName(stock.getItemName()).ifPresent(op -> {
+                                stock.setLastPurchaseDate(op.getDocDate());
+                                stock.setLastPurchasePrice(op.getPrice());
+                                stock.setParName(op.getParName());
+                        });
+                }
 
                 // Fetch from pricelist using normalized name
                 String normalizedName = com.stok.anandam.store.util.NormalizationUtil

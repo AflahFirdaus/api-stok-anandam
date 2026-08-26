@@ -154,5 +154,18 @@ public class MigrationController {
                 .paging(null)
                 .build());
     }
+
+    @PostMapping("/fix-stok-ppn-old")
+    @LogActivity("MEMPERBAIKI is_ppn STOK DARI old_purchase")
+    public ResponseEntity<WebResponse<String>> fixStokPpnFromOldPurchases() {
+        if (migrationService == null)
+            return migrationDisabled();
+        int updated = migrationService.fixStokIsPpnFromOldPurchasesOnly();
+        return ResponseEntity.ok(WebResponse.<String>builder()
+                .status(200)
+                .message("Fix is_ppn stok dari old_purchase selesai. " + updated + " baris terupdate.")
+                .data("Updated: " + updated + " rows")
+                .paging(null)
+                .build());
+    }
 }
-// Re-trigger compilation

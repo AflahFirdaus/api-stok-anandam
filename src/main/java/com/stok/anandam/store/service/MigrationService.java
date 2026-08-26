@@ -964,9 +964,11 @@ public class MigrationService {
     }
 
     // Hitung is_ppn di stok: pembelian terakhir item → par_name → distributor.tipe_pajak
+    // Prioritas: purchases (data baru), lalu old_purchase (data lama) sebagai fallback
     @Transactional
     public int computeStokIsPpn() {
-        String sql = """
+        // 1. Update dari tabel purchases (data pembelian baru)
+        String sqlPurchases = """
                     UPDATE stok s
                     SET is_ppn = COALESCE((d.tipe_pajak = 'PPN'), FALSE)
                     FROM (
@@ -980,9 +982,54 @@ public class MigrationService {
                         ON TRIM(LOWER(d.nama_distributor)) = latest.par_name
                     WHERE TRIM(LOWER(s.item_name)) = latest.item_name
                 """;
-        return pgJdbcTemplate.update(sql);
+        int updated = pgJdbcTemplate.update(sqlPurchases);
+        log.info("is_ppn updated from purchases: {} rows", updated);
+
+        // 2. Fallback: update dari old_purchase untuk item yang masih NULL is_ppn-nya
+        String sqlOldPurchase = """
+                    UPDATE stok s
+                    SET is_ppn = COALESCE((d.tipe_pajak = 'PPN'), FALSE)
+                    FROM (
+                        SELECT DISTINCT ON (TRIM(LOWER(op.item_name)))
+                            TRIM(LOWER(op.item_name)) AS item_name,
+                            TRIM(LOWER(op.par_name))  AS par_name
+                        FROM old_purchase op
+                        ORDER BY TRIM(LOWER(op.item_name)), op.doc_date DESC NULLS LAST, op.id DESC
+                    ) latest
+                    LEFT JOIN distributor d
+                        ON TRIM(LOWER(d.nama_distributor)) = latest.par_name
+                    WHERE TRIM(LOWER(s.item_name)) = latest.item_name
+                    AND s.is_ppn IS NULL
+                """;
+        int oldUpdated = pgJdbcTemplate.update(sqlOldPurchase);
+        log.info("is_ppn updated from old_purchase (fallback): {} rows", oldUpdated);
+
+        return updated + oldUpdated;
     }
     // Parser CSV sederhana yang menangani field ber-quote ganda (") supaya aman
+    // Khusus fix is_ppn stok dari old_purchase (untuk persediaan awal yang tidak ada di purchases)
+    @Transactional
+    public int fixStokIsPpnFromOldPurchasesOnly() {
+        String sql = """
+                    UPDATE stok s
+                    SET is_ppn = COALESCE((d.tipe_pajak = 'PPN'), FALSE)
+                    FROM (
+                        SELECT DISTINCT ON (TRIM(LOWER(op.item_name)))
+                            TRIM(LOWER(op.item_name)) AS item_name,
+                            TRIM(LOWER(op.par_name))  AS par_name
+                        FROM old_purchase op
+                        ORDER BY TRIM(LOWER(op.item_name)), op.doc_date DESC NULLS LAST, op.id DESC
+                    ) latest
+                    LEFT JOIN distributor d
+                        ON TRIM(LOWER(d.nama_distributor)) = latest.par_name
+                    WHERE TRIM(LOWER(s.item_name)) = latest.item_name
+                """;
+        int updated = pgJdbcTemplate.update(sql);
+        log.info("fixStokIsPpnFromOldPurchasesOnly: {} rows updated", updated);
+        return updated;
+    }
+
+
     private List<String> parseCsvLine(String line) {
         List<String> result = new ArrayList<>();
         StringBuilder cur = new StringBuilder();
