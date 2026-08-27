@@ -92,4 +92,7 @@ public interface MemoRepository extends JpaRepository<Memo, UUID> {
 
     // Search exact match by orderIdMarketplace (prioritas kedua)
     List<Memo> findByOrderIdMarketplaceIgnoreCase(String orderId);
+
+    // Cari memo berdasarkan QR Code (untuk scan delivery)
+    Optional<Memo> findByQrCode(String qrCode);
 }
