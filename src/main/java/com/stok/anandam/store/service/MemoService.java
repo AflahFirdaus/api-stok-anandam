@@ -1627,6 +1627,13 @@ public class MemoService {
         memo.setStatusAkhir(targetStatus);
         memoRepository.save(memo);
 
+        // Generate QR Code untuk keperluan scan delivery
+        if (memo.getQrCode() == null || memo.getQrCode().isBlank()) {
+            String qrData = "{ \"memoId\": \"" + memo.getId() + "\", \"nomor\": \"" + memo.getNomorMemo() + "\" }";
+            memo.setQrCode(qrData);
+            memoRepository.save(memo);
+        }
+
         memoLogRepository.save(new MemoLog(memo.getId(), targetStatus.name(), aktor.getId(), logMsg));
 
         sendMemoRefreshSignal();
