@@ -5,6 +5,7 @@ import com.stok.anandam.store.dto.PagingResponse;
 import com.stok.anandam.store.dto.StockSummaryByCategoryResponse;
 import com.stok.anandam.store.dto.StockSummaryRowResponse;
 import com.stok.anandam.store.dto.StockGroupedResponse;
+import com.stok.anandam.store.dto.StokBadanGroupResponse;
 import com.stok.anandam.store.dto.WebResponse;
 import com.stok.anandam.store.service.StockService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -98,6 +99,22 @@ public class StockController {
                                 .build());
         }
 
+/**
+         * Stok per badan: hitung purchase - sale per (badan, dep, item),
+         * lalu terapkan redistribusi deficit non-ANC diambil dari ANC.
+         * Output dikelompokkan per badan (6 badan: ANC,PDB,MGC,GBH,SSS,SGI).
+         * Mirip dengan GET /api/stok di portal-tim-project.
+         */
+        @GetMapping("/badan")
+        public ResponseEntity<WebResponse<List<StokBadanGroupResponse>>> getStokPerBadan() {
+            List<StokBadanGroupResponse> data = stockService.getStokPerBadan();
+            return ResponseEntity.ok(WebResponse.<List<StokBadanGroupResponse>>builder()
+                    .status(200)
+                    .message("Success fetch stok per badan")
+                    .data(data)
+                    .paging(null)
+                    .build());
+        }
         // FITUR 3: Detail Stok (Get By ID)
         @GetMapping("/{id}")
         public ResponseEntity<WebResponse<Stock>> getStockDetail(@PathVariable(name = "id") Long id, java.security.Principal principal) {

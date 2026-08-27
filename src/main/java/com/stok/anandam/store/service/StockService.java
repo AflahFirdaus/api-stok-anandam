@@ -6,6 +6,8 @@ import com.stok.anandam.store.dto.StockSummaryByCategoryResponse;
 import com.stok.anandam.store.dto.StockSummaryRowResponse;
 import com.stok.anandam.store.dto.StockGroupedResponse;
 import com.stok.anandam.store.dto.WarehouseStockDTO;
+import com.stok.anandam.store.dto.StokBadanItem;
+import com.stok.anandam.store.dto.StokBadanGroupResponse;
 import com.stok.anandam.store.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -532,6 +534,109 @@ public class StockService {
                 return stockRepository.findByFilters(search, null, null, pageable);
         }
 
+// ─── STOK PER BADAN (redistribusi deficit ke ANC) ──────────────
+
+        private static final List<String> BADAN_LIST = List.of("ANC", "PDB", "MGC", "GBH", "SSS", "SGI");
+
+        /**
+         * Ambil stok per badan: untuk setiap (badan, dep_code, item_code) hitung
+         * total_purchase_qty - total_sales_qty. Lalu terapkan redistribusi:
+         * deficit badan non-ANC diambil dari stok ANC (gudang pusat) per item_code.
+         * Hasil dikelompokkan per badan (selalu 6 badan tampil walau kosong).
+         *
+         * Mirip dengan StokService.getStokPerBadan() di portal-tim-project.
+         */
+        public List<StokBadanGroupResponse> getStokPerBadan() {
+            List<Object[]> rawRows = stockRepository.findStokPerBadanRaw();
+
+            // ── Map ke objek ──
+            List<StokBadanItem> items = new ArrayList<>();
+            for (Object[] row : rawRows) {
+                String badan = (String) row[0];
+                String depCode = (String) row[1];
+                String depName = (String) row[2];
+                String itemCode = (String) row[3];
+                String itemName = (String) row[4];
+                Object rawStokQty = row[5];
+                Object rawLineCount = row[6];
+
+                int stokQty = rawStokQty instanceof Number ? ((Number) rawStokQty).intValue() : 0;
+                int lineCount = rawLineCount instanceof Number ? ((Number) rawLineCount).intValue() : 0;
+
+                items.add(StokBadanItem.builder()
+                        .badan(badan)
+                        .depCode(depCode)
+                        .depName(depName)
+                        .itemCode(itemCode)
+                        .itemName(itemName)
+                        .stokQty(stokQty)
+                        .lineCount(lineCount)
+                        .build());
+            }
+
+            // ── Redistribusi stok: deficit non-ANC diambil dari ANC ──
+            // 1. Kelompokkan per item_code
+            Map<String, List<StokBadanItem>> itemGroups = new LinkedHashMap<>();
+            for (StokBadanItem item : items) {
+                itemGroups.computeIfAbsent(item.getItemCode(), k -> new ArrayList<>()).add(item);
+            }
+
+            // 2. Untuk setiap grup item_code
+            for (List<StokBadanItem> group : itemGroups.values()) {
+                // Hitung total deficit non-ANC
+                int deficit = 0;
+                for (StokBadanItem item : group) {
+                    if (!"ANC".equals(item.getBadan()) && item.getStokQty() < 0) {
+                        deficit += Math.abs(item.getStokQty());
+                    }
+                }
+                if (deficit == 0) continue;
+
+                // Kumpulkan baris ANC yang stok positif, urut dari terbesar
+                List<StokBadanItem> ancRows = group.stream()
+                        .filter(r -> "ANC".equals(r.getBadan()) && r.getStokQty() > 0)
+                        .sorted((a, b) -> b.getStokQty().compareTo(a.getStokQty()))
+                        .collect(Collectors.toList());
+
+                // Kurangi ANC satu per satu sampai deficit habis
+                int remaining = deficit;
+                for (StokBadanItem ancRow : ancRows) {
+                    if (remaining <= 0) break;
+                    int deduction = Math.min(remaining, ancRow.getStokQty());
+                    ancRow.setStokQty(ancRow.getStokQty() - deduction);
+                    remaining -= deduction;
+                }
+
+                // Nol-kan non-ANC yang minus
+                for (StokBadanItem item : group) {
+                    if (!"ANC".equals(item.getBadan()) && item.getStokQty() < 0) {
+                        item.setStokQty(0);
+                    }
+                }
+            }
+
+            // 3. Filter stok != 0
+            List<StokBadanItem> filtered = items.stream()
+                    .filter(r -> r.getStokQty() != 0)
+                    .collect(Collectors.toList());
+
+            // 4. Kelompokkan per badan (6 badan selalu tampil)
+            List<StokBadanGroupResponse> result = new ArrayList<>();
+            for (String badan : BADAN_LIST) {
+                List<StokBadanItem> badanItems = filtered.stream()
+                        .filter(r -> badan.equals(r.getBadan()))
+                        .collect(Collectors.toList());
+                int totalQty = badanItems.stream().mapToInt(StokBadanItem::getStokQty).sum();
+                result.add(StokBadanGroupResponse.builder()
+                        .badan(badan)
+                        .totalItems(badanItems.size())
+                        .totalQty(totalQty)
+                        .items(badanItems)
+                        .build());
+            }
+
+            return result;
+        }
         // ─── Helper PPN / NON PPN ─────────────────────────────────────────
         // Map nama distributor (ternormalisasi) -> entitas distributor
         private Map<String, Distributor> buildDistributorMap() {
