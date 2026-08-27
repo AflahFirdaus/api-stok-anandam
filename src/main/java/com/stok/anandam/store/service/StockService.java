@@ -51,6 +51,10 @@ public class StockService {
         @Autowired
         private OldPurchaseRepository oldPurchaseRepository;
 
+        @Autowired
+        @org.springframework.beans.factory.annotation.Qualifier("pgJdbcTemplate")
+        private org.springframework.jdbc.core.JdbcTemplate pgJdbcTemplate;
+
         public Page<StockGroupedResponse> getGroupedStocks(int page, int size, String sortBy, String direction,
                         String search, List<String> categories, String username) {
                 User user = userRepository.findByUsername(username)
@@ -637,6 +641,86 @@ public class StockService {
 
             return result;
         }
+/**
+         * Ambil stok per badan untuk SATU item tertentu (berdasarkan itemCode).
+         * Mengembalikan map: badan -> stokQty untuk 6 badan (ANC,PDB,MGC,GBH,SSS,SGI).
+         */
+        public Map<String, Integer> getStokPerBadanByItemCode(String itemCode) {
+            // Gunakan query yang sama dengan findStokPerBadanRaw() tapi filter by item_code
+            String sql = """
+                    WITH pur AS (
+                      SELECT p.id, p.par_name, p.doc_no_p, p.doc_date, p.dep_code, p.dep_name,
+                            p.item_code, p.item_name, p.qty, p.last_synced,
+                            CASE
+                              WHEN p.par_name ~* '\\\\mSGI\\\\M' THEN 'SGI'
+                              WHEN p.par_name ~* '\\\\mSSS\\\\M' THEN 'SSS'
+                              WHEN p.par_name ~* '\\\\mGBH\\\\M' THEN 'GBH'
+                              WHEN p.par_name ~* '\\\\mMGC\\\\M' THEN 'MGC'
+                              WHEN p.par_name ~* '\\\\mPDB\\\\M' THEN 'PDB'
+                              ELSE 'ANC'
+                            END AS badan
+                      FROM purchases p
+                      WHERE LOWER(TRIM(p.item_code)) = LOWER(TRIM(?))
+                    ),
+                    sls AS (
+                      SELECT s.ite_code, s.dep_code, s.dep_name, s.item_name, s.qty,
+                            CASE
+                              WHEN s.code ~* '\\\\mSGI\\\\M' THEN 'SGI'
+                              WHEN s.code ~* '\\\\mSSS\\\\M' THEN 'SSS'
+                              WHEN s.code ~* '\\\\mGBH\\\\M' THEN 'GBH'
+                              WHEN s.code ~* '\\\\mMGC\\\\M' THEN 'MGC'
+                              WHEN s.code ~* '\\\\mPDB\\\\M' THEN 'PDB'
+                              ELSE 'ANC'
+                            END AS badan
+                      FROM sales s
+                      WHERE LOWER(TRIM(s.ite_code)) = LOWER(TRIM(?))
+                    ),
+                    pur_agg AS (
+                      SELECT badan, dep_code, dep_name, item_code, item_name,
+                             SUM(qty) AS total_pur_qty,
+                             COUNT(*) AS purchase_lines
+                      FROM pur
+                      GROUP BY badan, dep_code, dep_name, item_code, item_name
+                    ),
+                    sls_agg AS (
+                      SELECT badan, dep_code, ite_code,
+                             MIN(dep_name) AS dep_name,
+                             MIN(item_name) AS item_name,
+                             SUM(qty) AS total_sls_qty,
+                             COUNT(*) AS sales_lines
+                      FROM sls
+                      GROUP BY badan, dep_code, ite_code
+                    )
+                    SELECT
+                      COALESCE(pa.badan, sa.badan) AS badan,
+                      COALESCE(pa.dep_code, sa.dep_code) AS dep_code,
+                      COALESCE(pa.dep_name, sa.dep_name) AS dep_name,
+                      COALESCE(pa.item_code, sa.ite_code) AS item_code,
+                      COALESCE(pa.item_name, sa.item_name) AS item_name,
+                      (COALESCE(pa.total_pur_qty, 0) - COALESCE(sa.total_sls_qty, 0))::int AS stok_qty,
+                      (COALESCE(pa.purchase_lines, 0) + COALESCE(sa.sales_lines, 0))::int AS line_count
+                    FROM pur_agg pa
+                    FULL OUTER JOIN sls_agg sa
+                      ON sa.badan = pa.badan
+                     AND sa.dep_code = pa.dep_code
+                     AND sa.ite_code = pa.item_code
+                    WHERE (COALESCE(pa.total_pur_qty, 0) - COALESCE(sa.total_sls_qty, 0)) <> 0
+                    ORDER BY badan, stok_qty DESC, item_name ASC
+                    """;
+            List<Map<String, Object>> rows = pgJdbcTemplate.queryForList(sql, itemCode, itemCode);
+            Map<String, Integer> result = new LinkedHashMap<>();
+            for (String badan : BADAN_LIST) {
+                result.put(badan, 0);
+            }
+            for (Map<String, Object> row : rows) {
+                String badan = (String) row.get("badan");
+                if (badan != null && result.containsKey(badan)) {
+                    result.put(badan, result.get(badan) + ((Number) row.get("stok_qty")).intValue());
+                }
+            }
+            return result;
+        }
+        // ─── Helper PPN / NON PPN ─────────────────────────────────────────
         // ─── Helper PPN / NON PPN ─────────────────────────────────────────
         // Map nama distributor (ternormalisasi) -> entitas distributor
         private Map<String, Distributor> buildDistributorMap() {

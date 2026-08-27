@@ -165,29 +165,29 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
         @Query(value = """
                 WITH pur AS (
                   SELECT p.id, p.par_name, p.doc_no_p, p.doc_date, p.dep_code, p.dep_name,
-                         p.item_code, p.item_name, p.qty, p.last_synced,
-                         CASE
-                           WHEN p.par_name ~* '\\mSGI\\M' THEN 'SGI'
-                           WHEN p.par_name ~* '\\mSSS\\M' THEN 'SSS'
-                           WHEN p.par_name ~* '\\mGBH\\M' THEN 'GBH'
-                           WHEN p.par_name ~* '\\mMGC\\M' THEN 'MGC'
-                           WHEN p.par_name ~* '\\mPDB\\M' THEN 'PDB'
-                           WHEN p.par_name ~* '\\mANC\\M' THEN 'ANC'
-                           ELSE 'ANC'
-                         END AS badan
+                        p.item_code, p.item_name, p.qty, p.last_synced,
+                        CASE
+                          WHEN p.par_name ~* '\\mSGI\\M' THEN 'SGI'
+                          WHEN p.par_name ~* '\\mSSS\\M' THEN 'SSS'
+                          WHEN p.par_name ~* '\\mGBH\\M' THEN 'GBH'
+                          WHEN p.par_name ~* '\\mMGC\\M' THEN 'MGC'
+                          WHEN p.par_name ~* '\\mPDB\\M' THEN 'PDB'
+                          WHEN p.par_name ~* '\\mANC\\M' THEN 'ANC'
+                          ELSE 'ANC'
+                        END AS badan
                   FROM purchases p
                 ),
                 sls AS (
                   SELECT s.ite_code, s.dep_code, s.dep_name, s.item_name, s.qty,
-                         CASE
-                           WHEN s.code ~* '\\mSGI\\M' THEN 'SGI'
-                           WHEN s.code ~* '\\mSSS\\M' THEN 'SSS'
-                           WHEN s.code ~* '\\mGBH\\M' THEN 'GBH'
-                           WHEN s.code ~* '\\mMGC\\M' THEN 'MGC'
-                           WHEN s.code ~* '\\mPDB\\M' THEN 'PDB'
-                           WHEN s.code ~* '\\mANC\\M' THEN 'ANC'
-                           ELSE 'ANC'
-                         END AS badan
+                        CASE
+                          WHEN s.code ~* '\\mSGI\\M' THEN 'SGI'
+                          WHEN s.code ~* '\\mSSS\\M' THEN 'SSS'
+                          WHEN s.code ~* '\\mGBH\\M' THEN 'GBH'
+                          WHEN s.code ~* '\\mMGC\\M' THEN 'MGC'
+                          WHEN s.code ~* '\\mPDB\\M' THEN 'PDB'
+                          WHEN s.code ~* '\\mANC\\M' THEN 'ANC'
+                          ELSE 'ANC'
+                        END AS badan
                   FROM sales s
                 ),
                 pur_agg AS (

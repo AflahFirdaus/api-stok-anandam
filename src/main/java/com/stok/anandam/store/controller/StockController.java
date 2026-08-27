@@ -13,6 +13,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.List;
 
@@ -115,6 +116,21 @@ public class StockController {
                     .paging(null)
                     .build());
         }
+/**
+         * Stok per badan untuk SATU item (berdasarkan itemCode).
+         */
+        @GetMapping("/{itemCode}/badan")
+        public ResponseEntity<WebResponse<Map<String, Integer>>> getStokPerBadanByItemCode(
+                @PathVariable(name = "itemCode") String itemCode) {
+            Map<String, Integer> data = stockService.getStokPerBadanByItemCode(itemCode);
+            return ResponseEntity.ok(WebResponse.<Map<String, Integer>>builder()
+                    .status(200)
+                    .message("Success fetch stok per badan for item")
+                    .data(data)
+                    .paging(null)
+                    .build());
+        }
+        // FITUR 3: Detail Stok (Get By ID)
         // FITUR 3: Detail Stok (Get By ID)
         @GetMapping("/{id}")
         public ResponseEntity<WebResponse<Stock>> getStockDetail(@PathVariable(name = "id") Long id, java.security.Principal principal) {
