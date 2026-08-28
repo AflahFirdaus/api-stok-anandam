@@ -4,9 +4,15 @@ import com.stok.anandam.store.annotation.LogActivity;
 import com.stok.anandam.store.dto.WebResponse;
 import com.stok.anandam.store.service.MemoService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import org.springframework.web.multipart.MultipartFile;
 import java.util.UUID;
@@ -318,6 +324,42 @@ public class MemoController {
             @RequestParam("photo") MultipartFile photo,
             java.security.Principal principal) {
         return memoService.uploadEvidencePhoto(memoId, photo, principal.getName());
+    }
+
+    /**
+     * GET /api/v1/memos/{memoId}/photo
+     * Sajikan foto bukti delivery secara aman (butuh JWT).
+     * Ini menggantikan akses langsung ke /uploads/ yang diblok IP whitelist.
+     */
+    @GetMapping(path = "/{memoId}/photo")
+    public ResponseEntity<Resource> getMemoPhoto(
+            @PathVariable("memoId") UUID memoId) {
+        try {
+            String fileName = memoService.getMemoPhotoFileName(memoId);
+            if (fileName == null || fileName.isBlank()) {
+                return ResponseEntity.notFound().build();
+            }
+            // Coba dua lokasi: uploads/memos/ (baru) dan uploads/ (lama)
+            java.nio.file.Path filePath = java.nio.file.Paths.get("uploads/memos/" + fileName);
+            if (!java.nio.file.Files.exists(filePath)) {
+                filePath = java.nio.file.Paths.get("uploads/" + fileName);
+            }
+            if (!java.nio.file.Files.exists(filePath)) {
+                return ResponseEntity.notFound().build();
+            }
+            Resource resource = new UrlResource(filePath.toUri());
+            String contentType = "image/jpeg";
+            try {
+                String probed = java.nio.file.Files.probeContentType(filePath);
+                if (probed != null) contentType = probed;
+            } catch (Exception ignored) {}
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_TYPE, contentType)
+                    .header(HttpHeaders.CACHE_CONTROL, "private, max-age=3600")
+                    .body(resource);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Gagal membaca foto: " + e.getMessage());
+        }
     }
 
     @LogActivity("Melakukan duplikat dan revisi memo")

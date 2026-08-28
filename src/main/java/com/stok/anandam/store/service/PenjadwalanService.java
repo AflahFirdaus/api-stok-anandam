@@ -970,4 +970,14 @@ public class PenjadwalanService {
                 .data("OK")
                 .build();
     }
+
+    /**
+     * Ambil nama file foto bukti dari tugas penjadwalan (untuk endpoint GET /api/v1/penjadwalan/{id}/photo)
+     */
+    @Transactional(readOnly = true)
+    public String getPenjadwalanPhotoFileName(Long id) {
+        PenjadwalanKonfirmasi jadwal = penjadwalanRepo.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Jadwal tidak ditemukan"));
+        return jadwal.getFotoBukti();
+    }
 }

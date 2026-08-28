@@ -1821,6 +1821,16 @@ public class MemoService {
                 .build();
     }
 
+    /**
+     * Ambil nama file foto bukti dari memo (untuk endpoint GET /api/v1/memos/{id}/photo)
+     */
+    @Transactional(readOnly = true)
+    public String getMemoPhotoFileName(UUID memoId) {
+        Memo memo = memoRepository.findById(memoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
+        return memo.getBuktiFoto();
+    }
+
     @Transactional
     public WebResponse<String> completeMemo(UUID memoId, String username) {
         Memo memo = memoRepository.findById(memoId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));

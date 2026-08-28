@@ -6,10 +6,16 @@ import com.stok.anandam.store.core.postgres.model.enums.TipeTugas;
 import com.stok.anandam.store.dto.*;
 import com.stok.anandam.store.service.PenjadwalanService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -50,19 +56,52 @@ public class PenjadwalanController {
         return penjadwalanService.updatePenjadwalan(id, request, principal.getName());
     }
 
-    @LogActivity("User menyelesaikan tugas penjadwalan dan upload bukti")
-    @PutMapping(
-            path = "/{id}/selesai",
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
-            produces = MediaType.APPLICATION_JSON_VALUE
-    )
+    @LogActivity("User menyelesaikan tugas")
+    @PostMapping(path = "/{id}/selesai", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public WebResponse<String> selesaikanTugas(
             @PathVariable(name = "id") Long id,
             @RequestParam(value = "photo", required = true) MultipartFile photo,
-            @RequestParam(value = "nama_penerima", required = true) String namaPenerima,
-            @RequestParam(value = "catatan_operasional", required = false) String catatanOperasional,
+            @RequestParam(value = "namaPenerima", required = false) String namaPenerima,
+            @RequestParam(value = "catatanOperasional", required = false) String catatanOperasional,
             java.security.Principal principal) {
         return penjadwalanService.selesaikanTugas(id, photo, namaPenerima, catatanOperasional, principal.getName());
+    }
+
+    /**
+     * GET /api/v1/penjadwalan/{id}/photo
+     * Sajikan foto bukti tugas penjadwalan secara aman (butuh JWT).
+     */
+    @GetMapping(path = "/{id}/photo")
+    public ResponseEntity<Resource> getPenjadwalanPhoto(
+            @PathVariable("id") Long id) {
+        try {
+            String fileName = penjadwalanService.getPenjadwalanPhotoFileName(id);
+            if (fileName == null || fileName.isBlank()) {
+                return ResponseEntity.notFound().build();
+            }
+            java.nio.file.Path filePath = java.nio.file.Paths.get("uploads/penjadwalan/" + fileName);
+            if (!java.nio.file.Files.exists(filePath)) {
+                filePath = java.nio.file.Paths.get("uploads/memos/" + fileName);
+            }
+            if (!java.nio.file.Files.exists(filePath)) {
+                filePath = java.nio.file.Paths.get("uploads/" + fileName);
+            }
+            if (!java.nio.file.Files.exists(filePath)) {
+                return ResponseEntity.notFound().build();
+            }
+            Resource resource = new UrlResource(filePath.toUri());
+            String contentType = "image/jpeg";
+            try {
+                String probed = java.nio.file.Files.probeContentType(filePath);
+                if (probed != null) contentType = probed;
+            } catch (Exception ignored) {}
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_TYPE, contentType)
+                    .header(HttpHeaders.CACHE_CONTROL, "private, max-age=3600")
+                    .body(resource);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Gagal membaca foto: " + e.getMessage());
+        }
     }
 
     @LogActivity("User memulai tugas penjadwalan")
