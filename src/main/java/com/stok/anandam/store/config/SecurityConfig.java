@@ -167,21 +167,17 @@ public class SecurityConfig {
 
                 return http.build();
         }
-/** Uploads: Hanya bisa diakses dari localhost / IP Internal Kantor (melindungi foto memo rahasia) */
+        /** Uploads: Static resources foto memo/bukti dapat diakses oleh mobile & web */
         @Bean
         @Order(3)
         public SecurityFilterChain uploadsSecurityFilterChain(HttpSecurity http) throws Exception {
                 http
                                 .securityMatcher("/uploads/**")
+                                .cors(Customizer.withDefaults())
                                 .csrf(csrf -> csrf.disable())
                                 .authorizeHttpRequests(auth -> auth
-                                                .anyRequest().access((authentication, context) -> {
-                                                        if (isIpWhitelisted(context.getRequest())) {
-                                                                return new org.springframework.security.authorization.AuthorizationDecision(true);
-                                                        }
-                                                        return new org.springframework.security.authorization.AuthorizationDecision(false);
-                                                }))
-                                .anonymous(anonymous -> anonymous.disable())
+                                                .anyRequest().permitAll())
+                                .anonymous(Customizer.withDefaults())
                                 .formLogin(login -> login.disable())
                                 .httpBasic(basic -> basic.disable());
                 return http.build();
