@@ -39,4 +39,15 @@ public class DeliveryAssignmentController {
             java.security.Principal principal) {
         return deliveryAssignmentService.releaseTask(penjadwalanId, principal.getName());
     }
+
+    @LogActivity("Delivery melepas tugas pengiriman memo (unassign by memo ID)")
+    @PostMapping(
+            path = "/memo/{memoId}/release",
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public WebResponse<String> releaseMemo(
+            @PathVariable java.util.UUID memoId,
+            java.security.Principal principal) {
+        return deliveryAssignmentService.releaseMemo(memoId, principal.getName());
+    }
 }

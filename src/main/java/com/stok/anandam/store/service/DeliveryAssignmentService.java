@@ -226,4 +226,44 @@ public class DeliveryAssignmentService {
                 .data("OK")
                 .build();
     }
+
+    /**
+     * Delivery melepas tugas pengiriman berdasarkan ID Memo.
+     */
+    @Transactional
+    public WebResponse<String> releaseMemo(UUID memoId, String username) {
+        User delivery = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User login tidak ditemukan"));
+
+        List<PenjadwalanKonfirmasi> existingList = penjadwalanRepo.findByMemo_IdAndDeletedAtIsNull(memoId)
+                .stream()
+                .filter(p -> p.getTipeTugas() == TipeTugas.PENGIRIMAN)
+                .collect(Collectors.toList());
+
+        boolean released = false;
+        for (PenjadwalanKonfirmasi jadwal : existingList) {
+            if (delivery.getId().equals(jadwal.getPersonelId())) {
+                jadwal.setPersonelId(null);
+                jadwal.setStatusJadwal(StatusJadwal.MENUNGGU_KONFIRMASI);
+                penjadwalanRepo.save(jadwal);
+                released = true;
+            }
+        }
+
+        Memo memo = memoRepository.findById(memoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memo tidak ditemukan"));
+        if (memo.getStatusAkhir() == MemoStatus.DIJADWALKAN) {
+            memo.setStatusAkhir(MemoStatus.MENUNGGU_PENGIRIMAN);
+            memoRepository.save(memo);
+            released = true;
+        }
+
+        sendMemoRefreshSignal();
+
+        return WebResponse.<String>builder()
+                .status(HttpStatus.OK.value())
+                .message("Berhasil melepas tugas pengiriman memo " + memo.getNomorMemo())
+                .data("OK")
+                .build();
+    }
 }

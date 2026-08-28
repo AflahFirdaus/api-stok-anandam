@@ -148,6 +148,9 @@ public class SecurityConfig {
                                         .requestMatchers(HttpMethod.GET, "/api/v1/request-delivery", "/api/v1/request-delivery/", "/api/v1/request-delivery/**").authenticated()
                                         .requestMatchers(HttpMethod.POST, "/api/v1/request-delivery", "/api/v1/request-delivery/", "/api/v1/request-delivery/**").authenticated()
 
+                                        // DELIVERY ASSIGNMENT & SCAN
+                                        .requestMatchers("/api/v1/delivery", "/api/v1/delivery/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_DELIVERY", "ROLE_GUDANG")
+
 
                                         // Endpoint Admin & Spv (Data sensitif)
                                         .requestMatchers(HttpMethod.GET, "/api/v1/users", "/api/v1/users/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SPV_MARKETING", "ROLE_SPV_GUDANG", "ROLE_SPV_TEKNISI", "ROLE_GUDANG", "ROLE_MARKETING", "ROLE_MARKETING_ONLINE", "ROLE_TEKNISI", "ROLE_DELIVERY")
