@@ -19,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,9 +40,54 @@ public class DeliveryAssignmentService {
         }
     }
 
+    private Optional<Memo> findMemoByScanInput(String scanInput) {
+        if (scanInput == null || scanInput.isBlank()) {
+            return Optional.empty();
+        }
+
+        String cleaned = scanInput.trim();
+
+        // 1. Coba parse sebagai UUID (karena QR Code memo berisi memo.id)
+        try {
+            UUID memoId = UUID.fromString(cleaned);
+            Optional<Memo> byId = memoRepository.findById(memoId);
+            if (byId.isPresent()) {
+                return byId;
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Bukan format UUID, lanjut ke metode pencarian lain
+        }
+
+        // 2. Coba cari berdasarkan Nomor Memo
+        Optional<Memo> byNomor = memoRepository.findByNomorMemo(cleaned);
+        if (byNomor.isPresent()) {
+            return byNomor;
+        }
+
+        // 3. Coba cari berdasarkan field qr_code
+        Optional<Memo> byQr = memoRepository.findByQrCode(cleaned);
+        if (byQr.isPresent()) {
+            return byQr;
+        }
+
+        // 4. Coba cari berdasarkan nomor resi
+        List<Memo> byResi = memoRepository.findByResiIgnoreCase(cleaned);
+        if (!byResi.isEmpty()) {
+            return Optional.of(byResi.get(0));
+        }
+
+        // 5. Coba cari berdasarkan order ID marketplace
+        List<Memo> byOrder = memoRepository.findByOrderIdMarketplaceIgnoreCase(cleaned);
+        if (!byOrder.isEmpty()) {
+            return Optional.of(byOrder.get(0));
+        }
+
+        return Optional.empty();
+    }
+
     /**
      * Delivery melakukan scan QR Code pada memo.
-     * Sistem akan mencari memo berdasarkan QR Code yang di-scan,
+     * Sistem akan mencari memo berdasarkan QR Code / ID / Nomor yang di-scan,
      * kemudian membuat/memperbarui jadwal pengiriman dan menugaskan
      * delivery tersebut sebagai pengirim.
      */
@@ -54,10 +101,10 @@ public class DeliveryAssignmentService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Hanya role DELIVERY yang dapat melakukan scan QR");
         }
 
-        // Cari memo berdasarkan QR Code
-        Memo memo = memoRepository.findByQrCode(qrCode)
+        // Cari memo berdasarkan Scan Input (UUID / Nomor Memo / QR Code / Resi / Order ID)
+        Memo memo = findMemoByScanInput(qrCode)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Memo dengan QR Code tersebut tidak ditemukan"));
+                        "Memo dengan QR Code / ID tersebut tidak ditemukan"));
 
         // Validasi status memo - hanya yang sudah siap kirim yang bisa di-scan
         if (memo.getStatusAkhir() != MemoStatus.MENUNGGU_PENGIRIMAN
